@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "695992616108",
+    "project_id": "celulas-app-50668",
+    "storage_bucket": "celulas-app-50668.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:695992616108:android:2f18287473b7fece998b09",
+        "android_client_info": {
+          "package_name": "com.devhelmont.celulas.celulas_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "695992616108-8pgag7mr0sgb6alqnjtubk15t8aj6q5e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_xJpy9Wim3m7QsAOOtxykf7-mmMdgIuY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "695992616108-8pgag7mr0sgb6alqnjtubk15t8aj6q5e.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
