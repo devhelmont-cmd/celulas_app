@@ -12,3 +12,9 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Arquivos de variáveis de ambiente
+*.env
+
+# Chaves privadas de contas de serviço (GCP/Firebase Admin)
+*service-account*.json

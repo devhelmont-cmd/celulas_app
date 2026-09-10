@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "695992616108-og6opvtncv6gai5aekntbkf4m83t0vro.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.devhelmont.celulas.celulas_app",
+            "certificate_hash": "01364b9a6516157594f8911bdaf006d9d92be49a"
+          }
+        },
+        {
           "client_id": "695992616108-8pgag7mr0sgb6alqnjtubk15t8aj6q5e.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -29,6 +37,13 @@
             {
               "client_id": "695992616108-8pgag7mr0sgb6alqnjtubk15t8aj6q5e.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "695992616108-mg48o597tb8u6n8r8vijtp0ogdpiku8e.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.devhelmont.celulas.celulasApp"
+              }
             }
           ]
         }
