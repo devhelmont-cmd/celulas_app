@@ -1,3 +1,4 @@
+import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/core/theme/app_theme.dart';
 import 'package:celulas_app/src/features/auth/presentation/pages/login_page.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'firebase_options.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await initInjection();
   runApp(const MyApp());
 }
 

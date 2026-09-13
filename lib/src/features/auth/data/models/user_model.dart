@@ -6,6 +6,7 @@ class UserModel extends UserEntity {
     required super.id,
     required super.email,
     required super.name,
+    required super.photoUrl,
   });
 
   //Mapeia o objeto nativo do Firebase Auth para nossa Entidade
@@ -14,6 +15,7 @@ class UserModel extends UserEntity {
       id: user.uid,
       email: user.email ?? '',
       name: user.displayName,
+      photoUrl: user.photoURL,
     );
   }
 }

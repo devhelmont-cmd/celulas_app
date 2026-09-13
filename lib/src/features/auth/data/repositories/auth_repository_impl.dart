@@ -6,7 +6,7 @@ import '../../domain/entities/user_entity.dart';
 class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource remoteDataSource;
 
-  AuthRepositoryImpl(this.remoteDataSource);
+  AuthRepositoryImpl({required this.remoteDataSource});
 
   @override
   Future<UserEntity> loginWithEmail({
@@ -22,7 +22,7 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<void> logout() async {
-    // TODO: implementação do logout no datasource
+  Future<void> signOut() async {
+    await remoteDataSource.signOut();
   }
 }

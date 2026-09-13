@@ -1,17 +1,21 @@
 import 'package:celulas_app/src/features/auth/domain/usecases/login_with_email.dart';
 import 'package:celulas_app/src/features/auth/domain/usecases/login_with_google.dart';
+import 'package:celulas_app/src/features/auth/domain/usecases/sign_out.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_state.dart';
 import 'package:flutter/foundation.dart';
 
 class AuthController extends ValueNotifier<AuthState> {
   final LoginWithEmailUseCase _loginWithEmailUseCase;
   final LoginWithGoogleUseCase _loginWithGoogleUseCase;
+  final SignOutUseCase _signOutUseCase;
 
   AuthController({
     required LoginWithEmailUseCase loginWithEmailUseCase,
     required LoginWithGoogleUseCase loginWithGoogleUseCase,
+    required SignOutUseCase signOutUseCase,
   }) : _loginWithEmailUseCase = loginWithEmailUseCase,
        _loginWithGoogleUseCase = loginWithGoogleUseCase,
+       _signOutUseCase = signOutUseCase,
        super(AuthInitialState());
 
   Future<void> loginWithEmail(String email, String password) async {
@@ -34,6 +38,16 @@ class AuthController extends ValueNotifier<AuthState> {
       value = AuthSuccessState(user);
     } catch (e) {
       value = AuthErrorState(e.toString().replaceAll('Exception', ''));
+    }
+  }
+
+  Future<void> signOut() async {
+    value = AuthLoadingState();
+    try {
+      await _signOutUseCase();
+      value = AuthInitialState();
+    } catch (e) {
+      value = AuthErrorState(e.toString());
     }
   }
 }

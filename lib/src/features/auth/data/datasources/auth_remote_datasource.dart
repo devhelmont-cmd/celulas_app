@@ -6,6 +6,8 @@ abstract class AuthRemoteDataSource {
   Future<UserModel> loginWithEmail(String email, String password);
 
   Future<UserModel> loginWithGoogle();
+
+  Future<void> signOut();
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -61,5 +63,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     } on FirebaseAuthException catch (e) {
       throw Exception('Erro ao realizar login com o Google: $e');
     }
+  }
+
+  @override
+  Future<void> signOut() async {
+    await Future.wait([_firebaseAuth.signOut(), _googleSignIn.signOut()]);
   }
 }
