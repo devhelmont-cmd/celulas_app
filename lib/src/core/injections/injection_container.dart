@@ -1,6 +1,7 @@
 import 'package:celulas_app/src/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:celulas_app/src/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:celulas_app/src/features/auth/domain/repositories/auth_repository.dart';
+import 'package:celulas_app/src/features/auth/domain/usecases/get_current_user.dart';
 import 'package:celulas_app/src/features/auth/domain/usecases/login_with_email.dart';
 import 'package:celulas_app/src/features/auth/domain/usecases/login_with_google.dart';
 import 'package:celulas_app/src/features/auth/domain/usecases/sign_out.dart';
@@ -52,6 +53,9 @@ Future<void> initInjection() async {
   getIt.registerLazySingleton<SignOutUseCase>(
     () => SignOutUseCase(getIt<AuthRepository>()),
   );
+  getIt.registerLazySingleton<GetCurrentUserUseCase>(
+    () => GetCurrentUserUseCase(getIt<AuthRepository>()),
+  );
 
   // -----------------------------------------------------------------------
   // Controllers / Presenters
@@ -61,6 +65,7 @@ Future<void> initInjection() async {
       loginWithEmailUseCase: getIt<LoginWithEmailUseCase>(),
       loginWithGoogleUseCase: getIt<LoginWithGoogleUseCase>(),
       signOutUseCase: getIt<SignOutUseCase>(),
+      getCurrentUserUseCase: getIt<GetCurrentUserUseCase>(),
     ),
   );
 }

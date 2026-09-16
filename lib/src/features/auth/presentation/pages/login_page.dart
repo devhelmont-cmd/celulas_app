@@ -10,6 +10,8 @@ import 'package:celulas_app/src/features/auth/presentation/pages/home_page.dart'
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
 
+import '../../../../core/utils/fade_page_route.dart';
+
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -29,10 +31,10 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    final dataSource = AuthRemoteDataSourceImpl();
+    /*final dataSource = AuthRemoteDataSourceImpl();
     final repository = AuthRepositoryImpl(remoteDataSource: dataSource);
 
-    /*_authController = AuthController(
+    _authController = AuthController(
       loginWithEmailUseCase: LoginWithEmailUseCase(repository),
       loginWithGoogleUseCase: LoginWithGoogleUseCase(repository),
       signOutUseCase: SignOutUseCase(repository),
@@ -54,9 +56,9 @@ class _LoginPageState extends State<LoginPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Bem-vindo, ${state.user.email}!')),
       );
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => HomePage(user: state.user)),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(FadePageRoute(page: HomePage(user: state.user)));
     }
   }
 

@@ -1,7 +1,6 @@
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/core/theme/app_theme.dart';
-import 'package:celulas_app/src/features/auth/presentation/pages/login_page.dart';
-import 'package:flutter/material.dart';
+import 'package:celulas_app/src/features/auth/presentation/pages/splash_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -16,7 +15,6 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -25,7 +23,7 @@ class MyApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
-      home: const LoginPage(),
+      home: const SplashPage(),
     );
   }
 }
