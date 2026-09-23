@@ -5,11 +5,12 @@ class UserModel extends UserEntity {
   const UserModel({
     required super.id,
     required super.email,
-    required super.name,
-    required super.photoUrl,
+    super.name,
+    super.photoUrl,
+    super.roles,
+    super.primaryCellId,
   });
 
-  //Mapeia o objeto nativo do Firebase Auth para nossa Entidade
   factory UserModel.fromFirebaseUser(firebase.User user) {
     return UserModel(
       id: user.uid,

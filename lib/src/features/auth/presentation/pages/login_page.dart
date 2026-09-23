@@ -1,16 +1,10 @@
 import 'package:celulas_app/src/core/injections/injection_container.dart';
-import 'package:celulas_app/src/features/auth/data/datasources/auth_remote_datasource.dart';
-import 'package:celulas_app/src/features/auth/data/repositories/auth_repository_impl.dart';
-import 'package:celulas_app/src/features/auth/domain/usecases/login_with_email.dart';
-import 'package:celulas_app/src/features/auth/domain/usecases/login_with_google.dart';
-import 'package:celulas_app/src/features/auth/domain/usecases/sign_out.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_state.dart';
-import 'package:celulas_app/src/features/auth/presentation/pages/home_page.dart';
 import 'package:flutter/material.dart';
-import 'package:get_it/get_it.dart';
 
 import '../../../../core/utils/fade_page_route.dart';
+import '../../../home/presentation/pages/home_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});

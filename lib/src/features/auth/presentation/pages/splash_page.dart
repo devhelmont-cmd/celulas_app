@@ -5,7 +5,7 @@ import 'package:celulas_app/src/features/auth/presentation/controllers/auth_stat
 import 'package:celulas_app/src/features/auth/presentation/pages/login_page.dart';
 import 'package:flutter/material.dart';
 
-import 'home_page.dart';
+import '../../../home/presentation/pages/home_page.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});

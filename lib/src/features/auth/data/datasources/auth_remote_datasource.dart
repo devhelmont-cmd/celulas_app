@@ -1,5 +1,4 @@
 import 'package:celulas_app/src/features/auth/data/models/user_model.dart';
-import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -10,7 +9,7 @@ abstract class AuthRemoteDataSource {
 
   Future<void> signOut();
 
-  Future<UserEntity?> getCurrentUser();
+  Future<UserModel?> getCurrentUser();
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -74,15 +73,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
-  Future<UserEntity?> getCurrentUser() async {
+  Future<UserModel?> getCurrentUser() async {
     final user = _firebaseAuth.currentUser;
     if (user != null) {
-      return UserEntity(
-        id: user.uid,
-        email: user.email ?? '',
-        name: user.displayName,
-        photoUrl: user.photoURL,
-      );
+      return UserModel.fromFirebaseUser(user);
     }
     return null;
   }
