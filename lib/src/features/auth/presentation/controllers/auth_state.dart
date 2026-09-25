@@ -17,3 +17,5 @@ class AuthErrorState extends AuthState {
 
   AuthErrorState(this.message);
 }
+
+class AuthUnauthenticatedState extends AuthState {}

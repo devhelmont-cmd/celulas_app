@@ -1,6 +1,7 @@
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_state.dart';
+import 'package:celulas_app/src/features/auth/presentation/pages/sign_up_page.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/utils/fade_page_route.dart';
@@ -25,15 +26,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    /*final dataSource = AuthRemoteDataSourceImpl();
-    final repository = AuthRepositoryImpl(remoteDataSource: dataSource);
-
-    _authController = AuthController(
-      loginWithEmailUseCase: LoginWithEmailUseCase(repository),
-      loginWithGoogleUseCase: LoginWithGoogleUseCase(repository),
-      signOutUseCase: SignOutUseCase(repository),
-    );*/
-
     _authController.addListener(_onAuthStateChanged);
   }
 
@@ -61,7 +53,6 @@ class _LoginPageState extends State<LoginPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _authController.removeListener(_onAuthStateChanged);
-    _authController.dispose();
     super.dispose();
   }
 
@@ -74,8 +65,85 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  void _showResetPasswordDialog() {
+    final resetEmailController = TextEditingController(
+      text: _emailController.text,
+    );
+    final dialogFormKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Redefinir Senha'),
+          content: Form(
+            key: dialogFormKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Digite seu e-mail cadastrado. Enviaremos um link para você redefinir sua senha.',
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: resetEmailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: 'E-mail',
+                    prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Informe o e-mail';
+                    }
+                    if (!value.contains('@')) {
+                      return 'Informe um e-mail válido';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                if (dialogFormKey.currentState?.validate() ?? false) {
+                  final email = resetEmailController.text.trim();
+                  Navigator.of(context).pop();
+
+                  await _authController.sendPasswordResetEmail(email);
+
+                  if (mounted && _authController.value is! AuthErrorState) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'E-mail de redefinição enviado para $email. Verifique sua caixa de entrada e spam.',
+                        ),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Enviar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _onLoginWithGoogle() {
-    _authController.logingWithGoogle();
+    _authController.loginWithGoogle();
+  }
+
+  void _navigateToSignUp() {
+    Navigator.of(context).push(FadePageRoute(page: const SignUpPage()));
   }
 
   @override
@@ -182,9 +250,7 @@ class _LoginPageState extends State<LoginPage> {
                       ],
                       const SizedBox(height: 12),
                       TextButton(
-                        onPressed: () {
-                          //TODO: Implementar redefinição de senha
-                        },
+                        onPressed: isLoading ? null : _showResetPasswordDialog,
                         child: const Text('Esqueceu a senha?'),
                       ),
                       const Row(
@@ -202,6 +268,17 @@ class _LoginPageState extends State<LoginPage> {
                         onPressed: _onLoginWithGoogle,
                         icon: const Icon(Icons.g_mobiledata, size: 28),
                         label: const Text('Continuar com o Google'),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('Não tem uma conta?'),
+                          TextButton(
+                            onPressed: isLoading ? null : _navigateToSignUp,
+                            child: const Text('Cadastre-se'),
+                          ),
+                        ],
                       ),
                     ],
                   );

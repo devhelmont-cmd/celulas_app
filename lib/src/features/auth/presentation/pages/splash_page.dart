@@ -41,10 +41,6 @@ class _SplashPageState extends State<SplashPage>
     _animationController.forward();
 
     _initializeSplash();
-
-    /*WidgetsBinding.instance.addPostFrameCallback((_) {
-      _authController.checkCurrentUser();
-    });*/
   }
 
   Future<void> _initializeSplash() async {
@@ -67,7 +63,6 @@ class _SplashPageState extends State<SplashPage>
   @override
   void dispose() {
     _animationController.dispose();
-    //_authController.removeListener(_onAuthStateChanged);
     super.dispose();
   }
 

@@ -84,12 +84,32 @@ class _HomePageState extends State<HomePage> {
             CircleAvatar(
               radius: 28,
               backgroundImage:
-                  widget.user.photoUrl != null
+                  widget.user.photoUrl != null &&
+                          widget.user.photoUrl!.isNotEmpty
                       ? NetworkImage(widget.user.photoUrl!)
                       : null,
+              onBackgroundImageError:
+                  widget.user.photoUrl != null &&
+                          widget.user.photoUrl!.isNotEmpty
+                      ? (exception, stackTrace) {
+                        debugPrint(
+                          'Erro ao carregar foto de perfil: $exception',
+                        );
+                      }
+                      : null,
               child:
-                  widget.user.photoUrl == null
-                      ? const Icon(Icons.person, size: 28)
+                  (widget.user.photoUrl == null ||
+                          widget.user.photoUrl!.isEmpty)
+                      ? (widget.user.name != null &&
+                              widget.user.name!.trim().isNotEmpty)
+                          ? Text(
+                            widget.user.name!.trim()[0].toUpperCase(),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                          )
+                          : const Icon(Icons.person, size: 28)
                       : null,
             ),
             const SizedBox(width: 12),
