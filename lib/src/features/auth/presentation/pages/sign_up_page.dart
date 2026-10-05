@@ -1,6 +1,6 @@
 import 'package:celulas_app/src/core/utils/fade_page_route.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_state.dart';
-import 'package:celulas_app/src/features/home/presentation/pages/home_page.dart';
+import 'package:celulas_app/src/features/cells/presentation/pages/root_page.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/injections/injection_container.dart';
@@ -46,11 +46,13 @@ class _SignUpPageState extends State<SignUpPage> {
           content: Text(
             'Conta criada com sucesso! Bem-vindo ${state.user.name}',
           ),
+          backgroundColor: Colors.green,
         ),
       );
+      // Redireciona para a RootPage para validar o status da célula do novo usuário
       Navigator.of(context).pushAndRemoveUntil(
-        FadePageRoute(page: HomePage(user: state.user)),
-        (route) => false,
+        FadePageRoute(page: RootPage(user: state.user)),
+            (route) => false,
       );
     }
   }
@@ -169,7 +171,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         enabled: !isLoading,
                         decoration: InputDecoration(
                           labelText: 'Senha',
-                          prefixIcon: Icon(Icons.lock_outline),
+                          prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
                             onPressed: () {
                               setState(() {
@@ -206,7 +208,7 @@ class _SignUpPageState extends State<SignUpPage> {
                             onPressed: () {
                               setState(() {
                                 _isConfirmPasswordVisible =
-                                    !_isConfirmPasswordVisible;
+                                !_isConfirmPasswordVisible;
                               });
                             },
                             icon: Icon(
@@ -243,9 +245,9 @@ class _SignUpPageState extends State<SignUpPage> {
                           const Text('Já tem uma conta?'),
                           TextButton(
                             onPressed:
-                                isLoading
-                                    ? null
-                                    : () => Navigator.of(context).pop(),
+                            isLoading
+                                ? null
+                                : () => Navigator.of(context).pop(),
                             child: const Text('Entrar'),
                           ),
                         ],

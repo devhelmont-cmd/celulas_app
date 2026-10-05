@@ -9,12 +9,24 @@ import 'package:celulas_app/src/features/auth/domain/usecases/send_password_rese
 import 'package:celulas_app/src/features/auth/domain/usecases/sign_out.dart';
 import 'package:celulas_app/src/features/auth/domain/usecases/sign_up_with_email.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:celulas_app/src/features/cell_reports/data/datasources/cell_reports_remote_datasource.dart';
+import 'package:celulas_app/src/features/cells/data/repositories/cell_repository_impl.dart';
+import 'package:celulas_app/src/features/cells/domain/repositories/i_cell_repository.dart';
+import 'package:celulas_app/src/features/cells/domain/usecases/add_cell_member.dart';
+import 'package:celulas_app/src/features/cells/domain/usecases/create_cell.dart';
+import 'package:celulas_app/src/features/cells/domain/usecases/get_cell_members.dart';
+import 'package:celulas_app/src/features/cells/domain/usecases/get_cells.dart';
+import 'package:celulas_app/src/features/cells/domain/usecases/remove_cell_member.dart';
+import 'package:celulas_app/src/features/cells/presentation/controllers/cell_controller.dart';
+import 'package:celulas_app/src/features/cells/presentation/controllers/cell_member_controller.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get_it/get_it.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../features/auth/domain/repositories/i_user_repository.dart';
+import '../../features/cells/data/datasources/cell_remote_datasource.dart';
+import '../../features/cells/presentation/controllers/user_cell_onboarding_controller.dart';
 
 final getIt = GetIt.instance;
 
@@ -48,6 +60,10 @@ Future<void> initInjection() async {
     ),
   );
 
+  getIt.registerLazySingleton<ICellRemoteDataSource>(
+    () => CellRemoteDataSourceImpl(getIt<FirebaseFirestore>()),
+  );
+
   // -----------------------------------------------------------------------
   // Repositories
   // -----------------------------------------------------------------------
@@ -56,6 +72,9 @@ Future<void> initInjection() async {
   );
   getIt.registerLazySingleton<IUserRepository>(
     () => UserRepositoryImpl(getIt<FirebaseFirestore>()),
+  );
+  getIt.registerLazySingleton<ICellRepository>(
+    () => CellRepositoryImpl(getIt<ICellRemoteDataSource>()),
   );
 
   // -----------------------------------------------------------------------
@@ -79,6 +98,21 @@ Future<void> initInjection() async {
   getIt.registerLazySingleton<GetCurrentUserUseCase>(
     () => GetCurrentUserUseCase(getIt<AuthRepository>()),
   );
+  getIt.registerLazySingleton<GetCells>(
+    () => GetCells(getIt<ICellRepository>()),
+  );
+  getIt.registerLazySingleton<CreateCell>(
+    () => CreateCell(getIt<ICellRepository>()),
+  );
+  getIt.registerLazySingleton<GetCellMembers>(
+    () => GetCellMembers(getIt<ICellRepository>()),
+  );
+  getIt.registerLazySingleton<AddCellMember>(
+    () => AddCellMember(getIt<ICellRepository>()),
+  );
+  getIt.registerLazySingleton<RemoveCellMember>(
+    () => RemoveCellMember(getIt<ICellRepository>()),
+  );
 
   // -----------------------------------------------------------------------
   // Controllers / Presenters
@@ -93,4 +127,21 @@ Future<void> initInjection() async {
       getCurrentUserUseCase: getIt<GetCurrentUserUseCase>(),
     ),
   );
+
+  getIt.registerLazySingleton<CellController>(
+    () => CellController(
+      getCellsUseCase: getIt<GetCells>(),
+      createCellUseCase: getIt<CreateCell>(),
+    ),
+  );
+
+  getIt.registerFactory<CellMembersController>(
+    () => CellMembersController(
+      getCellMembers: getIt<GetCellMembers>(),
+      addCellMember: getIt<AddCellMember>(),
+      removeCellMember: getIt<RemoveCellMember>(),
+    ),
+  );
+
+  getIt.registerFactory(() => UserCellOnboardingController(getIt()));
 }

@@ -3,6 +3,8 @@ import 'package:celulas_app/src/core/utils/fade_page_route.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_state.dart';
 import 'package:celulas_app/src/features/auth/presentation/pages/login_page.dart';
+import 'package:celulas_app/src/features/cells/presentation/pages/create_cell_page.dart';
+import 'package:celulas_app/src/features/cells/presentation/pages/root_page.dart';
 import 'package:flutter/material.dart';
 
 import '../../../home/presentation/pages/home_page.dart';
@@ -54,7 +56,7 @@ class _SplashPageState extends State<SplashPage>
     final state = _authController.value;
 
     if (state is AuthSuccessState) {
-      _navigateTo(HomePage(user: state.user));
+      _navigateTo(RootPage(user: state.user));
     } else if (state is AuthInitialState || state is AuthErrorState) {
       _navigateTo(const LoginPage());
     }

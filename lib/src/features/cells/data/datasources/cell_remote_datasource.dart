@@ -1,0 +1,651 @@
+import 'package:celulas_app/src/features/cells/data/models/cell_join_request_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_member_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
+import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+abstract class ICellRemoteDataSource {
+  Future<List<CellModel>> getCells({String? filterByUserId});
+
+  Stream<List<CellModel>> watchCells({String? filterByUserId});
+
+  Future<CellModel> getCellById(String id);
+
+  Future<void> createCell(CellModel cell);
+
+  Future<void> updateCell(CellModel cell);
+
+  Future<List<CellMemberEntity>> getCellMembers(String cellId);
+
+  Stream<List<CellMemberEntity>> watchCellMembers(String cellId);
+
+  Future<String?> getUserNameById(String userId);
+
+  Future<void> addCellMember(CellMemberModel member);
+
+  Future<void> updateCellMember(CellMemberModel member);
+
+  Future<void> removeCellMember(String memberId, String cellId);
+
+  Future<void> linkMemberToUserAccount({
+    required String cellId,
+    required String memberId,
+    required String newUserId,
+  });
+
+  Future<void> requestCellJoin(CellJoinRequestEntity request);
+
+  Future<List<CellJoinRequestEntity>> getPendingRequestsByLeader(
+      String leaderId,
+      );
+
+  Future<List<CellJoinRequestEntity>> getPendingRequestsForCell(String cellId);
+
+  Future<CellJoinRequestEntity?> getUserPendingRequest(String userId);
+
+  Future<void> approveJoinRequest({
+    required String requestId,
+    required String cellId,
+    required String userId,
+    String? matchedMemberId,
+    required String memberName,
+    required bool setAsLeader,
+  });
+
+  Future<void> rejectJoinRequest(String requestId);
+
+  Future<void> cancelCellJoinRequest(String requestId);
+
+  Future<void> changeMemberRole({
+    required String cellId,
+    required String memberId,
+    required String userId,
+    required String newRole,
+  });
+
+  Future<void> transferMember({
+    required String currentCellId,
+    required String newCellId,
+    required String memberId,
+    required String userId,
+    required String memberName,
+  });
+}
+
+class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
+  final FirebaseFirestore _firestore;
+
+  CellRemoteDataSourceImpl(this._firestore);
+
+  // ================= CÉLULAS =================
+  @override
+  Future<List<CellModel>> getCells({String? filterByUserId}) async {
+    Query query = _firestore.collection('cells');
+
+    if (filterByUserId != null) {
+      query = query.where('leaderId', isEqualTo: filterByUserId);
+    }
+
+    final snapshot = await query.get();
+    return snapshot.docs
+        .map(
+          (doc) =>
+          CellModel.fromMap(doc.data() as Map<String, dynamic>, doc.id),
+    )
+        .toList();
+  }
+
+  @override
+  Stream<List<CellModel>> watchCells({String? filterByUserId}) {
+    Query query = _firestore.collection('cells');
+    if (filterByUserId != null) {
+      query = query.where('leaderId', isEqualTo: filterByUserId);
+    }
+    return query.snapshots().map(
+          (snapshot) =>
+          snapshot.docs
+              .map(
+                (doc) => CellModel.fromMap(
+              doc.data() as Map<String, dynamic>,
+              doc.id,
+            ),
+          )
+              .toList(),
+    );
+  }
+
+  @override
+  Future<String?> getUserNameById(String userId) async {
+    if (userId.trim().isEmpty) return null;
+    try {
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists) return null;
+      final data = doc.data() as Map<String, dynamic>;
+      return data['name'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<CellModel> getCellById(String id) async {
+    final doc = await _firestore.collection('cells').doc(id).get();
+    if (!doc.exists) throw Exception('Célula não encontrada.');
+    return CellModel.fromMap(doc.data()!, doc.id);
+  }
+
+  @override
+  Future<void> createCell(CellModel cell) async {
+    final docRef =
+    cell.id.isEmpty
+        ? _firestore.collection('cells').doc()
+        : _firestore.collection('cells').doc(cell.id);
+    await docRef.set(cell.toMap());
+  }
+
+  @override
+  Future<void> updateCell(CellModel cell) async {
+    await _firestore.collection('cells').doc(cell.id).update(cell.toMap());
+  }
+
+  // ================= MEMBROS =================
+  @override
+  Future<List<CellMemberModel>> getCellMembers(String cellId) async {
+    final snapshot =
+    await _firestore
+        .collection('cells')
+        .doc(cellId)
+        .collection('members')
+        .get();
+
+    return snapshot.docs
+        .map((doc) => CellMemberModel.fromMap(doc.data(), doc.id))
+        .toList();
+  }
+
+  @override
+  Stream<List<CellMemberModel>> watchCellMembers(String cellId) {
+    return _firestore
+        .collection('cells')
+        .doc(cellId)
+        .collection('members')
+        .snapshots()
+        .map(
+          (snapshot) =>
+          snapshot.docs
+              .map((doc) => CellMemberModel.fromMap(doc.data(), doc.id))
+              .toList(),
+    );
+  }
+
+  @override
+  Future<void> addCellMember(CellMemberModel member) async {
+    final cellRef = _firestore.collection('cells').doc(member.cellId);
+    final memberRef =
+    member.id.isEmpty
+        ? cellRef.collection('members').doc()
+        : cellRef.collection('members').doc(member.id);
+
+    final normalizedRole = member.role.toLowerCase().trim();
+    final actualId =
+    (member.userId != null && member.userId!.isNotEmpty)
+        ? member.userId!
+        : memberRef.id;
+
+    final batch = _firestore.batch();
+    batch.set(memberRef, member.toMap());
+
+    // Regra de unicidade ao adicionar membro com função de liderança/anfitrião
+    if (normalizedRole == 'lider' || normalizedRole == 'leader') {
+      batch.update(cellRef, {'leaderId': actualId});
+      if (member.userId != null && member.userId!.isNotEmpty) {
+        batch.update(_firestore.collection('users').doc(member.userId!), {
+          'roles': FieldValue.arrayUnion(['leader']),
+          'primaryCellId': member.cellId,
+        });
+      }
+      final membersSnapshot = await cellRef.collection('members').get();
+      for (var doc in membersSnapshot.docs) {
+        if (doc.id != memberRef.id) {
+          final role = (doc.data()['role'] ?? '').toString().toLowerCase();
+          if (role == 'lider' || role == 'leader') {
+            batch.update(doc.reference, {'role': 'membro'});
+            final oldUserId = doc.data()['userId'] as String?;
+            if (oldUserId != null && oldUserId.isNotEmpty) {
+              batch.update(_firestore.collection('users').doc(oldUserId), {
+                'roles': FieldValue.arrayRemove(['leader']),
+              });
+            }
+          }
+        }
+      }
+    } else if (normalizedRole == 'colider' || normalizedRole == 'co-leader') {
+      batch.update(cellRef, {'coLeaderId': actualId});
+      final membersSnapshot = await cellRef.collection('members').get();
+      for (var doc in membersSnapshot.docs) {
+        if (doc.id != memberRef.id) {
+          final role = (doc.data()['role'] ?? '').toString().toLowerCase();
+          if (role == 'colider' || role == 'co-leader') {
+            batch.update(doc.reference, {'role': 'membro'});
+          }
+        }
+      }
+    } else if (normalizedRole == 'anfitriao' || normalizedRole == 'host') {
+      batch.update(cellRef, {'hostId': actualId});
+      final membersSnapshot = await cellRef.collection('members').get();
+      for (var doc in membersSnapshot.docs) {
+        if (doc.id != memberRef.id) {
+          final role = (doc.data()['role'] ?? '').toString().toLowerCase();
+          if (role == 'anfitriao' || role == 'host') {
+            batch.update(doc.reference, {'role': 'membro'});
+          }
+        }
+      }
+    }
+
+    await batch.commit();
+  }
+
+  @override
+  Future<void> updateCellMember(CellMemberModel member) async {
+    await _firestore
+        .collection('cells')
+        .doc(member.cellId)
+        .collection('members')
+        .doc(member.id)
+        .update(member.toMap());
+  }
+
+  @override
+  Future<void> removeCellMember(String memberId, String cellId) async {
+    final cellRef = _firestore.collection('cells').doc(cellId);
+    final memberRef = cellRef.collection('members').doc(memberId);
+
+    final memberDoc = await memberRef.get();
+    if (!memberDoc.exists) return;
+
+    final memberData = memberDoc.data() as Map<String, dynamic>;
+    final memberName = memberData['name'] as String? ?? '';
+    final memberUserId = memberData['userId'] as String? ?? '';
+
+    final cellDoc = await cellRef.get();
+    if (!cellDoc.exists) return;
+
+    final cellData = cellDoc.data() as Map<String, dynamic>;
+    final currentLeaderId = cellData['leaderId'] as String? ?? '';
+    final currentCoLeaderId = cellData['coLeaderId'] as String? ?? '';
+    final currentHostId = cellData['hostId'] as String? ?? '';
+
+    final batch = _firestore.batch();
+    batch.delete(memberRef);
+
+    final Map<String, dynamic> cellUpdates = {};
+
+    if (currentLeaderId == memberName ||
+        currentLeaderId == memberUserId ||
+        currentLeaderId == memberId) {
+      cellUpdates['leaderId'] = null;
+    }
+    if (currentCoLeaderId == memberName ||
+        currentCoLeaderId == memberUserId ||
+        currentCoLeaderId == memberId) {
+      cellUpdates['coLeaderId'] = null;
+    }
+    if (currentHostId == memberName ||
+        currentHostId == memberUserId ||
+        currentHostId == memberId) {
+      cellUpdates['hostId'] = null;
+    }
+
+    if (cellUpdates.isNotEmpty) {
+      batch.update(cellRef, cellUpdates);
+    }
+
+    if (memberUserId.isNotEmpty) {
+      final userRef = _firestore.collection('users').doc(memberUserId);
+      final Map<String, dynamic> userUpdates = {'primaryCellId': null};
+
+      if (cellUpdates.containsKey('leaderId')) {
+        userUpdates['roles'] = FieldValue.arrayRemove(['leader']);
+      }
+      batch.update(userRef, userUpdates);
+    }
+
+    await batch.commit();
+  }
+
+  @override
+  Future<void> linkMemberToUserAccount({
+    required String cellId,
+    required String memberId,
+    required String newUserId,
+  }) async {
+    await _firestore
+        .collection('cells')
+        .doc(cellId)
+        .collection('members')
+        .doc(memberId)
+        .update({'userId': newUserId});
+  }
+
+  @override
+  Future<void> requestCellJoin(CellJoinRequestEntity request) async {
+    await _firestore
+        .collection('cell_requests')
+        .doc(request.id.isEmpty ? null : request.id)
+        .set(request.toMap());
+  }
+
+  @override
+  Future<List<CellJoinRequestEntity>> getPendingRequestsByLeader(
+      String leaderId,
+      ) async {
+    final cells = await getCells(filterByUserId: leaderId);
+    if (cells.isEmpty) return [];
+
+    final cellIds = cells.map((c) => c.id).toList();
+
+    final snapshot =
+    await _firestore
+        .collection('cell_requests')
+        .where('cellId', whereIn: cellIds)
+        .where('status', isEqualTo: RequestStatus.pending.name)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => CellJoinRequestEntity.fromMap(doc.data(), doc.id))
+        .toList();
+  }
+
+  @override
+  Future<CellJoinRequestEntity?> getUserPendingRequest(String userId) async {
+    final snapshot =
+    await _firestore
+        .collection('cell_requests')
+        .where('userId', isEqualTo: userId)
+        .where('status', isEqualTo: RequestStatus.pending.name)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) return null;
+    return CellJoinRequestEntity.fromMap(
+      snapshot.docs.first.data(),
+      snapshot.docs.first.id,
+    );
+  }
+
+  @override
+  Future<List<CellJoinRequestEntity>> getPendingRequestsForCell(
+      String cellId,
+      ) async {
+    final snapshot =
+    await _firestore
+        .collection('cell_requests')
+        .where('cellId', isEqualTo: cellId)
+        .where('status', isEqualTo: RequestStatus.pending.name)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => CellJoinRequestEntity.fromMap(doc.data(), doc.id))
+        .toList();
+  }
+
+  @override
+  Future<void> approveJoinRequest({
+    required String requestId,
+    required String cellId,
+    required String userId,
+    String? matchedMemberId,
+    required String memberName,
+    required bool setAsLeader,
+  }) async {
+    final batch = _firestore.batch();
+    final requestRef = _firestore.collection('cell_requests').doc(requestId);
+
+    batch.update(requestRef, {
+      'status': 'approved',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    final cellRef = _firestore.collection('cells').doc(cellId);
+    final memberRef = cellRef.collection('members').doc();
+
+    batch.set(memberRef, {
+      'cellId': cellId,
+      'userId': userId,
+      'name': memberName,
+      'role': setAsLeader ? 'lider' : 'membro',
+      'joinedAt': FieldValue.serverTimestamp(),
+    });
+
+    final userRef = _firestore.collection('users').doc(userId);
+    final userUpdates = <String, dynamic>{'primaryCellId': cellId};
+
+    if (setAsLeader) {
+      userUpdates['roles'] = FieldValue.arrayUnion(['leader']);
+      batch.update(cellRef, {'leaderId': userId});
+
+      final membersSnapshot = await cellRef.collection('members').get();
+      for (var doc in membersSnapshot.docs) {
+        if (doc.id != memberRef.id) {
+          final role = (doc.data()['role'] ?? '').toString().toLowerCase();
+          if (role == 'lider' || role == 'leader') {
+            batch.update(doc.reference, {'role': 'membro'});
+            final oldLeaderUserId = doc.data()['userId'] as String?;
+            if (oldLeaderUserId != null && oldLeaderUserId.isNotEmpty) {
+              batch.update(
+                _firestore.collection('users').doc(oldLeaderUserId),
+                {
+                  'roles': FieldValue.arrayRemove(['leader']),
+                },
+              );
+            }
+          }
+        }
+      }
+    }
+
+    batch.update(userRef, userUpdates);
+    await batch.commit();
+  }
+
+  @override
+  Future<void> rejectJoinRequest(String requestId) async {
+    await _firestore.collection('cell_requests').doc(requestId).update({
+      'status': RequestStatus.rejected.name,
+    });
+  }
+
+  @override
+  Future<void> cancelCellJoinRequest(String requestId) async {
+    await _firestore.collection('cell_requests').doc(requestId).delete();
+  }
+
+  @override
+  Future<void> changeMemberRole({
+    required String cellId,
+    required String memberId,
+    required String userId,
+    required String newRole,
+  }) async {
+    final cellRef = _firestore.collection('cells').doc(cellId);
+    final memberRef = cellRef.collection('members').doc(memberId);
+    final userRef =
+    userId.isNotEmpty ? _firestore.collection('users').doc(userId) : null;
+
+    final batch = _firestore.batch();
+
+    final memberDoc = await memberRef.get();
+    if (!memberDoc.exists) return;
+
+    final currentRole =
+    (memberDoc.data()?['role'] ?? '').toString().toLowerCase();
+    final normalizedNewRole = newRole.toLowerCase();
+
+    if (currentRole == normalizedNewRole) return;
+
+    batch.update(memberRef, {'role': normalizedNewRole});
+
+    final Map<String, dynamic> cellUpdates = {};
+    final actualId = userId.isNotEmpty ? userId : memberId;
+
+    // 1. Limpa o cargo antigo no documento principal da célula
+    if (currentRole == 'lider' || currentRole == 'leader') {
+      cellUpdates['leaderId'] = null;
+      if (userRef != null) {
+        batch.update(userRef, {
+          'roles': FieldValue.arrayRemove(['leader']),
+        });
+      }
+    } else if (currentRole == 'colider' || currentRole == 'co-leader') {
+      cellUpdates['coLeaderId'] = null;
+    } else if (currentRole == 'anfitriao' || currentRole == 'host') {
+      cellUpdates['hostId'] = null;
+    }
+
+    // 2. Define o novo cargo e rebaixa automaticamente qualquer ocupante anterior na célula
+    final membersSnapshot = await cellRef.collection('members').get();
+
+    if (normalizedNewRole == 'lider' || normalizedNewRole == 'leader') {
+      cellUpdates['leaderId'] = actualId;
+      if (userRef != null) {
+        batch.update(userRef, {
+          'roles': FieldValue.arrayUnion(['leader']),
+        });
+      }
+
+      for (var doc in membersSnapshot.docs) {
+        if (doc.id != memberId) {
+          final role = (doc.data()['role'] ?? '').toString().toLowerCase();
+          if (role == 'lider' || role == 'leader') {
+            batch.update(doc.reference, {'role': 'membro'});
+
+            final oldLeaderUserId = doc.data()['userId'] as String?;
+            if (oldLeaderUserId != null && oldLeaderUserId.isNotEmpty) {
+              batch.update(
+                _firestore.collection('users').doc(oldLeaderUserId),
+                {
+                  'roles': FieldValue.arrayRemove(['leader']),
+                },
+              );
+            }
+          }
+        }
+      }
+    } else if (normalizedNewRole == 'colider' ||
+        normalizedNewRole == 'co-leader') {
+      cellUpdates['coLeaderId'] = actualId;
+
+      for (var doc in membersSnapshot.docs) {
+        if (doc.id != memberId) {
+          final role = (doc.data()['role'] ?? '').toString().toLowerCase();
+          if (role == 'colider' || role == 'co-leader') {
+            batch.update(doc.reference, {'role': 'membro'});
+          }
+        }
+      }
+    } else if (normalizedNewRole == 'anfitriao' ||
+        normalizedNewRole == 'host') {
+      cellUpdates['hostId'] = actualId;
+
+      for (var doc in membersSnapshot.docs) {
+        if (doc.id != memberId) {
+          final role = (doc.data()['role'] ?? '').toString().toLowerCase();
+          if (role == 'anfitriao' || role == 'host') {
+            batch.update(doc.reference, {'role': 'membro'});
+          }
+        }
+      }
+    }
+
+    if (cellUpdates.isNotEmpty) {
+      batch.update(cellRef, cellUpdates);
+    }
+
+    await batch.commit();
+  }
+
+  @override
+  Future<void> transferMember({
+    required String currentCellId,
+    required String newCellId,
+    required String memberId,
+    required String userId,
+    required String memberName,
+  }) async {
+    final currentCellRef = _firestore.collection('cells').doc(currentCellId);
+    final currentMemberRef =
+    currentCellRef.collection('members').doc(memberId);
+
+    final newCellRef = _firestore.collection('cells').doc(newCellId);
+    final newMemberRef = newCellRef.collection('members').doc();
+
+    final batch = _firestore.batch();
+
+    final memberDoc = await currentMemberRef.get();
+    if (!memberDoc.exists) return;
+
+    final memberData = memberDoc.data() as Map<String, dynamic>;
+
+    String actualUserId = memberData['userId'] as String? ?? '';
+    if (actualUserId.trim().isEmpty) {
+      actualUserId = userId;
+    }
+
+    final userRef =
+    actualUserId.isNotEmpty
+        ? _firestore.collection('users').doc(actualUserId)
+        : null;
+
+    batch.delete(currentMemberRef);
+
+    final oldCellDoc = await currentCellRef.get();
+    final Map<String, dynamic> oldCellUpdates = {};
+
+    if (oldCellDoc.exists) {
+      final cellData = oldCellDoc.data() as Map<String, dynamic>;
+      final currentLeaderId = cellData['leaderId'] as String? ?? '';
+      final currentCoLeaderId = cellData['coLeaderId'] as String? ?? '';
+      final currentHostId = cellData['hostId'] as String? ?? '';
+
+      if (currentLeaderId == memberId ||
+          currentLeaderId == actualUserId ||
+          currentLeaderId == memberName) {
+        oldCellUpdates['leaderId'] = null;
+        if (userRef != null) {
+          batch.update(userRef, {
+            'roles': FieldValue.arrayRemove(['leader']),
+          });
+        }
+      }
+      if (currentCoLeaderId == memberId ||
+          currentCoLeaderId == actualUserId ||
+          currentCoLeaderId == memberName) {
+        oldCellUpdates['coLeaderId'] = null;
+      }
+      if (currentHostId == memberId ||
+          currentHostId == actualUserId ||
+          currentHostId == memberName) {
+        oldCellUpdates['hostId'] = null;
+      }
+
+      if (oldCellUpdates.isNotEmpty) {
+        batch.update(currentCellRef, oldCellUpdates);
+      }
+    }
+
+    batch.set(newMemberRef, {
+      'cellId': newCellId,
+      'userId': actualUserId,
+      'name': memberName,
+      'role': 'membro',
+      'joinedAt': FieldValue.serverTimestamp(),
+    });
+
+    if (userRef != null) {
+      batch.update(userRef, {'primaryCellId': newCellId});
+    }
+
+    await batch.commit();
+  }
+}

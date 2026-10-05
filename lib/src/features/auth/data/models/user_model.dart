@@ -11,16 +11,16 @@ class UserModel extends UserEntity {
     super.primaryCellId,
   });
 
-  factory UserModel.fromFirebaseUser(firebase.User user) {
+  factory UserModel.fromFirebaseUser(firebase.User user, {String? primaryCellId}) {
     return UserModel(
-        id: user.uid,
-        email: user.email ?? '',
-        name: user.displayName,
-        photoUrl: user.photoURL,
-        roles: const[UserRole.member]
+      id: user.uid,
+      email: user.email ?? '',
+      name: user.displayName,
+      photoUrl: user.photoURL,
+      roles: const [UserRole.member],
+      primaryCellId: primaryCellId,
     );
   }
-
   factory UserModel.fromMap(Map<String, dynamic> map, String id) {
     return UserModel(
       id: id,

@@ -19,6 +19,7 @@ void main() async {
   }
 
   await initInjection();
+
   runApp(const MyApp());
 }
 

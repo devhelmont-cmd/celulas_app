@@ -2,6 +2,9 @@ import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_state.dart';
 import 'package:celulas_app/src/features/auth/presentation/pages/sign_up_page.dart';
+import 'package:celulas_app/src/features/cells/presentation/pages/cells_list_page.dart';
+import 'package:celulas_app/src/features/cells/presentation/pages/create_cell_page.dart';
+import 'package:celulas_app/src/features/cells/presentation/pages/root_page.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/utils/fade_page_route.dart';
@@ -44,7 +47,10 @@ class _LoginPageState extends State<LoginPage> {
       );
       Navigator.of(
         context,
-      ).pushReplacement(FadePageRoute(page: HomePage(user: state.user)));
+      ).pushReplacement(FadePageRoute(page:
+      //HomePage(user: state.user)
+        RootPage(user: state.user,)
+      ));
     }
   }
 
