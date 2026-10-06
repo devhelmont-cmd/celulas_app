@@ -9,7 +9,6 @@ import 'package:celulas_app/src/features/auth/domain/usecases/send_password_rese
 import 'package:celulas_app/src/features/auth/domain/usecases/sign_out.dart';
 import 'package:celulas_app/src/features/auth/domain/usecases/sign_up_with_email.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_controller.dart';
-import 'package:celulas_app/src/features/cell_reports/data/datasources/cell_reports_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/data/repositories/cell_repository_impl.dart';
 import 'package:celulas_app/src/features/cells/domain/repositories/i_cell_repository.dart';
 import 'package:celulas_app/src/features/cells/domain/usecases/add_cell_member.dart';

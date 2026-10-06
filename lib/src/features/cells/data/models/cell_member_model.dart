@@ -9,9 +9,14 @@ class CellMemberModel extends CellMemberEntity {
     required super.name,
     required super.role,
     required super.joinedAt,
+    super.cellName,
   });
 
-  factory CellMemberModel.fromMap(Map<String, dynamic> map, String id) {
+  factory CellMemberModel.fromMap(
+      Map<String, dynamic> map,
+      String id, {
+        String? cellName,
+      }) {
     return CellMemberModel(
       id: id,
       cellId: map['cellId'] ?? '',
@@ -19,6 +24,7 @@ class CellMemberModel extends CellMemberEntity {
       name: map['name'] ?? '',
       role: map['role'] ?? 'membro',
       joinedAt: (map['joinedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      cellName: cellName ?? map['cellName'],
     );
   }
 
@@ -40,6 +46,7 @@ class CellMemberModel extends CellMemberEntity {
       name: entity.name,
       role: entity.role,
       joinedAt: entity.joinedAt,
+      cellName: entity.cellName,
     );
   }
 }

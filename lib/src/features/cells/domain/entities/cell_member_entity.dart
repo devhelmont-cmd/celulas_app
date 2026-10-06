@@ -5,6 +5,7 @@ class CellMemberEntity {
   final String name;
   final String role;
   final DateTime joinedAt;
+  final String? cellName;
 
   const CellMemberEntity({
     required this.id,
@@ -13,5 +14,6 @@ class CellMemberEntity {
     required this.name,
     required this.role,
     required this.joinedAt,
+    this.cellName,
   });
 }
