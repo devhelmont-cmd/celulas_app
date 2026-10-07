@@ -104,9 +104,11 @@ class AuthController extends ValueNotifier<AuthState> {
   Future<void> checkCurrentUser() async {
     value = AuthLoadingState();
     try {
-      final user = await _getCurrentUserUseCase();
-      if (user != null) {
-        value = AuthSuccessState(user);
+      final rawUser = await _getCurrentUserUseCase();
+      if (rawUser != null) {
+        // Sincroniza/Carrega os dados do Firestore antes de emitir AuthSuccessState
+        final syncedUser = await getIt<IUserRepository>().syncUserData(rawUser);
+        value = AuthSuccessState(syncedUser);
       } else {
         value = AuthInitialState();
       }
@@ -115,4 +117,5 @@ class AuthController extends ValueNotifier<AuthState> {
       value = AuthErrorState(cleanError);
     }
   }
+
 }

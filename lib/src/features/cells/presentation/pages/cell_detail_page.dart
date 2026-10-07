@@ -332,7 +332,6 @@ class _CellDetailPageState extends State<CellDetailPage> {
       final success = await _membersController.addMember(newMember);
       if (mounted) {
         if (success) {
-          // Atualiza também o primaryCellId do usuário para refletir no sistema
           try {
             await FirebaseFirestore.instance
                 .collection('users')
@@ -704,30 +703,15 @@ class _CellDetailPageState extends State<CellDetailPage> {
         final currentMembers =
             (_membersController.value as CellMemberLoadedState).members;
 
-        final existingOccupant = currentMembers
-            .cast<CellMemberEntity>()
-            .firstWhere(
-              (m) => _normalizeRole(m.role) == newRole && m.id != member.id,
-          orElse:
-              () => CellMemberEntity(
-            id: '',
-            cellId: '',
-            name: '',
-            role: '',
-            joinedAt: DateTime.now(),
-          ),
-        );
-
-        if (existingOccupant.id.isNotEmpty) {
-          final String roleTitle = roleOptions[newRole] ?? newRole;
-          final confirmReplacement = await showDialog<bool>(
+        // Se o membro for o líder atual e estiver deixando o cargo de líder
+        final bool isCurrentlyLeader = currentSelection == 'lider';
+        if (isCurrentlyLeader && newRole != 'lider') {
+          final confirmLeaderless = await showDialog<bool>(
             context: context,
-            builder:
-                (ctx) => AlertDialog(
-              title: Text('Substituir $roleTitle?'),
+            builder: (ctx) => AlertDialog(
+              title: const Text('Célula Sem Líder'),
               content: Text(
-                'A célula já possui ${existingOccupant.name} como $roleTitle. '
-                    'Ao confirmar, ${existingOccupant.name} passará a ser Membro e ${member.name} assumirá o cargo.',
+                'Ao alterar a função de ${member.name}, a célula ficará sem um líder definido. Deseja continuar?',
               ),
               actions: [
                 TextButton(
@@ -736,13 +720,55 @@ class _CellDetailPageState extends State<CellDetailPage> {
                 ),
                 ElevatedButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Substituir'),
+                  child: const Text('Confirmar'),
                 ),
               ],
             ),
           );
 
-          if (confirmReplacement != true) return;
+          if (confirmLeaderless != true) return;
+        }
+
+        // Verifica substituição apenas se for um cargo de ocupante único (lider, colider, anfitriao)
+        if (newRole != 'membro') {
+          final existingOccupant = currentMembers
+              .cast<CellMemberEntity>()
+              .firstWhere(
+                (m) => _normalizeRole(m.role) == newRole && m.id != member.id,
+            orElse: () => CellMemberEntity(
+              id: '',
+              cellId: '',
+              name: '',
+              role: '',
+              joinedAt: DateTime.now(),
+            ),
+          );
+
+          if (existingOccupant.id.isNotEmpty) {
+            final String roleTitle = roleOptions[newRole] ?? newRole;
+            final confirmReplacement = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: Text('Substituir $roleTitle?'),
+                content: Text(
+                  'A célula já possui ${existingOccupant.name} como $roleTitle. '
+                      'Ao confirmar, ${existingOccupant.name} passará a ser Membro e ${member.name} assumirá o cargo.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancelar'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Substituir'),
+                  ),
+                ],
+              ),
+            );
+
+            if (confirmReplacement != true) return;
+          }
         }
       }
 
@@ -956,6 +982,7 @@ class _CellDetailPageState extends State<CellDetailPage> {
                             ),
                           )
                               : FutureBuilder<String?>(
+                            key: ValueKey('leader_detail_${cell.id}_${cell.leaderId}'),
                             future: dataSource.getUserNameById(
                               cell.leaderId!,
                             ),
@@ -1099,7 +1126,6 @@ class _CellDetailPageState extends State<CellDetailPage> {
                                 user.name!.trim().toLowerCase()));
                   }
 
-                  // Verifica se o pastor pode se vincular
                   final bool canBindSelf =
                       user != null && isPastorOrCoord && !isCurrentUserInCell;
 
@@ -1213,13 +1239,10 @@ class _CellDetailPageState extends State<CellDetailPage> {
                                                       .trim()
                                                       .toLowerCase()));
 
-                                  // Pastor ou líder atual da célula podem editar.
-                                  // O pastor consegue editar a própria função também.
                                   final bool canEditMember = isPastorOrCoord ||
                                       (isUserLeaderOfThisCell &&
                                           !isCurrentLogUserCard);
 
-                                  // Se for a conta conectada
                                   final bool canSeeLeaveButton = isCurrentLogUserCard;
 
                                   return Card(
@@ -1251,7 +1274,7 @@ class _CellDetailPageState extends State<CellDetailPage> {
                                             _showTransferDialog(member);
                                           } else if (value == 'remove') {
                                             if (isCurrentLogUserCard) {
-                                              _leaveCell(member); // Sai
+                                              _leaveCell(member);
                                             } else {
                                               _removeMemberCompletely(member);
                                             }
@@ -1262,7 +1285,6 @@ class _CellDetailPageState extends State<CellDetailPage> {
                                             value: 'role',
                                             child: Text('Alterar Função'),
                                           ),
-                                          // Bloqueia transferir a si mesmo (sair resolve isso)
                                           if (isPastorOrCoord && !isCurrentLogUserCard)
                                             const PopupMenuItem(
                                               value: 'transfer',

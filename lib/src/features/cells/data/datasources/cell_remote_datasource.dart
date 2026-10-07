@@ -121,10 +121,63 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
   Future<String?> getUserNameById(String userId) async {
     if (userId.trim().isEmpty) return null;
     try {
-      final doc = await _firestore.collection('users').doc(userId).get();
-      if (!doc.exists) return null;
-      final data = doc.data() as Map<String, dynamic>;
-      return data['name'] as String?;
+      // 1. Tenta procurar diretamente na coleção 'users' pelo userId
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        final data = userDoc.data() as Map<String, dynamic>;
+        final userName = data['name'] as String?;
+        if (userName != null && userName.trim().isNotEmpty) {
+          return userName;
+        }
+      }
+
+      // 2. Se não encontrou em 'users', procura no subgrupo de membros ('members')
+      final membersSnapshot =
+      await _firestore.collectionGroup('members').get();
+
+      // Verifica se o ID corresponde ao ID do documento de membro (memberId)
+      for (var doc in membersSnapshot.docs) {
+        if (doc.id == userId) {
+          final data = doc.data();
+          final memberUserId = data['userId'] as String?;
+
+          // Se o membro já possui um userId associado (ex: criou conta no app),
+          // procura o nome atualizado da conta do utilizador em 'users'
+          if (memberUserId != null && memberUserId.trim().isNotEmpty) {
+            final linkedUserDoc =
+            await _firestore.collection('users').doc(memberUserId).get();
+            if (linkedUserDoc.exists) {
+              final linkedUserData =
+              linkedUserDoc.data() as Map<String, dynamic>;
+              final linkedName = linkedUserData['name'] as String?;
+              if (linkedName != null && linkedName.trim().isNotEmpty) {
+                return linkedName;
+              }
+            }
+          }
+
+          // Se não tem conta associada ou não encontrou o nome do utilizador,
+          // devolve o nome do membro registado na célula
+          final memberName = data['name'] as String?;
+          if (memberName != null && memberName.trim().isNotEmpty) {
+            return memberName;
+          }
+        }
+      }
+
+      // 3. Caso o ID guardado seja na verdade um userId de um membro,
+      // mas o documento em 'users' não existe/não tem nome
+      for (var doc in membersSnapshot.docs) {
+        final data = doc.data();
+        if (data['userId'] == userId) {
+          final memberName = data['name'] as String?;
+          if (memberName != null && memberName.trim().isNotEmpty) {
+            return memberName;
+          }
+        }
+      }
+
+      return null;
     } catch (_) {
       return null;
     }
@@ -326,14 +379,27 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     final cellRef = _firestore.collection('cells').doc(cellId);
     final memberRef = cellRef.collection('members').doc(memberId);
 
-    batch.update(memberRef, {'userId': newUserId});
+    // Procura o nome do utilizador recém-criado na coleção 'users'
+    final userDoc = await _firestore.collection('users').doc(newUserId).get();
+    String? newUserName;
+    if (userDoc.exists) {
+      final userData = userDoc.data() as Map<String, dynamic>;
+      newUserName = userData['name'] as String?;
+    }
+
+    final Map<String, dynamic> memberUpdates = {'userId': newUserId};
+    if (newUserName != null && newUserName.trim().isNotEmpty) {
+      memberUpdates['name'] = newUserName;
+    }
+
+    batch.update(memberRef, memberUpdates);
 
     final cellDoc = await cellRef.get();
     if (cellDoc.exists) {
       final cellData = cellDoc.data() as Map<String, dynamic>;
       final cellUpdates = <String, dynamic>{};
 
-      // Substitui o ID temporário pelo novo userId nas permissões da célula
+      // Substitui o ID temporário do membro pelo novo userId
       if (cellData['leaderId'] == memberId) cellUpdates['leaderId'] = newUserId;
       if (cellData['coLeaderId'] == memberId) cellUpdates['coLeaderId'] = newUserId;
       if (cellData['hostId'] == memberId) cellUpdates['hostId'] = newUserId;
@@ -475,7 +541,6 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     DocumentReference targetMemberRef;
     Map<String, dynamic> memberData = {};
 
-    // Armazena as atualizações que precisam ir para o documento raiz da célula
     final Map<String, dynamic> targetCellUpdates = {};
 
     if (matchedMemberId != null && matchedMemberId.trim().isNotEmpty) {
@@ -542,7 +607,6 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
             matchedMemberId,
           );
 
-          // Verifica se os campos raiz da célula atual guardavam o ID temporário
           final targetCellDoc = await targetCellRef.get();
           if (targetCellDoc.exists) {
             final cellData = targetCellDoc.data() as Map<String, dynamic>;
@@ -583,7 +647,6 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       userUpdates['roles'] = FieldValue.arrayUnion(['leader']);
       targetCellUpdates['leaderId'] = userId;
 
-      // Remove cargos menores caso ele já ocupasse um antes e seja promovido no vínculo
       if (targetCellUpdates.containsKey('coLeaderId')) targetCellUpdates['coLeaderId'] = null;
       if (targetCellUpdates.containsKey('hostId')) targetCellUpdates['hostId'] = null;
 
@@ -785,7 +848,6 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         ? _firestore.collection('users').doc(actualUserId)
         : null;
 
-    // Atualiza célula e garante que entra na nova célula como 'membro'
     memberData['cellId'] = newCellId;
     memberData['role'] = 'membro';
     memberData['joinedAt'] = FieldValue.serverTimestamp();
@@ -803,7 +865,6 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     batch.set(newMemberRef, memberData);
     batch.delete(currentMemberRef);
 
-    // Limpa atribuição de líder/co-líder/anfitrião da célula anterior
     final oldCellDoc = await currentCellRef.get();
     if (oldCellDoc.exists) {
       final cellData = oldCellDoc.data() as Map<String, dynamic>;

@@ -34,18 +34,24 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
        _googleSignIn = googleSignIn ?? GoogleSignIn(),
        _firestore = firestore ?? FirebaseFirestore.instance;
 
-  @override
   Future<UserModel> loginWithEmail(String email, String password) async {
     try {
       final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
-      if (userCredential.user == null) {
+      final user = userCredential.user;
+      if (user == null) {
         throw Exception('Usuário não encontrado');
       }
 
-      return UserModel.fromFirebaseUser(userCredential.user!);
+      // Busca os dados completos e papéis no Firestore
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (doc.exists && doc.data() != null) {
+        return UserModel.fromMap(doc.data()!, user.uid);
+      }
+
+      return UserModel.fromFirebaseUser(user);
     } on FirebaseAuthException catch (e) {
       throw Exception(_handleAuthException(e));
     } catch (e) {
@@ -142,6 +148,14 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<UserModel?> getCurrentUser() async {
     final user = _firebaseAuth.currentUser;
     if (user != null) {
+      // 1. Busca o documento com os papéis (roles) e dados do usuário no Firestore
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+
+      if (doc.exists && doc.data() != null) {
+        // Ajuste este construtor de acordo com o que você possui em UserModel (ex: fromMap ou fromFirestore)
+        return UserModel.fromMap(doc.data()!, user.uid);
+      }
+
       return UserModel.fromFirebaseUser(user);
     }
     return null;

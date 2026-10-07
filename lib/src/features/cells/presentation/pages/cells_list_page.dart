@@ -24,23 +24,18 @@ class CellsListPage extends StatelessWidget {
     final canCreateCell = currentUser?.isPastorOrCoordinator ?? false;
     final isMemberOnly = currentUser != null && currentUser!.isMember && !currentUser!.isPastorOrCoordinator && !currentUser!.isLeader;
 
-    // Criamos uma cópia da lista para ordenar sem modificar o array original
     final sortedCells = List<CellEntity>.from(cells);
 
     sortedCells.sort((a, b) {
-      // Verifica se a célula 'a' é a célula do usuário logado
       final bool isCellAUser = currentUser != null &&
           (a.id == currentUser!.primaryCellId || a.leaderId == currentUser!.id);
 
-      // Verifica se a célula 'b' é a célula do usuário logado
       final bool isCellBUser = currentUser != null &&
           (b.id == currentUser!.primaryCellId || b.leaderId == currentUser!.id);
 
-      // A célula do usuário tem prioridade máxima (fica no topo)
       if (isCellAUser && !isCellBUser) return -1;
       if (!isCellAUser && isCellBUser) return 1;
 
-      // Caso contrário, ordena alfabeticamente pelo nome da célula
       final nameA = a.name ?? '';
       final nameB = b.name ?? '';
       return nameA.toLowerCase().compareTo(nameB.toLowerCase());
@@ -142,6 +137,7 @@ class CellsListPage extends StatelessWidget {
                               ),
                             )
                                 : FutureBuilder<String?>(
+                              key: ValueKey('leader_list_${cell.id}_${cell.leaderId}'),
                               future: dataSource.getUserNameById(cell.leaderId!),
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState ==
