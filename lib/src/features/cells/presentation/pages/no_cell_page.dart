@@ -14,13 +14,17 @@ import '../controllers/user_cell_onboarding_controller.dart';
 class NoCellPage extends StatefulWidget {
   final String userId;
   final String userName;
+  final bool isPastorOrCoordinator;
   final VoidCallback onSuccessRequest;
+  final VoidCallback? onSkip;
 
   const NoCellPage({
     super.key,
     required this.userId,
     required this.userName,
+    this.isPastorOrCoordinator = false,
     required this.onSuccessRequest,
+    this.onSkip,
   });
 
   @override
@@ -130,6 +134,21 @@ class _NoCellPageState extends State<NoCellPage> {
         ),
         body: Column(
           children: [
+            // Opção extra visível para Pastor/Coordenador caso precise pular
+            if (widget.isPastorOrCoordinator && widget.onSkip != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                child: ElevatedButton.icon(
+                  onPressed: widget.onSkip,
+                  icon: const Icon(Icons.admin_panel_settings),
+                  label: const Text('Acessar como Pastor/Coordenador (Sem Célula)'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
             Container(
               padding: const EdgeInsets.all(16),
               color: Colors.grey.shade200,

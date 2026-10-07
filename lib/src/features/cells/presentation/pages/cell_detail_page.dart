@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
@@ -253,6 +254,103 @@ class _CellDetailPageState extends State<CellDetailPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Erro ao adicionar membro.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _bindSelfToCell() async {
+    final roleOptions = {
+      'lider': 'Líder',
+      'colider': 'Co-líder',
+      'anfitriao': 'Anfitrião',
+      'membro': 'Membro',
+    };
+    String selectedRole = 'lider';
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Vincular-se à Célula'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Deseja se vincular a esta célula? Selecione sua função:'),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedRole,
+                    decoration: const InputDecoration(
+                      labelText: 'Sua Função',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: roleOptions.entries.map((entry) {
+                      return DropdownMenuItem<String>(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() => selectedRole = val);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Vincular'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true && widget.currentUser != null) {
+      final newMember = CellMemberModel(
+        id: '',
+        cellId: _currentCell.id,
+        userId: widget.currentUser!.id,
+        name: widget.currentUser!.name ?? widget.currentUser!.email.split('@').first,
+        role: selectedRole,
+        joinedAt: DateTime.now(),
+      );
+
+      final success = await _membersController.addMember(newMember);
+      if (mounted) {
+        if (success) {
+          // Atualiza também o primaryCellId do usuário para refletir no sistema
+          try {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(widget.currentUser!.id)
+                .update({'primaryCellId': _currentCell.id});
+          } catch (_) {}
+
+          await _refreshCell();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Você foi vinculado à célula com sucesso!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Erro ao vincular-se à célula.'),
               backgroundColor: Colors.red,
             ),
           );
@@ -988,184 +1086,226 @@ class _CellDetailPageState extends State<CellDetailPage> {
               ),
             ],
             const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Membros da Célula',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                if (canAddMember)
-                  ElevatedButton.icon(
-                    onPressed: _showAddMemberDialog,
-                    icon: const Icon(Icons.person_add, size: 18),
-                    label: const Text('Adicionar'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
             Expanded(
               child: ValueListenableBuilder<CellMemberState>(
                 valueListenable: _membersController,
                 builder: (context, state, _) {
-                  if (state is CellMemberLoadingState ||
-                      state is CellMemberInitialState) {
-                    return const Center(child: CircularProgressIndicator());
+                  bool isCurrentUserInCell = false;
+                  if (state is CellMemberLoadedState && user != null) {
+                    isCurrentUserInCell = state.members.any((m) =>
+                    m.userId == user.id ||
+                        (user.name != null &&
+                            m.name.trim().toLowerCase() ==
+                                user.name!.trim().toLowerCase()));
                   }
 
-                  if (state is CellMemberErrorState) {
-                    return Center(
-                      child: Text(
-                        'Erro: ${state.message}',
-                        style: const TextStyle(color: Colors.red),
-                      ),
-                    );
-                  }
+                  // Verifica se o pastor pode se vincular
+                  final bool canBindSelf =
+                      user != null && isPastorOrCoord && !isCurrentUserInCell;
 
-                  if (state is CellMemberLoadedState) {
-                    final members = List<CellMemberEntity>.from(state.members);
-
-                    if (members.isEmpty) {
-                      return const Center(
-                        child: Text('Nenhum membro cadastrado nesta célula.'),
-                      );
-                    }
-
-                    members.sort((a, b) {
-                      final bool isUserA =
-                          user != null &&
-                              (a.userId == user.id ||
-                                  (user.name != null &&
-                                      a.name.trim().toLowerCase() ==
-                                          user.name!.trim().toLowerCase()));
-                      final bool isUserB =
-                          user != null &&
-                              (b.userId == user.id ||
-                                  (user.name != null &&
-                                      b.name.trim().toLowerCase() ==
-                                          user.name!.trim().toLowerCase()));
-
-                      if (isUserA && !isUserB) return -1;
-                      if (!isUserA && isUserB) return 1;
-
-                      final int weightA = _getRoleWeight(a.role);
-                      final int weightB = _getRoleWeight(b.role);
-
-                      if (weightA != weightB) {
-                        return weightA.compareTo(weightB);
-                      }
-
-                      return a.name.toLowerCase().compareTo(
-                        b.name.toLowerCase(),
-                      );
-                    });
-
-                    return ListView.builder(
-                      itemCount: members.length,
-                      itemBuilder: (context, index) {
-                        final member = members[index];
-                        final formattedRole = _formatMemberRole(member.role);
-
-                        final bool isUserLeaderOfThisCell =
-                            user != null &&
-                                (cell.leaderId == user.id ||
-                                    (user.name != null &&
-                                        cell.leaderId?.trim().toLowerCase() ==
-                                            user.name!.trim().toLowerCase()));
-
-                        final bool isCurrentLogUserCard =
-                            user != null &&
-                                (member.userId == user.id ||
-                                    (user.name != null &&
-                                        member.name.trim().toLowerCase() ==
-                                            user.name!.trim().toLowerCase()));
-
-                        final bool canEditMember =
-                            (isPastorOrCoord || isUserLeaderOfThisCell) &&
-                                !isCurrentLogUserCard;
-                        final bool canSeeLeaveButton =
-                            isCurrentLogUserCard && !isPastorOrCoord;
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              child: Text(
-                                member.name.isNotEmpty
-                                    ? member.name[0].toUpperCase()
-                                    : 'M',
-                              ),
-                            ),
-                            title: Text(member.name),
-                            subtitle: Text(
-                              formattedRole,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color:
-                                formattedRole == 'Líder'
-                                    ? Colors.blue.shade700
-                                    : Colors.grey.shade700,
-                              ),
-                            ),
-                            trailing:
-                            canEditMember
-                                ? PopupMenuButton<String>(
-                              onSelected: (value) {
-                                if (value == 'role') {
-                                  _showRoleChangeDialog(member);
-                                } else if (value == 'transfer') {
-                                  _showTransferDialog(member);
-                                } else if (value == 'remove') {
-                                  _removeMemberCompletely(member);
-                                }
-                              },
-                              itemBuilder:
-                                  (context) => [
-                                const PopupMenuItem(
-                                  value: 'role',
-                                  child: Text('Alterar Função'),
-                                ),
-                                if (isPastorOrCoord)
-                                  const PopupMenuItem(
-                                    value: 'transfer',
-                                    child: Text(
-                                      'Transferir de Célula',
-                                    ),
-                                  ),
-                                const PopupMenuItem(
-                                  value: 'remove',
-                                  child: Text(
-                                    'Remover da Célula',
-                                    style: TextStyle(
-                                      color: Colors.red,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            )
-                                : canSeeLeaveButton
-                                ? TextButton.icon(
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.red,
-                              ),
-                              onPressed: () => _leaveCell(member),
-                              icon: const Icon(Icons.logout, size: 16),
-                              label: const Text('Sair'),
-                            )
-                                : null,
+                  return Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Membros da Célula',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
                           ),
-                        );
-                      },
-                    );
-                  }
+                          Row(
+                            children: [
+                              if (canBindSelf)
+                                ElevatedButton.icon(
+                                  onPressed: _bindSelfToCell,
+                                  icon: const Icon(Icons.link, size: 18),
+                                  label: const Text('Vincular-me'),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                  ),
+                                ),
+                              if (canBindSelf && canAddMember)
+                                const SizedBox(width: 8),
+                              if (canAddMember)
+                                ElevatedButton.icon(
+                                  onPressed: _showAddMemberDialog,
+                                  icon: const Icon(Icons.person_add, size: 18),
+                                  label: const Text('Adicionar'),
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: Builder(
+                          builder: (context) {
+                            if (state is CellMemberLoadingState ||
+                                state is CellMemberInitialState) {
+                              return const Center(
+                                  child: CircularProgressIndicator());
+                            }
 
-                  return const SizedBox.shrink();
+                            if (state is CellMemberErrorState) {
+                              return Center(
+                                child: Text(
+                                  'Erro: ${state.message}',
+                                  style: const TextStyle(color: Colors.red),
+                                ),
+                              );
+                            }
+
+                            if (state is CellMemberLoadedState) {
+                              final members =
+                              List<CellMemberEntity>.from(state.members);
+
+                              if (members.isEmpty) {
+                                return const Center(
+                                  child: Text(
+                                      'Nenhum membro cadastrado nesta célula.'),
+                                );
+                              }
+
+                              members.sort((a, b) {
+                                final bool isUserA = user != null &&
+                                    (a.userId == user.id ||
+                                        (user.name != null &&
+                                            a.name.trim().toLowerCase() ==
+                                                user.name!.trim().toLowerCase()));
+                                final bool isUserB = user != null &&
+                                    (b.userId == user.id ||
+                                        (user.name != null &&
+                                            b.name.trim().toLowerCase() ==
+                                                user.name!.trim().toLowerCase()));
+
+                                if (isUserA && !isUserB) return -1;
+                                if (!isUserA && isUserB) return 1;
+
+                                final int weightA = _getRoleWeight(a.role);
+                                final int weightB = _getRoleWeight(b.role);
+
+                                if (weightA != weightB) {
+                                  return weightA.compareTo(weightB);
+                                }
+
+                                return a.name.toLowerCase().compareTo(
+                                  b.name.toLowerCase(),
+                                );
+                              });
+
+                              return ListView.builder(
+                                itemCount: members.length,
+                                itemBuilder: (context, index) {
+                                  final member = members[index];
+                                  final formattedRole =
+                                  _formatMemberRole(member.role);
+
+                                  final bool isCurrentLogUserCard = user != null &&
+                                      (member.userId == user.id ||
+                                          (user.name != null &&
+                                              member.name.trim().toLowerCase() ==
+                                                  user.name!
+                                                      .trim()
+                                                      .toLowerCase()));
+
+                                  // Pastor ou líder atual da célula podem editar.
+                                  // O pastor consegue editar a própria função também.
+                                  final bool canEditMember = isPastorOrCoord ||
+                                      (isUserLeaderOfThisCell &&
+                                          !isCurrentLogUserCard);
+
+                                  // Se for a conta conectada
+                                  final bool canSeeLeaveButton = isCurrentLogUserCard;
+
+                                  return Card(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    child: ListTile(
+                                      leading: CircleAvatar(
+                                        child: Text(
+                                          member.name.isNotEmpty
+                                              ? member.name[0].toUpperCase()
+                                              : 'M',
+                                        ),
+                                      ),
+                                      title: Text(member.name),
+                                      subtitle: Text(
+                                        formattedRole,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: formattedRole == 'Líder'
+                                              ? Colors.blue.shade700
+                                              : Colors.grey.shade700,
+                                        ),
+                                      ),
+                                      trailing: canEditMember
+                                          ? PopupMenuButton<String>(
+                                        onSelected: (value) {
+                                          if (value == 'role') {
+                                            _showRoleChangeDialog(member);
+                                          } else if (value == 'transfer') {
+                                            _showTransferDialog(member);
+                                          } else if (value == 'remove') {
+                                            if (isCurrentLogUserCard) {
+                                              _leaveCell(member); // Sai
+                                            } else {
+                                              _removeMemberCompletely(member);
+                                            }
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(
+                                            value: 'role',
+                                            child: Text('Alterar Função'),
+                                          ),
+                                          // Bloqueia transferir a si mesmo (sair resolve isso)
+                                          if (isPastorOrCoord && !isCurrentLogUserCard)
+                                            const PopupMenuItem(
+                                              value: 'transfer',
+                                              child: Text(
+                                                  'Transferir de Célula'),
+                                            ),
+                                          PopupMenuItem(
+                                            value: 'remove',
+                                            child: Text(
+                                              isCurrentLogUserCard
+                                                  ? 'Sair da Célula'
+                                                  : 'Remover da Célula',
+                                              style: const TextStyle(
+                                                  color: Colors.red),
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                          : canSeeLeaveButton
+                                          ? TextButton.icon(
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Colors.red,
+                                        ),
+                                        onPressed: () =>
+                                            _leaveCell(member),
+                                        icon: const Icon(
+                                            Icons.logout,
+                                            size: 16),
+                                        label: const Text('Sair'),
+                                      )
+                                          : null,
+                                    ),
+                                  );
+                                },
+                              );
+                            }
+
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ),
+                    ],
+                  );
                 },
               ),
             ),

@@ -31,6 +31,7 @@ class _RootPageState extends State<RootPage> {
   @override
   Widget build(BuildContext context) {
     // 1. Passe livre imediato apenas para Pastor ou Coordenador
+    // (O usuário pastor que acabou de logar irá direto para a HomePage)
     if (widget.user.isPastorOrCoordinator) {
       return HomePage(user: widget.user);
     }
@@ -69,6 +70,12 @@ class _RootPageState extends State<RootPage> {
           return NoCellPage(
             userId: widget.user.id,
             userName: widget.user.name ?? widget.user.email,
+            isPastorOrCoordinator: widget.user.isPastorOrCoordinator,
+            onSkip: () {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => HomePage(user: widget.user)),
+              );
+            },
             onSuccessRequest: () =>
                 _onboardingController.checkUserCellStatus(widget.user.id),
           );
