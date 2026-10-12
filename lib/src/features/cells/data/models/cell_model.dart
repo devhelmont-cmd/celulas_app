@@ -18,7 +18,6 @@ class CellModel extends CellEntity {
   });
 
   factory CellModel.fromMap(Map<String, dynamic> map, String id) {
-    // Blindagem para a data de criação:
     DateTime parsedDate = DateTime.now();
     if (map['createdAt'] != null) {
       if (map['createdAt'] is Timestamp) {
@@ -39,8 +38,9 @@ class CellModel extends CellEntity {
       meetingDay: map['meetingDay']?.toString() ?? '',
       meetingTime: map['meetingTime']?.toString() ?? '',
       category: map['category']?.toString() ?? 'Geral',
-      // Aceita true booleano ou a string 'true' de bancos antigos
-      isActive: map['isActive'] == true || map['isActive'] == 'true',
+      isActive: map['isActive'] == null
+          ? true
+          : (map['isActive'] == true || map['isActive'] == 'true'),
       createdAt: parsedDate,
     );
   }

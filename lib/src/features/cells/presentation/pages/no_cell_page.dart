@@ -1,5 +1,3 @@
-// lib/src/features/cells/presentation/pages/no_cell_page.dart
-
 import 'package:flutter/material.dart';
 
 import '../../../../core/injections/injection_container.dart';
@@ -39,6 +37,9 @@ class _NoCellPageState extends State<NoCellPage> {
   String _searchQuery = '';
   String? _fatalError;
 
+  // Cache em memória para nomes de Líderes e Anfitriões resolvidos
+  final Map<String, String> _resolvedNamesCache = {};
+
   @override
   void initState() {
     super.initState();
@@ -53,7 +54,8 @@ class _NoCellPageState extends State<NoCellPage> {
         });
       });
     } catch (e) {
-      _fatalError = '🚨 ERRO DE INJEÇÃO (GetIt):\n$e\n\nVocê registrou o UserCellOnboardingController no injection_container.dart? Lembre-se de parar o app no Stop e rodar de novo!';
+      _fatalError =
+      '🚨 ERRO DE INJEÇÃO (GetIt):\n$e\n\nVocê registrou o UserCellOnboardingController no injection_container.dart? Lembre-se de parar o app no Stop e rodar de novo!';
     }
   }
 
@@ -63,12 +65,30 @@ class _NoCellPageState extends State<NoCellPage> {
     super.dispose();
   }
 
+  Future<String> _resolveName(
+      ICellRemoteDataSource dataSource,
+      String? idOrName,
+      ) async {
+    if (idOrName == null || idOrName.trim().isEmpty) return '';
+    if (_resolvedNamesCache.containsKey(idOrName)) {
+      return _resolvedNamesCache[idOrName]!;
+    }
+
+    final name = await dataSource.getUserNameById(idOrName);
+    final resolved = name ?? idOrName;
+    _resolvedNamesCache[idOrName] = resolved;
+    return resolved;
+  }
+
   Future<void> _requestToJoin(CellEntity cell) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder:
+          (ctx) => AlertDialog(
         title: Text('Entrar em ${cell.name}'),
-        content: Text('Deseja enviar uma solicitação para a célula ${cell.name}?'),
+        content: Text(
+          'Deseja enviar uma solicitação para a célula ${cell.name}?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -92,7 +112,10 @@ class _NoCellPageState extends State<NoCellPage> {
 
       if (mounted && success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Solicitação enviada com sucesso!'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Solicitação enviada com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
         );
         widget.onSuccessRequest();
       }
@@ -106,7 +129,14 @@ class _NoCellPageState extends State<NoCellPage> {
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(20.0),
-            child: Text(_fatalError!, style: const TextStyle(color: Colors.red, fontSize: 18, fontWeight: FontWeight.bold)),
+            child: Text(
+              _fatalError!,
+              style: const TextStyle(
+                color: Colors.red,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
       );
@@ -138,12 +168,17 @@ class _NoCellPageState extends State<NoCellPage> {
             if (widget.isPastorOrCoordinator && widget.onSkip != null)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 color: Theme.of(context).primaryColor.withOpacity(0.1),
                 child: ElevatedButton.icon(
                   onPressed: widget.onSkip,
                   icon: const Icon(Icons.admin_panel_settings),
-                  label: const Text('Acessar como Pastor/Coordenador (Sem Célula)'),
+                  label: const Text(
+                    'Acessar como Pastor/Coordenador (Sem Célula)',
+                  ),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
@@ -154,14 +189,19 @@ class _NoCellPageState extends State<NoCellPage> {
               color: Colors.grey.shade200,
               child: Column(
                 children: [
-                  const Text('Ainda não pertence a nenhuma célula. Pesquise abaixo:', textAlign: TextAlign.center),
+                  const Text(
+                    'Ainda não pertence a nenhuma célula. Pesquise abaixo:',
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: 'Buscar por nome ou bairro...',
+                      hintText: 'Buscar por nome, bairro, líder ou anfitrião...',
                       prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                   ),
@@ -173,111 +213,244 @@ class _NoCellPageState extends State<NoCellPage> {
                 valueListenable: _cellController,
                 builder: (context, state, child) {
                   if (state is CellLoadedState) {
-                    final cells = state.cells.where((c) {
-                      final name = c.name.toString().toLowerCase();
-                      final neighborhood = c.neighborhood.toString().toLowerCase();
-                      return name.contains(_searchQuery) || neighborhood.contains(_searchQuery);
-                    }).toList();
+                    final allCells = state.cells;
 
-                    cells.sort((a, b) => (a.name ?? '').toLowerCase().compareTo((b.name ?? '').toLowerCase()));
+                    if (allCells.isEmpty) {
+                      return const Center(
+                        child: Text('Nenhuma célula encontrada.'),
+                      );
+                    }
 
-                    if (cells.isEmpty) return const Center(child: Text('Nenhuma célula encontrada.'));
+                    return FutureBuilder<List<CellEntity>>(
+                      future: Future.wait(
+                        allCells.map((cell) async {
+                          final leaderName = await _resolveName(
+                            dataSource,
+                            cell.leaderId,
+                          );
+                          final hostName = await _resolveName(
+                            dataSource,
+                            cell.hostId,
+                          );
 
-                    return ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: cells.length,
-                      itemBuilder: (context, index) {
-                        final cell = cells[index];
-                        final isLeaderEmpty = cell.leaderId == null || cell.leaderId!.trim().isEmpty;
+                          final name = (cell.name ?? '').toLowerCase();
+                          final neighborhood = (cell.neighborhood ?? '')
+                              .toLowerCase();
+                          final leader = leaderName.toLowerCase();
+                          final host = hostName.toLowerCase();
 
-                        return Card(
-                          key: ValueKey(cell.id),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        cell.name ?? 'Sem Nome',
-                                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      onTap: () => _requestToJoin(cell),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          border: Border.all(color: Theme.of(context).primaryColor),
-                                          borderRadius: BorderRadius.circular(20),
-                                        ),
-                                        child: Text(
-                                          'Solicitar',
-                                          style: TextStyle(
-                                            color: Theme.of(context).primaryColor,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
+                          final matches =
+                              _searchQuery.isEmpty ||
+                                  name.contains(_searchQuery) ||
+                                  neighborhood.contains(_searchQuery) ||
+                                  leader.contains(_searchQuery) ||
+                                  host.contains(_searchQuery);
 
-                                // Oculta a linha do líder caso ele não esteja definido
-                                if (!isLeaderEmpty) ...[
-                                  FutureBuilder<String?>(
-                                    future: dataSource.getUserNameById(cell.leaderId!),
-                                    builder: (context, snapshot) {
-                                      final leaderName = snapshot.data ?? cell.leaderId!;
-                                      return Row(
-                                        children: [
-                                          const Icon(Icons.person, size: 16, color: Colors.grey),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            'Líder: $leaderName',
-                                            style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.black87),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(height: 4),
-                                ],
-
-                                Row(
-                                  children: [
-                                    const Icon(Icons.location_on, size: 16, color: Colors.grey),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        '${cell.address ?? ''} • ${cell.neighborhood ?? ''}',
-                                        style: const TextStyle(color: Colors.grey),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      '${cell.meetingDay ?? ''} às ${cell.meetingTime ?? ''}',
-                                      style: const TextStyle(color: Colors.grey),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                          return matches ? cell : null;
+                        }),
+                      ).then(
+                            (list) => list.whereType<CellEntity>().toList()
+                          ..sort(
+                                (a, b) => (a.name ?? '').toLowerCase().compareTo(
+                              (b.name ?? '').toLowerCase(),
                             ),
                           ),
+                      ),
+                      builder: (context, asyncSnapshot) {
+                        if (asyncSnapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+
+                        final filteredCells = asyncSnapshot.data ?? [];
+
+                        if (filteredCells.isEmpty) {
+                          return const Center(
+                            child: Text('Nenhuma célula encontrada.'),
+                          );
+                        }
+
+                        return ListView.builder(
+                          padding: const EdgeInsets.all(12),
+                          itemCount: filteredCells.length,
+                          itemBuilder: (context, index) {
+                            final cell = filteredCells[index];
+                            final isLeaderEmpty =
+                                cell.leaderId == null ||
+                                    cell.leaderId!.trim().isEmpty;
+                            final isHostEmpty =
+                                cell.hostId == null ||
+                                    cell.hostId!.trim().isEmpty;
+
+                            return Card(
+                              key: ValueKey(cell.id),
+                              margin: const EdgeInsets.only(bottom: 12),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            cell.name ?? 'Sem Nome',
+                                            style: const TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        GestureDetector(
+                                          onTap: () => _requestToJoin(cell),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                              vertical: 8,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              border: Border.all(
+                                                color:
+                                                Theme.of(
+                                                  context,
+                                                ).primaryColor,
+                                              ),
+                                              borderRadius:
+                                              BorderRadius.circular(20),
+                                            ),
+                                            child: Text(
+                                              'Solicitar',
+                                              style: TextStyle(
+                                                color:
+                                                Theme.of(
+                                                  context,
+                                                ).primaryColor,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+
+                                    // Linha do Líder
+                                    if (!isLeaderEmpty) ...[
+                                      FutureBuilder<String>(
+                                        future: _resolveName(
+                                          dataSource,
+                                          cell.leaderId,
+                                        ),
+                                        builder: (context, snapshot) {
+                                          final leaderName =
+                                              snapshot.data ??
+                                                  cell.leaderId ??
+                                                  '';
+                                          return Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.person,
+                                                size: 16,
+                                                color: Colors.grey,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Líder: $leaderName',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                      const SizedBox(height: 4),
+                                    ],
+
+                                    // Linha do Anfitrião
+                                    if (!isHostEmpty) ...[
+                                      FutureBuilder<String>(
+                                        future: _resolveName(
+                                          dataSource,
+                                          cell.hostId,
+                                        ),
+                                        builder: (context, snapshot) {
+                                          final hostName =
+                                              snapshot.data ??
+                                                  cell.hostId ??
+                                                  '';
+                                          return Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.home,
+                                                size: 16,
+                                                color: Colors.grey,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Anfitrião: $hostName',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                      const SizedBox(height: 4),
+                                    ],
+
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.location_on,
+                                          size: 16,
+                                          color: Colors.grey,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            '${cell.address ?? ''} • ${cell.neighborhood ?? ''}',
+                                            style: const TextStyle(
+                                              color: Colors.grey,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.access_time,
+                                          size: 16,
+                                          color: Colors.grey,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '${cell.meetingDay ?? ''} às ${cell.meetingTime ?? ''}',
+                                          style: const TextStyle(
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         );
                       },
                     );
@@ -292,7 +465,10 @@ class _NoCellPageState extends State<NoCellPage> {
     } catch (e, stack) {
       return Scaffold(
         body: SafeArea(
-          child: Text('🚨 ERRO NO BUILD:\n$e\n\n$stack', style: const TextStyle(color: Colors.red)),
+          child: Text(
+            '🚨 ERRO NO BUILD:\n$e\n\n$stack',
+            style: const TextStyle(color: Colors.red),
+          ),
         ),
       );
     }

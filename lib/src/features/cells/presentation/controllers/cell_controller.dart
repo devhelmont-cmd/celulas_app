@@ -1,3 +1,4 @@
+import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:celulas_app/src/features/cells/domain/usecases/create_cell.dart';
 import 'package:celulas_app/src/features/cells/domain/usecases/get_cells.dart';
@@ -7,22 +8,21 @@ import 'package:flutter/cupertino.dart';
 class CellController extends ValueNotifier<CellState> {
   final GetCells _getCellsUseCase;
   final CreateCell _createCellUseCase;
+  final ICellRemoteDataSource _dataSource;
 
   List<CellEntity> _cachedCells = [];
 
   CellController({
     required GetCells getCellsUseCase,
     required CreateCell createCellUseCase,
+    required ICellRemoteDataSource dataSource,
   }) : _getCellsUseCase = getCellsUseCase,
-       _createCellUseCase = createCellUseCase,
-       super(const CellInitialState());
+        _createCellUseCase = createCellUseCase,
+        _dataSource = dataSource,
+        super(const CellInitialState());
 
-  /// Retorna a lista atual em memória para fácil acesso da UI
   List<CellEntity> get cells => _cachedCells;
 
-  /// Carrega as células.
-  /// Passar [filterByUserId] filtra as células do líder/membro.
-  /// Deixar null carrega todas (visão de Pastor/Coordenador).
   Future<void> fetchCells({String? filterByUserId}) async {
     value = const CellLoadingState();
 
@@ -35,19 +35,17 @@ class CellController extends ValueNotifier<CellState> {
     }
   }
 
-  /// Cadastra uma nova célula e recarrega a listagem
   Future<bool> createCell(CellEntity cell, {String? filterByUserId}) async {
     value = const CellLoadingState();
 
     try {
       await _createCellUseCase(cell);
-
-      // Recarrega a lista atualizada
-      final updateList = await _getCellsUseCase(filterByUserId: filterByUserId);
+      final updateList = await _getCellsUseCase(
+        filterByUserId: filterByUserId,
+      );
       _cachedCells = updateList;
 
       value = const CellOperationSuccessState('Célula criada com sucesso!');
-      //Atualiza o estado da UI com a nova lista
       value = CellLoadedState(_cachedCells);
       return true;
     } catch (e) {
@@ -56,7 +54,48 @@ class CellController extends ValueNotifier<CellState> {
     }
   }
 
-  /// Limpa a formatação de 'Exception: ' para exibir na UI
+  Future<bool> updateCell(CellEntity cell, {String? filterByUserId}) async {
+    value = const CellLoadingState();
+    try {
+      final cellModel =
+      cell is CellEntity ? (cell as dynamic).toModel() : cell;
+      await _dataSource.updateCell(cellModel);
+      await fetchCells(filterByUserId: filterByUserId);
+      return true;
+    } catch (e) {
+      value = CellErrorState(_cleanErrorMessage(e.toString()));
+      return false;
+    }
+  }
+
+  Future<bool> deleteCell(String cellId, {String? filterByUserId}) async {
+    value = const CellLoadingState();
+    try {
+      await _dataSource.deleteCell(cellId);
+      await fetchCells(filterByUserId: filterByUserId);
+      return true;
+    } catch (e) {
+      value = CellErrorState(_cleanErrorMessage(e.toString()));
+      return false;
+    }
+  }
+
+  Future<bool> toggleCellStatus(
+      String cellId,
+      bool isActive, {
+        String? filterByUserId,
+      }) async {
+    value = const CellLoadingState();
+    try {
+      await _dataSource.toggleCellStatus(cellId, isActive);
+      await fetchCells(filterByUserId: filterByUserId);
+      return true;
+    } catch (e) {
+      value = CellErrorState(_cleanErrorMessage(e.toString()));
+      return false;
+    }
+  }
+
   String _cleanErrorMessage(String rawMessage) {
     return rawMessage.replaceAll('Exception: ', '').replaceAll('Exception', '');
   }

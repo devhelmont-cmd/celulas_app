@@ -8,6 +8,9 @@ import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_member_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/prayer_request_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/unlinked_user_or_member_model.dart';
 
 import '../../data/models/cell_join_request_model.dart';
 
@@ -21,19 +24,34 @@ class CellDetailPage extends StatefulWidget {
   State<CellDetailPage> createState() => _CellDetailPageState();
 }
 
-class _CellDetailPageState extends State<CellDetailPage> {
+class _CellDetailPageState extends State<CellDetailPage>
+    with SingleTickerProviderStateMixin {
   late final CellMembersController _membersController;
   late CellEntity _currentCell;
+  late TabController _tabController;
+
   List<CellJoinRequestEntity> _pendingRequests = [];
   bool _isLoadingRequests = false;
+
+  CellMeetingModel? _currentMeeting;
+  List<PrayerRequestModel> _prayerRequests = [];
+  bool _isLoadingMeetingData = false;
 
   @override
   void initState() {
     super.initState();
     _currentCell = widget.cell;
+    _tabController = TabController(length: 3, vsync: this);
     _membersController = getIt<CellMembersController>();
     _membersController.fetchMembers(_currentCell.id);
     _loadPendingRequests();
+    _loadMeetingAndPrayerRequests();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPendingRequests() async {
@@ -62,6 +80,25 @@ class _CellDetailPageState extends State<CellDetailPage> {
     }
   }
 
+  Future<void> _loadMeetingAndPrayerRequests() async {
+    setState(() => _isLoadingMeetingData = true);
+    try {
+      final dataSource = getIt<ICellRemoteDataSource>();
+      final meeting = await dataSource.getLatestMeeting(_currentCell.id);
+      final prayers = await dataSource.getPrayerRequests(_currentCell.id);
+
+      if (mounted) {
+        setState(() {
+          _currentMeeting = meeting;
+          _prayerRequests = prayers;
+          _isLoadingMeetingData = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingMeetingData = false);
+    }
+  }
+
   Future<void> _refreshCell() async {
     try {
       final dataSource = getIt<ICellRemoteDataSource>();
@@ -72,6 +109,7 @@ class _CellDetailPageState extends State<CellDetailPage> {
         });
       }
       await _loadPendingRequests();
+      await _loadMeetingAndPrayerRequests();
       _membersController.fetchMembers(_currentCell.id);
     } catch (_) {}
   }
@@ -130,6 +168,388 @@ class _CellDetailPageState extends State<CellDetailPage> {
     }
   }
 
+  // ================= GESTÃO DA CÉLULA (EDITAR, INATIVAR, EXCLUIR) =================
+  Future<void> _showEditCellDialog() async {
+    final nameCtrl = TextEditingController(text: _currentCell.name);
+    final addressCtrl = TextEditingController(text: _currentCell.address);
+    final neighborhoodCtrl = TextEditingController(
+      text: _currentCell.neighborhood,
+    );
+
+    String selectedDay = _currentCell.meetingDay ?? 'Terça-feira';
+    String selectedTime = _currentCell.meetingTime ?? '19:30';
+    String selectedCategory = _currentCell.category ?? 'Geral';
+
+    final days = [
+      'Segunda-feira',
+      'Terça-feira',
+      'Quarta-feira',
+      'Quinta-feira',
+      'Sexta-feira',
+      'Sábado',
+      'Domingo',
+    ];
+    if (!days.contains(selectedDay)) selectedDay = days.first;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Editar Célula'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome da Célula',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: addressCtrl,
+                  decoration: const InputDecoration(labelText: 'Endereço'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: neighborhoodCtrl,
+                  decoration: const InputDecoration(labelText: 'Bairro'),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: selectedDay,
+                  decoration: const InputDecoration(
+                    labelText: 'Dia da Reunião',
+                  ),
+                  items:
+                  days
+                      .map(
+                        (d) => DropdownMenuItem(value: d, child: Text(d)),
+                  )
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) selectedDay = val;
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: TextEditingController(text: selectedTime),
+                  decoration: const InputDecoration(
+                    labelText: 'Horário (HH:mm)',
+                  ),
+                  onChanged: (val) => selectedTime = val,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Salvar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true) {
+      final updatedModel = CellModel(
+        id: _currentCell.id,
+        name: nameCtrl.text.trim(),
+        leaderId: _currentCell.leaderId,
+        coLeaderId: _currentCell.coLeaderId,
+        hostId: _currentCell.hostId,
+        address: addressCtrl.text.trim(),
+        neighborhood: neighborhoodCtrl.text.trim(),
+        meetingDay: selectedDay,
+        meetingTime: selectedTime,
+        category: selectedCategory,
+        isActive: _currentCell.isActive,
+        createdAt: _currentCell.createdAt,
+      );
+
+      final dataSource = getIt<ICellRemoteDataSource>();
+      await dataSource.updateCell(updatedModel);
+      await _refreshCell();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Célula atualizada com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleCellStatus() async {
+    final bool newStatus = !_currentCell.isActive;
+    final String actionText = newStatus ? 'reativar' : 'inativar';
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+        title: Text('${newStatus ? "Reativar" : "Inativar"} Célula'),
+        content: Text(
+          newStatus
+              ? 'Deseja reativar esta célula? Ela voltará a ficar visível para todos os membros.'
+              : 'Ao inativar a célula, ela manterá o histórico, mas todos os membros e líderes ficarão avulsos (sem célula).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Confirmar $actionText'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final dataSource = getIt<ICellRemoteDataSource>();
+      await dataSource.toggleCellStatus(_currentCell.id, newStatus);
+      await _refreshCell();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Célula ${newStatus ? "reativada" : "inativada"}!'),
+            backgroundColor: Colors.blue,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteCellCompletely() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+        title: const Text('Desfazer / Excluir Célula'),
+        content: const Text(
+          'ATENÇÃO: Esta ação é irreversível!\n\n'
+              'A célula deixará de existir no sistema e todos os membros, líderes, co-líderes e anfitriões ficarão avulsos (sem célula).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Excluir Célula',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final dataSource = getIt<ICellRemoteDataSource>();
+        await dataSource.deleteCell(_currentCell.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Célula excluída com sucesso!'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro ao excluir célula: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  // ================= ADICIONAR MEMBROS E USUÁRIOS AVULSOS =================
+  Future<void> _onTapAddButton() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+        title: const Text('Adicionar à Célula'),
+        content: const Text(
+          'Deseja cadastrar um novo membro sem conta ou adicionar uma pessoa avulsa sem célula?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'novo'),
+            child: const Text('Novo Membro Sem Conta'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, 'avulso'),
+            child: const Text('Adicionar Pessoa Sem Célula'),
+          ),
+        ],
+      ),
+    );
+
+    if (choice == 'novo') {
+      _showAddMemberDialog();
+    } else if (choice == 'avulso') {
+      _showAddUnlinkedPersonDialog();
+    }
+  }
+
+  Future<void> _showAddUnlinkedPersonDialog() async {
+    final dataSource = getIt<ICellRemoteDataSource>();
+    List<UnlinkedUserOrMember> candidates = [];
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      candidates = await dataSource.getUsersAndMembersWithoutCell();
+      // Ordenação alfabética crescente da lista de pessoas sem célula
+      candidates.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    } catch (e) {
+      debugPrint('Erro ao buscar pessoas sem célula: $e');
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context);
+
+    if (candidates.isEmpty) {
+      await showDialog(
+        context: context,
+        builder:
+            (ctx) => AlertDialog(
+          title: const Text('Ninguém sem célula'),
+          content: const Text(
+            'Não foram encontrados membros ou usuários avulsos sem célula cadastrados.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final selected = await showDialog<UnlinkedUserOrMember>(
+      context: context,
+      builder: (ctx) {
+        String query = '';
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filtered =
+            candidates.where((c) {
+              return c.name.toLowerCase().contains(
+                query.toLowerCase().trim(),
+              );
+            }).toList();
+
+            return AlertDialog(
+              title: const Text('Selecionar Pessoa Sem Célula'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      decoration: const InputDecoration(
+                        labelText: 'Buscar por nome',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (val) {
+                        setDialogState(() => query = val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child:
+                      filtered.isEmpty
+                          ? const Center(
+                        child: Text('Nenhuma pessoa avulsa encontrada.'),
+                      )
+                          : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final item = filtered[index];
+                          final badge =
+                          item.isRegisteredUser
+                              ? 'Com Conta no App'
+                              : 'Membro Sem Conta';
+
+                          return ListTile(
+                            leading: CircleAvatar(
+                              child: Text(
+                                item.name.isNotEmpty
+                                    ? item.name[0].toUpperCase()
+                                    : 'P',
+                              ),
+                            ),
+                            title: Text(item.name),
+                            subtitle: Text(
+                              '$badge ${item.email != null ? "(${item.email})" : ""}',
+                            ),
+                            onTap: () => Navigator.pop(ctx, item),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (selected != null) {
+      await dataSource.addExistingUserOrMemberToCell(
+        cellId: _currentCell.id,
+        item: selected,
+        role: 'membro',
+      );
+      await _refreshCell();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${selected.name} adicionado(a) à célula!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _showAddMemberDialog() async {
     final nameController = TextEditingController();
     String selectedRole = 'membro';
@@ -164,7 +584,7 @@ class _CellDetailPageState extends State<CellDetailPage> {
                       controller: nameController,
                       decoration: const InputDecoration(
                         labelText: 'Nome Completo',
-                        hintText: 'Seu nome e sobrenome',
+                        hintText: 'Nome e sobrenome',
                         border: OutlineInputBorder(),
                       ),
                       textCapitalization: TextCapitalization.words,
@@ -209,11 +629,17 @@ class _CellDetailPageState extends State<CellDetailPage> {
                       return;
                     }
 
-                    final words = rawName.split(' ').where((w) => w.trim().isNotEmpty).toList();
+                    final words =
+                    rawName
+                        .split(' ')
+                        .where((w) => w.trim().isNotEmpty)
+                        .toList();
                     if (words.length < 2) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Informe seu nome completo (nome e sobrenome).'),
+                          content: Text(
+                            'Informe seu nome completo (nome e sobrenome).',
+                          ),
                         ),
                       );
                       return;
@@ -281,7 +707,9 @@ class _CellDetailPageState extends State<CellDetailPage> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Deseja se vincular a esta célula? Selecione sua função:'),
+                  const Text(
+                    'Deseja se vincular a esta célula? Selecione sua função:',
+                  ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     value: selectedRole,
@@ -289,7 +717,8 @@ class _CellDetailPageState extends State<CellDetailPage> {
                       labelText: 'Sua Função',
                       border: OutlineInputBorder(),
                     ),
-                    items: roleOptions.entries.map((entry) {
+                    items:
+                    roleOptions.entries.map((entry) {
                       return DropdownMenuItem<String>(
                         value: entry.key,
                         child: Text(entry.value),
@@ -324,7 +753,9 @@ class _CellDetailPageState extends State<CellDetailPage> {
         id: '',
         cellId: _currentCell.id,
         userId: widget.currentUser!.id,
-        name: widget.currentUser!.name ?? widget.currentUser!.email.split('@').first,
+        name:
+        widget.currentUser!.name ??
+            widget.currentUser!.email.split('@').first,
         role: selectedRole,
         joinedAt: DateTime.now(),
       );
@@ -358,7 +789,7 @@ class _CellDetailPageState extends State<CellDetailPage> {
     }
   }
 
-  Future<CellMemberModel?> _showLinkMemberDialog() async {
+  Future<CellMemberModel?> _showLinkMemberDialog({String? targetName}) async {
     final dataSource = getIt<ICellRemoteDataSource>();
     List<CellMemberModel> unlinkedMembers = [];
 
@@ -384,7 +815,7 @@ class _CellDetailPageState extends State<CellDetailPage> {
             (ctx) => AlertDialog(
           title: const Text('Nenhum Membro Sem Conta'),
           content: const Text(
-            'Não existem membros cadastrados no sistema que ainda não possuem conta.',
+            'Não existem membros avulsos cadastrados no sistema.',
           ),
           actions: [
             TextButton(
@@ -396,6 +827,25 @@ class _CellDetailPageState extends State<CellDetailPage> {
       );
       return null;
     }
+
+    // Ordenação: Nomes iguais ou correspondentes ao targetName (ex: Reinaldo) no topo em ordem crescente,
+    // seguidos pelos demais em ordem alfabética crescente.
+    unlinkedMembers.sort((a, b) {
+      if (targetName != null && targetName.trim().isNotEmpty) {
+        final target = targetName.trim().toLowerCase();
+        final nameA = a.name.trim().toLowerCase();
+        final nameB = b.name.trim().toLowerCase();
+        final bool matchA = nameA == target || nameA.contains(target);
+        final bool matchB = nameB == target || nameB.contains(target);
+
+        if (matchA && !matchB) return -1;
+        if (!matchA && matchB) return 1;
+        if (matchA && matchB) {
+          return nameA.compareTo(nameB);
+        }
+      }
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
 
     return showDialog<CellMemberModel>(
       context: context,
@@ -451,7 +901,7 @@ class _CellDetailPageState extends State<CellDetailPage> {
                             ),
                             title: Text(member.name),
                             subtitle: Text(
-                              'Célula: $cellName | Função: ${_formatMemberRole(member.role)}',
+                              'Origem: $cellName | Função: ${_formatMemberRole(member.role)}',
                             ),
                             onTap: () => Navigator.pop(ctx, member),
                           );
@@ -501,7 +951,7 @@ class _CellDetailPageState extends State<CellDetailPage> {
     if (option == null) return;
 
     if (option == 'vincular') {
-      selectedMember = await _showLinkMemberDialog();
+      selectedMember = await _showLinkMemberDialog(targetName: request.userName);
       if (selectedMember == null) return;
     }
 
@@ -552,9 +1002,9 @@ class _CellDetailPageState extends State<CellDetailPage> {
       await dataSource.approveJoinRequest(
         requestId: request.id,
         cellId: _currentCell.id,
-        userId: request.userId ?? '',
+        userId: request.userId,
         matchedMemberId: matchedMemberId,
-        memberName: request.userName ?? 'Novo Membro',
+        memberName: request.userName,
         setAsLeader: setAsLeader,
       );
 
@@ -703,12 +1153,12 @@ class _CellDetailPageState extends State<CellDetailPage> {
         final currentMembers =
             (_membersController.value as CellMemberLoadedState).members;
 
-        // Se o membro for o líder atual e estiver deixando o cargo de líder
         final bool isCurrentlyLeader = currentSelection == 'lider';
         if (isCurrentlyLeader && newRole != 'lider') {
           final confirmLeaderless = await showDialog<bool>(
             context: context,
-            builder: (ctx) => AlertDialog(
+            builder:
+                (ctx) => AlertDialog(
               title: const Text('Célula Sem Líder'),
               content: Text(
                 'Ao alterar a função de ${member.name}, a célula ficará sem um líder definido. Deseja continuar?',
@@ -729,13 +1179,13 @@ class _CellDetailPageState extends State<CellDetailPage> {
           if (confirmLeaderless != true) return;
         }
 
-        // Verifica substituição apenas se for um cargo de ocupante único (lider, colider, anfitriao)
         if (newRole != 'membro') {
           final existingOccupant = currentMembers
               .cast<CellMemberEntity>()
               .firstWhere(
                 (m) => _normalizeRole(m.role) == newRole && m.id != member.id,
-            orElse: () => CellMemberEntity(
+            orElse:
+                () => CellMemberEntity(
               id: '',
               cellId: '',
               name: '',
@@ -748,7 +1198,8 @@ class _CellDetailPageState extends State<CellDetailPage> {
             final String roleTitle = roleOptions[newRole] ?? newRole;
             final confirmReplacement = await showDialog<bool>(
               context: context,
-              builder: (ctx) => AlertDialog(
+              builder:
+                  (ctx) => AlertDialog(
                 title: Text('Substituir $roleTitle?'),
                 content: Text(
                   'A célula já possui ${existingOccupant.name} como $roleTitle. '
@@ -919,6 +1370,244 @@ class _CellDetailPageState extends State<CellDetailPage> {
     }
   }
 
+  // ================= REUNIÕES & FUNÇÕES DA CÉLULA =================
+  Future<void> _showEditMeetingRolesDialog() async {
+    final members = _membersController.members;
+    final memberNames = members.map((m) => m.name).toList();
+    if (!memberNames.contains('Não definido')) {
+      memberNames.insert(0, 'Não definido');
+    }
+
+    String initialPrayer = _currentMeeting?.initialPrayerName ?? 'Não definido';
+    String icebreaker = _currentMeeting?.icebreakerName ?? 'Não definido';
+    String worship = _currentMeeting?.worshipName ?? 'Não definido';
+    String word = _currentMeeting?.wordName ?? 'Não definido';
+    String finalPrayer = _currentMeeting?.finalPrayerName ?? 'Não definido';
+    String snack = _currentMeeting?.snackName ?? 'Não definido';
+
+    String status = _currentMeeting?.status ?? 'normal';
+    String statusNote = _currentMeeting?.statusNote ?? '';
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Definir Funções da Reunião'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: status,
+                      decoration: const InputDecoration(
+                        labelText: 'Status da Reunião',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'normal',
+                          child: Text('Reunião Normal'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'bridge_event',
+                          child: Text('Evento Ponte'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'rescheduled',
+                          child: Text('Remarcada'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'canceled',
+                          child: Text('Cancelada'),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) setDialogState(() => status = val);
+                      },
+                    ),
+                    if (status != 'normal') ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        decoration: InputDecoration(
+                          labelText:
+                          status == 'bridge_event'
+                              ? 'Título / Detalhes do Evento'
+                              : status == 'canceled'
+                              ? 'Motivo do Cancelamento'
+                              : 'Nova Data / Horário',
+                        ),
+                        onChanged: (val) => statusNote = val,
+                      ),
+                    ],
+                    const Divider(height: 24),
+                    _buildRoleDropdown(
+                      'Oração Inicial',
+                      initialPrayer,
+                      memberNames,
+                          (v) => initialPrayer = v,
+                    ),
+                    _buildRoleDropdown(
+                      'Quebra-gelo',
+                      icebreaker,
+                      memberNames,
+                          (v) => icebreaker = v,
+                    ),
+                    _buildRoleDropdown(
+                      'Louvor',
+                      worship,
+                      memberNames,
+                          (v) => worship = v,
+                    ),
+                    _buildRoleDropdown(
+                      'Palavra',
+                      word,
+                      memberNames,
+                          (v) => word = v,
+                    ),
+                    _buildRoleDropdown(
+                      'Oração Final',
+                      finalPrayer,
+                      memberNames,
+                          (v) => finalPrayer = v,
+                    ),
+                    _buildRoleDropdown(
+                      'Lanche',
+                      snack,
+                      memberNames,
+                          (v) => snack = v,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Salvar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true) {
+      final updatedMeeting = CellMeetingModel(
+        id: _currentMeeting?.id ?? '',
+        cellId: _currentCell.id,
+        meetingDate: DateTime.now(),
+        status: status,
+        statusNote: statusNote,
+        initialPrayerName:
+        initialPrayer == 'Não definido' ? null : initialPrayer,
+        icebreakerName: icebreaker == 'Não definido' ? null : icebreaker,
+        worshipName: worship == 'Não definido' ? null : worship,
+        wordName: word == 'Não definido' ? null : word,
+        finalPrayerName: finalPrayer == 'Não definido' ? null : finalPrayer,
+        snackName: snack == 'Não definido' ? null : snack,
+      );
+
+      final dataSource = getIt<ICellRemoteDataSource>();
+      await dataSource.saveOrUpdateMeeting(updatedMeeting);
+      await _loadMeetingAndPrayerRequests();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Funções da reunião salvas com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildRoleDropdown(
+      String label,
+      String currentValue,
+      List<String> options,
+      Function(String) onChanged,
+      ) {
+    final String val =
+    options.contains(currentValue) ? currentValue : options.first;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: DropdownButtonFormField<String>(
+        value: val,
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          border: const OutlineInputBorder(),
+        ),
+        items:
+        options
+            .map((opt) => DropdownMenuItem(value: opt, child: Text(opt)))
+            .toList(),
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
+      ),
+    );
+  }
+
+  // ================= PEDIDOS DE ORAÇÃO =================
+  Future<void> _showAddPrayerRequestDialog() async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+        title: const Text('Novo Pedido de Oração'),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Escreva seu pedido de oração...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Enviar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && ctrl.text.trim().isNotEmpty) {
+      final user = widget.currentUser;
+      final newReq = PrayerRequestModel(
+        id: '',
+        cellId: _currentCell.id,
+        authorId: user?.id,
+        authorName: user?.name ?? user?.email ?? 'Membro/Visitante',
+        request: ctrl.text.trim(),
+        createdAt: DateTime.now(),
+      );
+
+      final dataSource = getIt<ICellRemoteDataSource>();
+      await dataSource.addPrayerRequest(newReq);
+      await _loadMeetingAndPrayerRequests();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pedido de oração cadastrado!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cell = _currentCell;
@@ -927,13 +1616,8 @@ class _CellDetailPageState extends State<CellDetailPage> {
     final meetingTime = cell.meetingTime ?? '';
     final address = cell.address ?? '';
 
-    final isLeaderEmpty =
-        cell.leaderId == null || cell.leaderId!.trim().isEmpty;
-    final dataSource = getIt<ICellRemoteDataSource>();
-
     final user = widget.currentUser;
     final isPastorOrCoord = user?.isPastorOrCoordinator ?? false;
-
     final bool isUserLeaderOfThisCell =
         user != null &&
             (cell.leaderId == user.id ||
@@ -941,398 +1625,820 @@ class _CellDetailPageState extends State<CellDetailPage> {
                     cell.leaderId?.trim().toLowerCase() ==
                         user.name!.trim().toLowerCase()));
 
+    final bool canEditCell = isPastorOrCoord || isUserLeaderOfThisCell;
+    final bool canManageCellStatus = isPastorOrCoord;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(cellName),
+        actions: [
+          if (canEditCell)
+            PopupMenuButton<String>(
+              onSelected: (val) {
+                if (val == 'edit') _showEditCellDialog();
+                if (val == 'toggle') _toggleCellStatus();
+                if (val == 'delete') _deleteCellCompletely();
+              },
+              itemBuilder:
+                  (context) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Text('Editar Célula'),
+                ),
+                if (canManageCellStatus)
+                  PopupMenuItem(
+                    value: 'toggle',
+                    child: Text(
+                      _currentCell.isActive
+                          ? 'Inativar Célula'
+                          : 'Reativar Célula',
+                    ),
+                  ),
+                if (canManageCellStatus)
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text(
+                      'Desfazer / Excluir Célula',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+              ],
+            ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.people), text: 'Membros'),
+            Tab(icon: Icon(Icons.event_note), text: 'Reunião'),
+            Tab(icon: Icon(Icons.volunteer_activism), text: 'Oração'),
+          ],
+        ),
+      ),
+      body: Column(
+        children: [
+          if (!_currentCell.isActive)
+            Container(
+              color: Colors.red.shade100,
+              padding: const EdgeInsets.all(8),
+              width: double.infinity,
+              child: Row(
+                children: const [
+                  Icon(Icons.warning, color: Colors.red),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'CÉLULA INATIVA: Visível apenas para o Líder e Pastor.',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildMembersTab(
+                  isPastorOrCoord,
+                  isUserLeaderOfThisCell,
+                  meetingDay,
+                  meetingTime,
+                  address,
+                ),
+                _buildMeetingTab(isUserLeaderOfThisCell || isPastorOrCoord),
+                _buildPrayerTab(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // TAB 1: MEMBROS
+  Widget _buildMembersTab(
+      bool isPastorOrCoord,
+      bool isUserLeaderOfThisCell,
+      String meetingDay,
+      String meetingTime,
+      String address,
+      ) {
+    final cell = _currentCell;
+    final isLeaderEmpty =
+        cell.leaderId == null || cell.leaderId!.trim().isEmpty;
+    final dataSource = getIt<ICellRemoteDataSource>();
+    final user = widget.currentUser;
     final bool canViewRequests =
         user != null && (isPastorOrCoord || isUserLeaderOfThisCell);
-
     final bool canAddMember =
         user != null && (isPastorOrCoord || isUserLeaderOfThisCell);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(cellName)),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!isLeaderEmpty || !isUserLeaderOfThisCell) ...[
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.person,
-                            size: 20,
-                            color: isLeaderEmpty ? Colors.red : Colors.grey,
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!isLeaderEmpty || !isUserLeaderOfThisCell) ...[
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.person,
+                          size: 20,
+                          color: isLeaderEmpty ? Colors.red : Colors.grey,
+                        ),
+                        const SizedBox(width: 8),
+                        isLeaderEmpty
+                            ? const Text(
+                          'Líder: Sem líder definido',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red,
                           ),
-                          const SizedBox(width: 8),
-                          isLeaderEmpty
-                              ? const Text(
-                            'Líder: Sem líder definido',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.red,
-                            ),
-                          )
-                              : FutureBuilder<String?>(
-                            key: ValueKey('leader_detail_${cell.id}_${cell.leaderId}'),
-                            future: dataSource.getUserNameById(
-                              cell.leaderId!,
-                            ),
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState ==
-                                  ConnectionState.waiting) {
-                                return const Text(
-                                  'Líder: Carregando...',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                );
-                              }
-                              final leaderName =
-                                  snapshot.data ?? cell.leaderId!;
-                              return Text(
-                                'Líder: $leaderName',
-                                style: const TextStyle(
+                        )
+                            : FutureBuilder<String?>(
+                          key: ValueKey(
+                            'leader_detail_${cell.id}_${cell.leaderId}',
+                          ),
+                          future: dataSource.getUserNameById(
+                            cell.leaderId!,
+                          ),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Text(
+                                'Líder: Carregando...',
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: Colors.black87,
                                 ),
                               );
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.access_time,
-                          size: 20,
-                          color: Colors.grey,
+                            }
+                            final leaderName =
+                                snapshot.data ?? cell.leaderId!;
+                            return Text(
+                              'Líder: $leaderName',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            );
+                          },
                         ),
-                        const SizedBox(width: 8),
-                        Text('Reuniões: $meetingDay às $meetingTime'),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.location_on,
-                          size: 20,
-                          color: Colors.grey,
-                        ),
-                        const SizedBox(width: 8),
-                        Text('Endereço: $address'),
-                      ],
-                    ),
                   ],
-                ),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.access_time,
+                        size: 20,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      Text('Reuniões: $meetingDay às $meetingTime'),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on,
+                        size: 20,
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      Text('Endereço: $address'),
+                    ],
+                  ),
+                ],
               ),
             ),
-            if (canViewRequests && _pendingRequests.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              const Text(
-                'Solicitações Pendentes',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange,
-                ),
+          ),
+          if (canViewRequests && _pendingRequests.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text(
+              'Solicitações Pendentes',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.orange,
               ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 110,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _pendingRequests.length,
-                  itemBuilder: (context, index) {
-                    final req = _pendingRequests[index];
-                    return Container(
-                      width: 260,
-                      margin: const EdgeInsets.only(right: 12),
-                      child: Card(
-                        color: Colors.orange.shade50,
-                        elevation: 1,
-                        child: Padding(
-                          padding: const EdgeInsets.all(10.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                req.userName ?? 'Usuário',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                                overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 110,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _pendingRequests.length,
+                itemBuilder: (context, index) {
+                  final req = _pendingRequests[index];
+                  return Container(
+                    width: 260,
+                    margin: const EdgeInsets.only(right: 12),
+                    child: Card(
+                      color: Colors.orange.shade50,
+                      elevation: 1,
+                      child: Padding(
+                        padding: const EdgeInsets.all(10.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              req.userName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
                               ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Deseja entrar na célula',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                              const Spacer(),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  TextButton.icon(
-                                    onPressed: () => _onTapApproveRequest(req),
-                                    icon: const Icon(
-                                      Icons.check,
-                                      size: 16,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Deseja entrar na célula',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            const Spacer(),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                TextButton.icon(
+                                  onPressed: () => _onTapApproveRequest(req),
+                                  icon: const Icon(
+                                    Icons.check,
+                                    size: 16,
+                                    color: Colors.green,
+                                  ),
+                                  label: const Text(
+                                    'Aprovar',
+                                    style: TextStyle(
+                                      fontSize: 12,
                                       color: Colors.green,
                                     ),
-                                    label: const Text(
-                                      'Aprovar',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.green,
-                                      ),
-                                    ),
                                   ),
-                                ],
-                              ),
-                            ],
-                          ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                    );
-                  },
-                ),
-              ),
-            ],
-            const SizedBox(height: 24),
-            Expanded(
-              child: ValueListenableBuilder<CellMemberState>(
-                valueListenable: _membersController,
-                builder: (context, state, _) {
-                  bool isCurrentUserInCell = false;
-                  if (state is CellMemberLoadedState && user != null) {
-                    isCurrentUserInCell = state.members.any((m) =>
-                    m.userId == user.id ||
-                        (user.name != null &&
-                            m.name.trim().toLowerCase() ==
-                                user.name!.trim().toLowerCase()));
-                  }
-
-                  final bool canBindSelf =
-                      user != null && isPastorOrCoord && !isCurrentUserInCell;
-
-                  return Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Membros da Célula',
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          Row(
-                            children: [
-                              if (canBindSelf)
-                                ElevatedButton.icon(
-                                  onPressed: _bindSelfToCell,
-                                  icon: const Icon(Icons.link, size: 18),
-                                  label: const Text('Vincular-me'),
-                                  style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 8),
-                                  ),
-                                ),
-                              if (canBindSelf && canAddMember)
-                                const SizedBox(width: 8),
-                              if (canAddMember)
-                                ElevatedButton.icon(
-                                  onPressed: _showAddMemberDialog,
-                                  icon: const Icon(Icons.person_add, size: 18),
-                                  label: const Text('Adicionar'),
-                                  style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 8),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: Builder(
-                          builder: (context) {
-                            if (state is CellMemberLoadingState ||
-                                state is CellMemberInitialState) {
-                              return const Center(
-                                  child: CircularProgressIndicator());
-                            }
-
-                            if (state is CellMemberErrorState) {
-                              return Center(
-                                child: Text(
-                                  'Erro: ${state.message}',
-                                  style: const TextStyle(color: Colors.red),
-                                ),
-                              );
-                            }
-
-                            if (state is CellMemberLoadedState) {
-                              final members =
-                              List<CellMemberEntity>.from(state.members);
-
-                              if (members.isEmpty) {
-                                return const Center(
-                                  child: Text(
-                                      'Nenhum membro cadastrado nesta célula.'),
-                                );
-                              }
-
-                              members.sort((a, b) {
-                                final bool isUserA = user != null &&
-                                    (a.userId == user.id ||
-                                        (user.name != null &&
-                                            a.name.trim().toLowerCase() ==
-                                                user.name!.trim().toLowerCase()));
-                                final bool isUserB = user != null &&
-                                    (b.userId == user.id ||
-                                        (user.name != null &&
-                                            b.name.trim().toLowerCase() ==
-                                                user.name!.trim().toLowerCase()));
-
-                                if (isUserA && !isUserB) return -1;
-                                if (!isUserA && isUserB) return 1;
-
-                                final int weightA = _getRoleWeight(a.role);
-                                final int weightB = _getRoleWeight(b.role);
-
-                                if (weightA != weightB) {
-                                  return weightA.compareTo(weightB);
-                                }
-
-                                return a.name.toLowerCase().compareTo(
-                                  b.name.toLowerCase(),
-                                );
-                              });
-
-                              return ListView.builder(
-                                itemCount: members.length,
-                                itemBuilder: (context, index) {
-                                  final member = members[index];
-                                  final formattedRole =
-                                  _formatMemberRole(member.role);
-
-                                  final bool isCurrentLogUserCard = user != null &&
-                                      (member.userId == user.id ||
-                                          (user.name != null &&
-                                              member.name.trim().toLowerCase() ==
-                                                  user.name!
-                                                      .trim()
-                                                      .toLowerCase()));
-
-                                  final bool canEditMember = isPastorOrCoord ||
-                                      (isUserLeaderOfThisCell &&
-                                          !isCurrentLogUserCard);
-
-                                  final bool canSeeLeaveButton = isCurrentLogUserCard;
-
-                                  return Card(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    child: ListTile(
-                                      leading: CircleAvatar(
-                                        child: Text(
-                                          member.name.isNotEmpty
-                                              ? member.name[0].toUpperCase()
-                                              : 'M',
-                                        ),
-                                      ),
-                                      title: Text(member.name),
-                                      subtitle: Text(
-                                        formattedRole,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          color: formattedRole == 'Líder'
-                                              ? Colors.blue.shade700
-                                              : Colors.grey.shade700,
-                                        ),
-                                      ),
-                                      trailing: canEditMember
-                                          ? PopupMenuButton<String>(
-                                        onSelected: (value) {
-                                          if (value == 'role') {
-                                            _showRoleChangeDialog(member);
-                                          } else if (value == 'transfer') {
-                                            _showTransferDialog(member);
-                                          } else if (value == 'remove') {
-                                            if (isCurrentLogUserCard) {
-                                              _leaveCell(member);
-                                            } else {
-                                              _removeMemberCompletely(member);
-                                            }
-                                          }
-                                        },
-                                        itemBuilder: (context) => [
-                                          const PopupMenuItem(
-                                            value: 'role',
-                                            child: Text('Alterar Função'),
-                                          ),
-                                          if (isPastorOrCoord && !isCurrentLogUserCard)
-                                            const PopupMenuItem(
-                                              value: 'transfer',
-                                              child: Text(
-                                                  'Transferir de Célula'),
-                                            ),
-                                          PopupMenuItem(
-                                            value: 'remove',
-                                            child: Text(
-                                              isCurrentLogUserCard
-                                                  ? 'Sair da Célula'
-                                                  : 'Remover da Célula',
-                                              style: const TextStyle(
-                                                  color: Colors.red),
-                                            ),
-                                          ),
-                                        ],
-                                      )
-                                          : canSeeLeaveButton
-                                          ? TextButton.icon(
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: Colors.red,
-                                        ),
-                                        onPressed: () =>
-                                            _leaveCell(member),
-                                        icon: const Icon(
-                                            Icons.logout,
-                                            size: 16),
-                                        label: const Text('Sair'),
-                                      )
-                                          : null,
-                                    ),
-                                  );
-                                },
-                              );
-                            }
-
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ),
-                    ],
+                    ),
                   );
                 },
               ),
             ),
           ],
+          const SizedBox(height: 24),
+          Expanded(
+            child: ValueListenableBuilder<CellMemberState>(
+              valueListenable: _membersController,
+              builder: (context, state, _) {
+                bool isCurrentUserInCell = false;
+                if (state is CellMemberLoadedState && user != null) {
+                  isCurrentUserInCell = state.members.any(
+                        (m) =>
+                    m.userId == user.id ||
+                        (user.name != null &&
+                            m.name.trim().toLowerCase() ==
+                                user.name!.trim().toLowerCase()),
+                  );
+                }
+
+                final bool canBindSelf =
+                    user != null && isPastorOrCoord && !isCurrentUserInCell;
+
+                return Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Membros da Célula',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            if (canBindSelf)
+                              ElevatedButton.icon(
+                                onPressed: _bindSelfToCell,
+                                icon: const Icon(Icons.link, size: 18),
+                                label: const Text('Vincular-me'),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                ),
+                              ),
+                            if (canBindSelf && canAddMember)
+                              const SizedBox(width: 8),
+                            if (canAddMember)
+                              ElevatedButton.icon(
+                                onPressed: _onTapAddButton,
+                                icon: const Icon(Icons.person_add, size: 18),
+                                label: const Text('Adicionar'),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: Builder(
+                        builder: (context) {
+                          if (state is CellMemberLoadingState ||
+                              state is CellMemberInitialState) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+
+                          if (state is CellMemberErrorState) {
+                            return Center(
+                              child: Text(
+                                'Erro: ${state.message}',
+                                style: const TextStyle(color: Colors.red),
+                              ),
+                            );
+                          }
+
+                          if (state is CellMemberLoadedState) {
+                            final members = List<CellMemberEntity>.from(
+                              state.members,
+                            );
+
+                            if (members.isEmpty) {
+                              return const Center(
+                                child: Text(
+                                  'Nenhum membro cadastrado nesta célula.',
+                                ),
+                              );
+                            }
+
+                            members.sort((a, b) {
+                              final bool isUserA =
+                                  user != null &&
+                                      (a.userId == user.id ||
+                                          (user.name != null &&
+                                              a.name.trim().toLowerCase() ==
+                                                  user.name!
+                                                      .trim()
+                                                      .toLowerCase()));
+                              final bool isUserB =
+                                  user != null &&
+                                      (b.userId == user.id ||
+                                          (user.name != null &&
+                                              b.name.trim().toLowerCase() ==
+                                                  user.name!
+                                                      .trim()
+                                                      .toLowerCase()));
+
+                              if (isUserA && !isUserB) return -1;
+                              if (!isUserA && isUserB) return 1;
+
+                              final int weightA = _getRoleWeight(a.role);
+                              final int weightB = _getRoleWeight(b.role);
+
+                              if (weightA != weightB) {
+                                return weightA.compareTo(weightB);
+                              }
+
+                              return a.name.toLowerCase().compareTo(
+                                b.name.toLowerCase(),
+                              );
+                            });
+
+                            return ListView.builder(
+                              itemCount: members.length,
+                              itemBuilder: (context, index) {
+                                final member = members[index];
+                                final formattedRole = _formatMemberRole(
+                                  member.role,
+                                );
+
+                                final bool isCurrentLogUserCard =
+                                    user != null &&
+                                        (member.userId == user.id ||
+                                            (user.name != null &&
+                                                member.name.trim().toLowerCase() ==
+                                                    user.name!
+                                                        .trim()
+                                                        .toLowerCase()));
+
+                                final bool canEditMember =
+                                    isPastorOrCoord ||
+                                        (isUserLeaderOfThisCell &&
+                                            !isCurrentLogUserCard);
+
+                                final bool canSeeLeaveButton =
+                                    isCurrentLogUserCard;
+
+                                return Card(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  child: ListTile(
+                                    leading: CircleAvatar(
+                                      child: Text(
+                                        member.name.isNotEmpty
+                                            ? member.name[0].toUpperCase()
+                                            : 'M',
+                                      ),
+                                    ),
+                                    title: Text(member.name),
+                                    subtitle: Text(
+                                      formattedRole,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        color:
+                                        formattedRole == 'Líder'
+                                            ? Colors.blue.shade700
+                                            : Colors.grey.shade700,
+                                      ),
+                                    ),
+                                    trailing:
+                                    canEditMember
+                                        ? PopupMenuButton<String>(
+                                      onSelected: (value) {
+                                        if (value == 'role') {
+                                          _showRoleChangeDialog(member);
+                                        } else if (value ==
+                                            'transfer') {
+                                          _showTransferDialog(member);
+                                        } else if (value == 'remove') {
+                                          if (isCurrentLogUserCard) {
+                                            _leaveCell(member);
+                                          } else {
+                                            _removeMemberCompletely(
+                                              member,
+                                            );
+                                          }
+                                        }
+                                      },
+                                      itemBuilder:
+                                          (context) => [
+                                        const PopupMenuItem(
+                                          value: 'role',
+                                          child: Text(
+                                            'Alterar Função',
+                                          ),
+                                        ),
+                                        if (isPastorOrCoord &&
+                                            !isCurrentLogUserCard)
+                                          const PopupMenuItem(
+                                            value: 'transfer',
+                                            child: Text(
+                                              'Transferir de Célula',
+                                            ),
+                                          ),
+                                        PopupMenuItem(
+                                          value: 'remove',
+                                          child: Text(
+                                            isCurrentLogUserCard
+                                                ? 'Sair da Célula'
+                                                : 'Remover da Célula',
+                                            style: const TextStyle(
+                                              color: Colors.red,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                        : canSeeLeaveButton
+                                        ? TextButton.icon(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                      ),
+                                      onPressed:
+                                          () => _leaveCell(member),
+                                      icon: const Icon(
+                                        Icons.logout,
+                                        size: 16,
+                                      ),
+                                      label: const Text('Sair'),
+                                    )
+                                        : null,
+                                  ),
+                                );
+                              },
+                            );
+                          }
+
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // TAB 2: REUNIÃO DA CÉLULA & ATIVIDADES
+  Widget _buildMeetingTab(bool canEdit) {
+    if (_isLoadingMeetingData) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final meeting = _currentMeeting;
+    final status = meeting?.status ?? 'normal';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (canEdit) ...[
+            Card(
+              color: Colors.amber.shade50,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Row(
+                  children: const [
+                    Icon(Icons.warning_amber, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Aviso ao Líder: Lembre-se de definir as funções da próxima reunião e preencher o relatório da reunião passada.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          if (status == 'bridge_event')
+            Card(
+              color: Colors.blue.shade50,
+              child: ListTile(
+                leading: const Icon(Icons.star, color: Colors.blue, size: 32),
+                title: const Text(
+                  'EVENTO PONTE DA CÉLULA',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
+                  ),
+                ),
+                subtitle: Text(
+                  meeting?.statusNote ??
+                      'Esta reunião será um evento de conexão especial!',
+                ),
+              ),
+            )
+          else if (status == 'canceled')
+            Card(
+              color: Colors.red.shade50,
+              child: ListTile(
+                leading: const Icon(
+                  Icons.cancel,
+                  color: Colors.red,
+                  size: 32,
+                ),
+                title: const Text(
+                  'REUNIÃO CANCELADA',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+                subtitle: Text(
+                  'Motivo: ${meeting?.statusNote ?? "Sem motivo informado."}',
+                ),
+              ),
+            )
+          else if (status == 'rescheduled')
+              Card(
+                color: Colors.purple.shade50,
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.edit_calendar,
+                    color: Colors.purple,
+                    size: 32,
+                  ),
+                  title: const Text(
+                    'REUNIÃO REMARCADA',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.purple,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Nova data/horário: ${meeting?.statusNote ?? "A definir"}',
+                  ),
+                ),
+              ),
+
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Funções da Próxima Reunião',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              if (canEdit)
+                ElevatedButton.icon(
+                  onPressed: _showEditMeetingRolesDialog,
+                  icon: const Icon(Icons.edit, size: 16),
+                  label: const Text('Definir'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          _buildRoleCard(
+            'Oração Inicial',
+            meeting?.initialPrayerName,
+            Icons.nature_people,
+          ),
+          _buildRoleCard('Quebra-gelo', meeting?.icebreakerName, Icons.games),
+          _buildRoleCard('Louvor', meeting?.worshipName, Icons.music_note),
+          _buildRoleCard('Palavra', meeting?.wordName, Icons.menu_book),
+          _buildRoleCard(
+            'Oração Final',
+            meeting?.finalPrayerName,
+            Icons.volunteer_activism,
+            highlightPrayerAlert: true,
+          ),
+          _buildRoleCard('Lanche', meeting?.snackName, Icons.restaurant),
+
+          const SizedBox(height: 24),
+          const Text(
+            'Momentos Abertos a Todos',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                children: const [
+                  ListTile(
+                    leading: Icon(
+                      Icons.forum_outlined,
+                      color: Colors.indigo,
+                    ),
+                    title: Text(
+                      'Conversa sobre a Palavra',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'Espaço para todos compartilharem e conversarem sobre a lição.',
+                    ),
+                  ),
+                  Divider(),
+                  ListTile(
+                    leading: Icon(
+                      Icons.record_voice_over,
+                      color: Colors.green,
+                    ),
+                    title: Text(
+                      'Testemunhos',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      'Momento livre para contar vitórias e bênçãos alcançadas.',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoleCard(
+      String title,
+      String? assignedName,
+      IconData icon, {
+        bool highlightPrayerAlert = false,
+      }) {
+    final user = widget.currentUser;
+    final bool isUserAssigned =
+        user != null &&
+            assignedName != null &&
+            (user.name?.trim().toLowerCase() == assignedName.trim().toLowerCase());
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8.0),
+      child: ListTile(
+        leading: Icon(
+          icon,
+          color: isUserAssigned ? Colors.orange.shade800 : Colors.blue.shade700,
         ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(
+          assignedName ?? 'Não definido',
+          style: TextStyle(
+            color: assignedName != null ? Colors.black87 : Colors.grey,
+            fontWeight:
+            assignedName != null ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        trailing:
+        highlightPrayerAlert && assignedName != null
+            ? Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 4,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.orange.shade100,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Text(
+            'Orar pelos Pedidos!',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.orange,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        )
+            : null,
+      ),
+    );
+  }
+
+  // TAB 3: PEDIDOS DE ORAÇÃO
+  Widget _buildPrayerTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Pedidos de Oração',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              ElevatedButton.icon(
+                onPressed: _showAddPrayerRequestDialog,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Pedir Oração'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child:
+            _prayerRequests.isEmpty
+                ? const Center(
+              child: Text(
+                'Nenhum pedido de oração registrado nesta célula.',
+              ),
+            )
+                : ListView.builder(
+              itemCount: _prayerRequests.length,
+              itemBuilder: (context, index) {
+                final prayer = _prayerRequests[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8.0),
+                  child: ListTile(
+                    leading: const CircleAvatar(
+                      child: Icon(Icons.volunteer_activism, size: 20),
+                    ),
+                    title: Text(prayer.request),
+                    subtitle: Text('Por: ${prayer.authorName}'),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
