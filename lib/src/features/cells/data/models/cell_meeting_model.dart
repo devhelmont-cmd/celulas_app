@@ -8,6 +8,7 @@ class CellMeetingModel {
   final String? statusNote;
   final String? newMeetingDate;
   final String? newMeetingTime;
+  final bool isReportFilled;
 
   // Funções da reunião
   final String? initialPrayerName;
@@ -16,6 +17,8 @@ class CellMeetingModel {
   final String? wordName;
   final String? finalPrayerName;
   final String? snackName;
+  final String? officialPhotoName;
+  final String? reportFillerName;
 
   CellMeetingModel({
     required this.id,
@@ -25,12 +28,15 @@ class CellMeetingModel {
     this.statusNote,
     this.newMeetingDate,
     this.newMeetingTime,
+    this.isReportFilled = false,
     this.initialPrayerName,
     this.icebreakerName,
     this.worshipName,
     this.wordName,
     this.finalPrayerName,
     this.snackName,
+    this.officialPhotoName,
+    this.reportFillerName,
   });
 
   factory CellMeetingModel.fromMap(Map<String, dynamic> map, String id) {
@@ -42,12 +48,15 @@ class CellMeetingModel {
       statusNote: map['statusNote'],
       newMeetingDate: map['newMeetingDate'],
       newMeetingTime: map['newMeetingTime'],
+      isReportFilled: map['isReportFilled'] ?? false,
       initialPrayerName: map['initialPrayerName'],
       icebreakerName: map['icebreakerName'],
       worshipName: map['worshipName'],
       wordName: map['wordName'],
       finalPrayerName: map['finalPrayerName'],
       snackName: map['snackName'],
+      officialPhotoName: map['officialPhotoName'],
+      reportFillerName: map['reportFillerName'],
     );
   }
 
@@ -59,12 +68,15 @@ class CellMeetingModel {
       'statusNote': statusNote,
       'newMeetingDate': newMeetingDate,
       'newMeetingTime': newMeetingTime,
+      'isReportFilled': isReportFilled,
       'initialPrayerName': initialPrayerName,
       'icebreakerName': icebreakerName,
       'worshipName': worshipName,
       'wordName': wordName,
       'finalPrayerName': finalPrayerName,
       'snackName': snackName,
+      'officialPhotoName': officialPhotoName,
+      'reportFillerName': reportFillerName,
     };
   }
 }

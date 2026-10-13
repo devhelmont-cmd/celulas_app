@@ -17,8 +17,16 @@ import '../../data/models/cell_join_request_model.dart';
 class CellDetailPage extends StatefulWidget {
   final CellEntity cell;
   final UserEntity? currentUser;
+  final int initialTabIndex;
+  final bool autoOpenEditMeeting;
 
-  const CellDetailPage({super.key, required this.cell, this.currentUser});
+  const CellDetailPage({
+    super.key,
+    required this.cell,
+    this.currentUser,
+    this.initialTabIndex = 0,
+    this.autoOpenEditMeeting = false,
+  });
 
   @override
   State<CellDetailPage> createState() => _CellDetailPageState();
@@ -41,17 +49,44 @@ class _CellDetailPageState extends State<CellDetailPage>
   void initState() {
     super.initState();
     _currentCell = widget.cell;
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
     _membersController = getIt<CellMembersController>();
     _membersController.fetchMembers(_currentCell.id);
     _loadPendingRequests();
-    _loadMeetingAndPrayerRequests();
+    _loadMeetingAndPrayerRequests().then((_) {
+      if (widget.autoOpenEditMeeting && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showEditMeetingRolesDialog();
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  bool _hasUnassignedRolesOrPendingReport() {
+    final m = _currentMeeting;
+    if (m == null) return true;
+    if (!m.isReportFilled) return true;
+
+    final isNullOrEmpty = (String? val) => val == null || val.trim().isEmpty || val == 'Não definido';
+
+    return isNullOrEmpty(m.initialPrayerName) ||
+        isNullOrEmpty(m.icebreakerName) ||
+        isNullOrEmpty(m.worshipName) ||
+        isNullOrEmpty(m.wordName) ||
+        isNullOrEmpty(m.finalPrayerName) ||
+        isNullOrEmpty(m.snackName) ||
+        isNullOrEmpty(m.officialPhotoName) ||
+        isNullOrEmpty(m.reportFillerName);
   }
 
   Future<void> _loadPendingRequests() async {
@@ -424,8 +459,9 @@ class _CellDetailPageState extends State<CellDetailPage>
 
     try {
       candidates = await dataSource.getUsersAndMembersWithoutCell();
-      // Ordenação alfabética crescente da lista de pessoas sem célula
-      candidates.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      candidates.sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
     } catch (e) {
       debugPrint('Erro ao buscar pessoas sem célula: $e');
     }
@@ -488,7 +524,9 @@ class _CellDetailPageState extends State<CellDetailPage>
                       child:
                       filtered.isEmpty
                           ? const Center(
-                        child: Text('Nenhuma pessoa avulsa encontrada.'),
+                        child: Text(
+                          'Nenhuma pessoa avulsa encontrada.',
+                        ),
                       )
                           : ListView.builder(
                         shrinkWrap: true,
@@ -828,8 +866,6 @@ class _CellDetailPageState extends State<CellDetailPage>
       return null;
     }
 
-    // Ordenação: Nomes iguais ou correspondentes ao targetName (ex: Reinaldo) no topo em ordem crescente,
-    // seguidos pelos demais em ordem alfabética crescente.
     unlinkedMembers.sort((a, b) {
       if (targetName != null && targetName.trim().isNotEmpty) {
         final target = targetName.trim().toLowerCase();
@@ -1061,10 +1097,7 @@ class _CellDetailPageState extends State<CellDetailPage>
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Sair',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('Sair', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1080,10 +1113,7 @@ class _CellDetailPageState extends State<CellDetailPage>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao sair: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Erro ao sair: $e'), backgroundColor: Colors.red),
       );
     }
   }
@@ -1372,7 +1402,17 @@ class _CellDetailPageState extends State<CellDetailPage>
 
   // ================= REUNIÕES & FUNÇÕES DA CÉLULA =================
   Future<void> _showEditMeetingRolesDialog() async {
-    final members = _membersController.members;
+    List<CellMemberEntity> members = [];
+    try {
+      final dataSource = getIt<ICellRemoteDataSource>();
+      final fetchedModels = await dataSource.getCellMembers(_currentCell.id);
+      members = fetchedModels.cast<CellMemberEntity>();
+    } catch (_) {
+      if (_membersController.value is CellMemberLoadedState) {
+        members = (_membersController.value as CellMemberLoadedState).members;
+      }
+    }
+
     final memberNames = members.map((m) => m.name).toList();
     if (!memberNames.contains('Não definido')) {
       memberNames.insert(0, 'Não definido');
@@ -1384,9 +1424,30 @@ class _CellDetailPageState extends State<CellDetailPage>
     String word = _currentMeeting?.wordName ?? 'Não definido';
     String finalPrayer = _currentMeeting?.finalPrayerName ?? 'Não definido';
     String snack = _currentMeeting?.snackName ?? 'Não definido';
+    String officialPhoto = _currentMeeting?.officialPhotoName ?? 'Não definido';
+
+    // Regra padrão para preenchimento do relatório: Co-líder -> Líder -> Não definido
+    String reportFiller = _currentMeeting?.reportFillerName ?? '';
+    if (reportFiller.isEmpty || reportFiller == 'Não definido') {
+      final coLeader = members.cast<CellMemberEntity>().firstWhere(
+            (m) => _normalizeRole(m.role) == 'colider',
+        orElse: () => CellMemberEntity(id: '', cellId: '', name: '', role: '', joinedAt: DateTime.now()),
+      );
+      if (coLeader.name.isNotEmpty) {
+        reportFiller = coLeader.name;
+      } else {
+        final leader = members.cast<CellMemberEntity>().firstWhere(
+              (m) => _normalizeRole(m.role) == 'lider',
+          orElse: () => CellMemberEntity(id: '', cellId: '', name: '', role: '', joinedAt: DateTime.now()),
+        );
+        reportFiller = leader.name.isNotEmpty ? leader.name : 'Não definido';
+      }
+    }
 
     String status = _currentMeeting?.status ?? 'normal';
     String statusNote = _currentMeeting?.statusNote ?? '';
+
+    if (!mounted) return;
 
     final result = await showDialog<bool>(
       context: context,
@@ -1477,6 +1538,18 @@ class _CellDetailPageState extends State<CellDetailPage>
                       memberNames,
                           (v) => snack = v,
                     ),
+                    _buildRoleDropdown(
+                      'Foto Oficial',
+                      officialPhoto,
+                      memberNames,
+                          (v) => officialPhoto = v,
+                    ),
+                    _buildRoleDropdown(
+                      'Preenchimento do Relatório',
+                      reportFiller,
+                      memberNames,
+                          (v) => reportFiller = v,
+                    ),
                   ],
                 ),
               ),
@@ -1510,6 +1583,9 @@ class _CellDetailPageState extends State<CellDetailPage>
         wordName: word == 'Não definido' ? null : word,
         finalPrayerName: finalPrayer == 'Não definido' ? null : finalPrayer,
         snackName: snack == 'Não definido' ? null : snack,
+        officialPhotoName: officialPhoto == 'Não definido' ? null : officialPhoto,
+        reportFillerName: reportFiller == 'Não definido' ? null : reportFiller,
+        isReportFilled: _currentMeeting?.isReportFilled ?? false,
       );
 
       final dataSource = getIt<ICellRemoteDataSource>();
@@ -1608,6 +1684,143 @@ class _CellDetailPageState extends State<CellDetailPage>
     }
   }
 
+  bool _canEditPrayer(PrayerRequestModel prayer) {
+    final user = widget.currentUser;
+    if (user == null) return false;
+    if (user.isPastorOrCoordinator) return true;
+    final isAuthor =
+        prayer.authorId == user.id ||
+            (user.name != null &&
+                prayer.authorName.trim().toLowerCase() ==
+                    user.name!.trim().toLowerCase());
+    return isAuthor;
+  }
+
+  bool _canDeletePrayer(PrayerRequestModel prayer) {
+    final user = widget.currentUser;
+    if (user == null) return false;
+    if (user.isPastorOrCoordinator) return true;
+    final isAuthor =
+        prayer.authorId == user.id ||
+            (user.name != null &&
+                prayer.authorName.trim().toLowerCase() ==
+                    user.name!.trim().toLowerCase());
+    if (isAuthor) return true;
+
+    final bool isUserLeader =
+        user.isLeader ||
+            _currentCell.leaderId == user.id ||
+            (_currentCell.leaderId != null &&
+                user.name != null &&
+                _currentCell.leaderId!.trim().toLowerCase() ==
+                    user.name!.trim().toLowerCase());
+
+    if (isUserLeader) {
+      List<CellMemberEntity> members = [];
+      if (_membersController.value is CellMemberLoadedState) {
+        members = (_membersController.value as CellMemberLoadedState).members;
+      }
+      final isMemberOfCell = members.any(
+            (m) =>
+        m.userId == prayer.authorId ||
+            m.name.trim().toLowerCase() == prayer.authorName.trim().toLowerCase(),
+      );
+      if (isMemberOfCell) return true;
+    }
+
+    return false;
+  }
+
+  Future<void> _showEditPrayerDialog(PrayerRequestModel prayer) async {
+    final ctrl = TextEditingController(text: prayer.request);
+    final result = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+        title: const Text('Editar Pedido de Oração'),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 3,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && ctrl.text.trim().isNotEmpty) {
+      final updated = PrayerRequestModel(
+        id: prayer.id,
+        cellId: prayer.cellId,
+        authorId: prayer.authorId,
+        authorName: prayer.authorName,
+        request: ctrl.text.trim(),
+        createdAt: prayer.createdAt,
+        isAnswered: prayer.isAnswered,
+      );
+      final dataSource = getIt<ICellRemoteDataSource>();
+      await dataSource.updatePrayerRequest(updated);
+      await _loadMeetingAndPrayerRequests();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pedido atualizado!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deletePrayerRequest(PrayerRequestModel prayer) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+        title: const Text('Excluir Pedido'),
+        content: const Text(
+          'Tem certeza de que deseja excluir este pedido de oração?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Excluir',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final dataSource = getIt<ICellRemoteDataSource>();
+      await dataSource.deletePrayerRequest(prayer.cellId, prayer.id);
+      await _loadMeetingAndPrayerRequests();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pedido excluído!'),
+            backgroundColor: Colors.blue,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cell = _currentCell;
@@ -1625,8 +1838,23 @@ class _CellDetailPageState extends State<CellDetailPage>
                     cell.leaderId?.trim().toLowerCase() ==
                         user.name!.trim().toLowerCase()));
 
+    final bool isUserCoLeaderOfThisCell =
+        user != null &&
+            (cell.coLeaderId == user.id ||
+                (cell.coLeaderId != null &&
+                    user.name != null &&
+                    cell.coLeaderId!.trim().toLowerCase() ==
+                        user.name!.trim().toLowerCase()));
+
+    final bool isUserReportFiller =
+        user != null &&
+            _currentMeeting?.reportFillerName != null &&
+            _currentMeeting!.reportFillerName!.trim().toLowerCase() ==
+                user.name!.trim().toLowerCase();
+
     final bool canEditCell = isPastorOrCoord || isUserLeaderOfThisCell;
     final bool canManageCellStatus = isPastorOrCoord;
+    final bool canEditMeeting = user != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -1708,7 +1936,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                   meetingTime,
                   address,
                 ),
-                _buildMeetingTab(isUserLeaderOfThisCell || isPastorOrCoord),
+                _buildMeetingTab(canEditMeeting),
                 _buildPrayerTab(),
               ],
             ),
@@ -2129,8 +2357,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                                       style: TextButton.styleFrom(
                                         foregroundColor: Colors.red,
                                       ),
-                                      onPressed:
-                                          () => _leaveCell(member),
+                                      onPressed: () => _leaveCell(member),
                                       icon: const Icon(
                                         Icons.logout,
                                         size: 16,
@@ -2166,13 +2393,14 @@ class _CellDetailPageState extends State<CellDetailPage>
 
     final meeting = _currentMeeting;
     final status = meeting?.status ?? 'normal';
+    final bool showLeaderWarning = canEdit && _hasUnassignedRolesOrPendingReport();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (canEdit) ...[
+          if (showLeaderWarning) ...[
             Card(
               color: Colors.amber.shade50,
               child: Padding(
@@ -2291,6 +2519,8 @@ class _CellDetailPageState extends State<CellDetailPage>
             highlightPrayerAlert: true,
           ),
           _buildRoleCard('Lanche', meeting?.snackName, Icons.restaurant),
+          _buildRoleCard('Foto Oficial', meeting?.officialPhotoName, Icons.camera_alt),
+          _buildRoleCard('Preenchimento do Relatório', meeting?.reportFillerName, Icons.description),
 
           const SizedBox(height: 24),
           const Text(
@@ -2304,10 +2534,7 @@ class _CellDetailPageState extends State<CellDetailPage>
               child: Column(
                 children: const [
                   ListTile(
-                    leading: Icon(
-                      Icons.forum_outlined,
-                      color: Colors.indigo,
-                    ),
+                    leading: Icon(Icons.forum_outlined, color: Colors.indigo),
                     title: Text(
                       'Conversa sobre a Palavra',
                       style: TextStyle(fontWeight: FontWeight.bold),
@@ -2425,6 +2652,9 @@ class _CellDetailPageState extends State<CellDetailPage>
               itemCount: _prayerRequests.length,
               itemBuilder: (context, index) {
                 final prayer = _prayerRequests[index];
+                final canEdit = _canEditPrayer(prayer);
+                final canDelete = _canDeletePrayer(prayer);
+
                 return Card(
                   margin: const EdgeInsets.only(bottom: 8.0),
                   child: ListTile(
@@ -2433,6 +2663,31 @@ class _CellDetailPageState extends State<CellDetailPage>
                     ),
                     title: Text(prayer.request),
                     subtitle: Text('Por: ${prayer.authorName}'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (canEdit)
+                          IconButton(
+                            icon: const Icon(
+                              Icons.edit,
+                              size: 20,
+                              color: Colors.blue,
+                            ),
+                            onPressed:
+                                () => _showEditPrayerDialog(prayer),
+                          ),
+                        if (canDelete)
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete,
+                              size: 20,
+                              color: Colors.red,
+                            ),
+                            onPressed:
+                                () => _deletePrayerRequest(prayer),
+                          ),
+                      ],
+                    ),
                   ),
                 );
               },

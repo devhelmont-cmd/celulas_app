@@ -131,24 +131,27 @@ class _HomePageState extends State<HomePage> {
           children: [
             CircleAvatar(
               radius: 28,
-              backgroundImage: widget.user.photoUrl != null &&
-                  widget.user.photoUrl!.isNotEmpty
-                  ? NetworkImage(widget.user.photoUrl!)
+              backgroundImage:
+              _currentUser.photoUrl != null &&
+                  _currentUser.photoUrl!.isNotEmpty
+                  ? NetworkImage(_currentUser.photoUrl!)
                   : null,
-              onBackgroundImageError: widget.user.photoUrl != null &&
-                  widget.user.photoUrl!.isNotEmpty
+              onBackgroundImageError:
+              _currentUser.photoUrl != null &&
+                  _currentUser.photoUrl!.isNotEmpty
                   ? (exception, stackTrace) {
                 debugPrint(
                   'Erro ao carregar foto de perfil: $exception',
                 );
               }
                   : null,
-              child: (widget.user.photoUrl == null ||
-                  widget.user.photoUrl!.isEmpty)
-                  ? (widget.user.name != null &&
-                  widget.user.name!.trim().isNotEmpty)
+              child:
+              (_currentUser.photoUrl == null ||
+                  _currentUser.photoUrl!.isEmpty)
+                  ? (_currentUser.name != null &&
+                  _currentUser.name!.trim().isNotEmpty)
                   ? Text(
-                widget.user.name!.trim()[0].toUpperCase(),
+                _currentUser.name!.trim()[0].toUpperCase(),
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 20,
@@ -162,13 +165,13 @@ class _HomePageState extends State<HomePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Olá, ${widget.user.name ?? widget.user.email.split('@').first}',
+                  'Olá, ${_currentUser.name ?? _currentUser.email.split('@').first}',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 Text(
-                  _getUserRoleLabel(widget.user),
+                  _getUserRoleLabel(_currentUser),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -178,23 +181,26 @@ class _HomePageState extends State<HomePage> {
         const SizedBox(height: 24),
 
         // 2. Renderização Condicional por Perfil (Hierárquica)
-        if (widget.user.isPastorOrCoordinator) ...[
+        if (_currentUser.isPastorOrCoordinator) ...[
           const PastorDashboardWidget(),
           const SizedBox(height: 20),
         ],
 
-        if (widget.user.isLeader) ...[
-          const LeaderDashboardWidget(),
+        if (_currentUser.isLeader) ...[
+          LeaderDashboardWidget(user: _currentUser),
           const SizedBox(height: 20),
         ],
 
-        if (widget.user.isMember) ...[const MemberDashboardWidget()],
+        if (_currentUser.isMember) ...[
+          MemberDashboardWidget(user: _currentUser),
+        ],
       ],
     );
   }
 
   String _getUserRoleLabel(UserEntity user) {
-    if (user.roles.contains(UserRole.pastor)) return 'Pastor / Coordenador';
+    if (user.roles.contains(UserRole.pastor)) return 'Pastor';
+    if (user.roles.contains(UserRole.coordinator)) return 'Coordenador';
     if (user.roles.contains(UserRole.leader)) return 'Líder de Célula';
     return 'Membro';
   }
