@@ -12,12 +12,18 @@ class MemberDashboardWidget extends StatelessWidget {
 
   const MemberDashboardWidget({super.key, required this.user});
 
+  bool _isMeetingExpired(CellMeetingModel? meeting) {
+    if (meeting == null) return true;
+    final targetDate = meeting.meetingDate;
+    final expiry = DateTime(targetDate.year, targetDate.month, targetDate.day + 1);
+    return DateTime.now().isAfter(expiry);
+  }
+
   Future<void> _showAddPrayerDialog(BuildContext context, String cellId) async {
     final ctrl = TextEditingController();
     final result = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Novo Pedido de Oração'),
         content: TextField(
           controller: ctrl,
@@ -69,8 +75,7 @@ class MemberDashboardWidget extends StatelessWidget {
     final ctrl = TextEditingController(text: prayer.request);
     final result = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Editar Pedido de Oração'),
         content: TextField(
           controller: ctrl,
@@ -119,8 +124,7 @@ class MemberDashboardWidget extends StatelessWidget {
       ) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Excluir Pedido'),
         content: const Text(
           'Tem certeza de que deseja excluir este pedido de oração?',
@@ -181,8 +185,27 @@ class MemberDashboardWidget extends StatelessWidget {
         return StreamBuilder<CellMeetingModel?>(
           stream: dataSource.watchLatestMeeting(cell.id),
           builder: (context, meetingSnapshot) {
-            final meeting = meetingSnapshot.data;
+            final rawMeeting = meetingSnapshot.data;
+            final meeting = _isMeetingExpired(rawMeeting) ? null : rawMeeting;
             final status = meeting?.status ?? 'normal';
+
+            // Determina dinamicamente rótulo e valor sem dar a entender que é o padrão semanal
+            String displayLabel;
+            String displayValue;
+            String displayAddress;
+
+            if (meeting != null && (status == 'bridge_event' || status == 'rescheduled')) {
+              final formattedDate = '${meeting.meetingDate.day.toString().padLeft(2, '0')}/${meeting.meetingDate.month.toString().padLeft(2, '0')}/${meeting.meetingDate.year}';
+              final time = meeting.meetingTime ?? cell.meetingTime ?? '';
+              displayLabel = status == 'bridge_event' ? 'Data do Evento' : 'Data Remarcada';
+              displayValue = '$formattedDate às $time';
+              displayAddress = meeting.meetingLocation?.isNotEmpty == true ? meeting.meetingLocation! : (cell.address ?? '');
+            } else {
+              displayLabel = 'Reuniões';
+              displayValue = '${cell.meetingDay ?? 'Dia a definir'} às ${cell.meetingTime ?? 'Horário a definir'}';
+              displayAddress = cell.address ?? 'Endereço não informado';
+            }
+
             final userName = user.name?.trim().toLowerCase() ?? '';
 
             List<String> assignedRoles = [];
@@ -258,9 +281,7 @@ class MemberDashboardWidget extends StatelessWidget {
                             children: [
                               const Icon(Icons.calendar_today, size: 16),
                               const SizedBox(width: 8),
-                              Text(
-                                '${cell.meetingDay ?? 'Dia a definir'} às ${cell.meetingTime ?? 'Horário a definir'}',
-                              ),
+                              Expanded(child: Text('$displayLabel: $displayValue')),
                             ],
                           ),
                           const SizedBox(height: 8),
@@ -269,9 +290,7 @@ class MemberDashboardWidget extends StatelessWidget {
                               const Icon(Icons.location_on_outlined, size: 16),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(
-                                  cell.address ?? 'Endereço não informado',
-                                ),
+                                child: Text(displayAddress),
                               ),
                             ],
                           ),
@@ -280,8 +299,7 @@ class MemberDashboardWidget extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color:
-                                status == 'bridge_event'
+                                color: status == 'bridge_event'
                                     ? Colors.blue.shade50
                                     : status == 'canceled'
                                     ? Colors.red.shade50
@@ -297,8 +315,7 @@ class MemberDashboardWidget extends StatelessWidget {
                                         ? Icons.cancel
                                         : Icons.edit_calendar,
                                     size: 18,
-                                    color:
-                                    status == 'bridge_event'
+                                    color: status == 'bridge_event'
                                         ? Colors.blue
                                         : status == 'canceled'
                                         ? Colors.red
@@ -308,15 +325,14 @@ class MemberDashboardWidget extends StatelessWidget {
                                   Expanded(
                                     child: Text(
                                       status == 'bridge_event'
-                                          ? 'Evento Ponte: ${meeting?.statusNote ?? ''}'
+                                          ? 'Evento Ponte: ${meeting?.eventName ?? meeting?.statusNote ?? ""}'
                                           : status == 'canceled'
-                                          ? 'Reunião Cancelada: ${meeting?.statusNote ?? ''}'
-                                          : 'Reunião Remarcada: ${meeting?.statusNote ?? ''}',
+                                          ? 'Reunião Cancelada: ${meeting?.statusNote ?? ""}'
+                                          : 'Reunião Remarcada: ${meeting?.meetingTime ?? ""} (${meeting?.meetingLocation ?? ""})',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 12,
-                                        color:
-                                        status == 'bridge_event'
+                                        color: status == 'bridge_event'
                                             ? Colors.blue.shade800
                                             : status == 'canceled'
                                             ? Colors.red.shade800
@@ -426,8 +442,7 @@ class MemberDashboardWidget extends StatelessWidget {
                     }
 
                     final allPrayers = prayerSnapshot.data ?? [];
-                    final myPrayers =
-                    allPrayers.where((p) {
+                    final myPrayers = allPrayers.where((p) {
                       return p.authorId == user.id ||
                           (user.name != null &&
                               p.authorName.trim().toLowerCase() ==
@@ -472,8 +487,7 @@ class MemberDashboardWidget extends StatelessWidget {
                                     size: 20,
                                     color: Colors.blue,
                                   ),
-                                  onPressed:
-                                      () => _showEditPrayerDialog(
+                                  onPressed: () => _showEditPrayerDialog(
                                     context,
                                     prayer,
                                   ),
@@ -484,8 +498,7 @@ class MemberDashboardWidget extends StatelessWidget {
                                     size: 20,
                                     color: Colors.red,
                                   ),
-                                  onPressed:
-                                      () => _deletePrayer(context, prayer),
+                                  onPressed: () => _deletePrayer(context, prayer),
                                 ),
                               ],
                             ),

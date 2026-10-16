@@ -5,9 +5,10 @@ class CellMeetingModel {
   final String cellId;
   final DateTime meetingDate;
   final String status; // 'normal', 'bridge_event', 'canceled', 'rescheduled'
-  final String? statusNote;
-  final String? newMeetingDate;
-  final String? newMeetingTime;
+  final String? statusNote; // Justificativa de cancelamento ou notas
+  final String? eventName; // Título do Evento Ponte
+  final String? meetingTime; // Horário no formato HH:mm
+  final String? meetingLocation; // Local personalizado da reunião/evento
   final bool isReportFilled;
 
   // Funções da reunião
@@ -26,8 +27,9 @@ class CellMeetingModel {
     required this.meetingDate,
     this.status = 'normal',
     this.statusNote,
-    this.newMeetingDate,
-    this.newMeetingTime,
+    this.eventName,
+    this.meetingTime,
+    this.meetingLocation,
     this.isReportFilled = false,
     this.initialPrayerName,
     this.icebreakerName,
@@ -39,6 +41,13 @@ class CellMeetingModel {
     this.reportFillerName,
   });
 
+  /// Verifica se esta reunião já aconteceu e expirou (passou o dia da ocorrência)
+  bool get isExpired {
+    DateTime targetDate = meetingDate;
+    final expiry = DateTime(targetDate.year, targetDate.month, targetDate.day + 1);
+    return DateTime.now().isAfter(expiry);
+  }
+
   factory CellMeetingModel.fromMap(Map<String, dynamic> map, String id) {
     return CellMeetingModel(
       id: id,
@@ -46,8 +55,9 @@ class CellMeetingModel {
       meetingDate: (map['meetingDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
       status: map['status'] ?? 'normal',
       statusNote: map['statusNote'],
-      newMeetingDate: map['newMeetingDate'],
-      newMeetingTime: map['newMeetingTime'],
+      eventName: map['eventName'],
+      meetingTime: map['meetingTime'],
+      meetingLocation: map['meetingLocation'],
       isReportFilled: map['isReportFilled'] ?? false,
       initialPrayerName: map['initialPrayerName'],
       icebreakerName: map['icebreakerName'],
@@ -66,8 +76,9 @@ class CellMeetingModel {
       'meetingDate': Timestamp.fromDate(meetingDate),
       'status': status,
       'statusNote': statusNote,
-      'newMeetingDate': newMeetingDate,
-      'newMeetingTime': newMeetingTime,
+      'eventName': eventName,
+      'meetingTime': meetingTime,
+      'meetingLocation': meetingLocation,
       'isReportFilled': isReportFilled,
       'initialPrayerName': initialPrayerName,
       'icebreakerName': icebreakerName,

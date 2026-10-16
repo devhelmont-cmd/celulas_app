@@ -3,6 +3,7 @@ import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart'
 import 'package:celulas_app/src/features/cells/presentation/pages/cell_detail_page.dart';
 import 'package:celulas_app/src/features/cells/presentation/pages/create_cell_page.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 
@@ -17,6 +18,13 @@ class CellsListPage extends StatelessWidget {
     required this.onRefresh,
     this.currentUser,
   });
+
+  bool _isMeetingExpired(CellMeetingModel? meeting) {
+    if (meeting == null) return true;
+    final targetDate = meeting.meetingDate;
+    final expiry = DateTime(targetDate.year, targetDate.month, targetDate.day + 1);
+    return DateTime.now().isAfter(expiry);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -166,20 +174,101 @@ class CellsListPage extends StatelessWidget {
                         const SizedBox(height: 6),
                       ],
 
-                      Row(
-                        children: [
-                          const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                          const SizedBox(width: 8),
-                          Text('${cell.meetingDay ?? ''} às ${cell.meetingTime ?? ''}'),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on, size: 16, color: Colors.grey),
-                          const SizedBox(width: 8),
-                          Text('${cell.address ?? ''}'),
-                        ],
+                      // Exibição Dinâmica e Clara (Evitando confusão com o dia padrão)
+                      FutureBuilder<CellMeetingModel?>(
+                        future: dataSource.getLatestMeeting(cell.id),
+                        builder: (context, meetingSnapshot) {
+                          final rawMeeting = meetingSnapshot.data;
+                          final meeting = _isMeetingExpired(rawMeeting) ? null : rawMeeting;
+                          final status = meeting?.status ?? 'normal';
+
+                          String displayLabel;
+                          String displayValue;
+                          String displayAddress;
+
+                          if (meeting != null && (status == 'bridge_event' || status == 'rescheduled')) {
+                            final formattedDate = '${meeting.meetingDate.day.toString().padLeft(2, '0')}/${meeting.meetingDate.month.toString().padLeft(2, '0')}/${meeting.meetingDate.year}';
+                            final time = meeting.meetingTime ?? cell.meetingTime ?? '';
+                            displayLabel = status == 'bridge_event' ? 'Data do Evento' : 'Data Remarcada';
+                            displayValue = '$formattedDate às $time';
+                            displayAddress = meeting.meetingLocation?.isNotEmpty == true ? meeting.meetingLocation! : (cell.address ?? '');
+                          } else {
+                            displayLabel = 'Reuniões';
+                            displayValue = '${cell.meetingDay ?? ''} às ${cell.meetingTime ?? ''}';
+                            displayAddress = cell.address ?? '';
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text('$displayLabel: $displayValue')),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(displayAddress)),
+                                ],
+                              ),
+                              if (status != 'normal') ...[
+                                Container(
+                                  margin: const EdgeInsets.only(top: 8),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: status == 'bridge_event'
+                                        ? Colors.blue.shade50
+                                        : status == 'canceled'
+                                        ? Colors.red.shade50
+                                        : Colors.purple.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        status == 'bridge_event'
+                                            ? Icons.star
+                                            : status == 'canceled'
+                                            ? Icons.cancel
+                                            : Icons.edit_calendar,
+                                        size: 16,
+                                        color: status == 'bridge_event'
+                                            ? Colors.blue
+                                            : status == 'canceled'
+                                            ? Colors.red
+                                            : Colors.purple,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          status == 'bridge_event'
+                                              ? 'Evento Ponte: ${meeting!.eventName ?? meeting.statusNote ?? ""}'
+                                              : status == 'canceled'
+                                              ? 'Reunião Cancelada: ${meeting!.statusNote ?? ""}'
+                                              : 'Reunião Remarcada: ${meeting!.meetingTime ?? ""} (${meeting.meetingLocation ?? ""})',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                            color: status == 'bridge_event'
+                                                ? Colors.blue.shade800
+                                                : status == 'canceled'
+                                                ? Colors.red.shade800
+                                                : Colors.purple.shade800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
                       ),
 
                       if (canViewRequests) ...[

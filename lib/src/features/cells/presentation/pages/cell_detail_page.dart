@@ -72,8 +72,49 @@ class _CellDetailPageState extends State<CellDetailPage>
     super.dispose();
   }
 
+  /// Calcula a próxima data de reunião com base no dia da semana configurado na célula
+  DateTime _calculateNextMeetingDate(String? meetingDayStr) {
+    final now = DateTime.now();
+    if (meetingDayStr == null || meetingDayStr.trim().isEmpty) {
+      return now;
+    }
+
+    int targetWeekday = 2; // Terça-feira por padrão
+    final lower = meetingDayStr.toLowerCase().trim();
+    if (lower.contains('segunda')) {
+      targetWeekday = DateTime.monday;
+    } else if (lower.contains('terça') || lower.contains('terca')) {
+      targetWeekday = DateTime.tuesday;
+    } else if (lower.contains('quarta')) {
+      targetWeekday = DateTime.wednesday;
+    } else if (lower.contains('quinta')) {
+      targetWeekday = DateTime.thursday;
+    } else if (lower.contains('sexta')) {
+      targetWeekday = DateTime.friday;
+    } else if (lower.contains('sábado') || lower.contains('sabado')) {
+      targetWeekday = DateTime.saturday;
+    } else if (lower.contains('domingo')) {
+      targetWeekday = DateTime.sunday;
+    }
+
+    int daysUntil = targetWeekday - now.weekday;
+    if (daysUntil < 0) {
+      daysUntil += 7;
+    }
+
+    return DateTime(now.year, now.month, now.day).add(Duration(days: daysUntil));
+  }
+
+  bool _isMeetingExpired(CellMeetingModel? meeting) {
+    if (meeting == null) return true;
+    final targetDate = meeting.meetingDate;
+    final expiry = DateTime(targetDate.year, targetDate.month, targetDate.day + 1);
+    return DateTime.now().isAfter(expiry);
+  }
+
   bool _hasUnassignedRolesOrPendingReport() {
-    final m = _currentMeeting;
+    final rawMeeting = _currentMeeting;
+    final m = _isMeetingExpired(rawMeeting) ? null : rawMeeting;
     if (m == null) return true;
     if (!m.isReportFilled) return true;
 
@@ -203,7 +244,6 @@ class _CellDetailPageState extends State<CellDetailPage>
     }
   }
 
-  // ================= GESTÃO DA CÉLULA (EDITAR, INATIVAR, EXCLUIR) =================
   Future<void> _showEditCellDialog() async {
     final nameCtrl = TextEditingController(text: _currentCell.name);
     final addressCtrl = TextEditingController(text: _currentCell.address);
@@ -257,8 +297,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                   decoration: const InputDecoration(
                     labelText: 'Dia da Reunião',
                   ),
-                  items:
-                  days
+                  items: days
                       .map(
                         (d) => DropdownMenuItem(value: d, child: Text(d)),
                   )
@@ -328,8 +367,7 @@ class _CellDetailPageState extends State<CellDetailPage>
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: Text('${newStatus ? "Reativar" : "Inativar"} Célula'),
         content: Text(
           newStatus
@@ -367,8 +405,7 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _deleteCellCompletely() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Desfazer / Excluir Célula'),
         content: const Text(
           'ATENÇÃO: Esta ação é irreversível!\n\n'
@@ -417,12 +454,10 @@ class _CellDetailPageState extends State<CellDetailPage>
     }
   }
 
-  // ================= ADICIONAR MEMBROS E USUÁRIOS AVULSOS =================
   Future<void> _onTapAddButton() async {
     final choice = await showDialog<String>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Adicionar à Célula'),
         content: const Text(
           'Deseja cadastrar um novo membro sem conta ou adicionar uma pessoa avulsa sem célula?',
@@ -472,8 +507,7 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (candidates.isEmpty) {
       await showDialog(
         context: context,
-        builder:
-            (ctx) => AlertDialog(
+        builder: (ctx) => AlertDialog(
           title: const Text('Ninguém sem célula'),
           content: const Text(
             'Não foram encontrados membros ou usuários avulsos sem célula cadastrados.',
@@ -495,8 +529,7 @@ class _CellDetailPageState extends State<CellDetailPage>
         String query = '';
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final filtered =
-            candidates.where((c) {
+            final filtered = candidates.where((c) {
               return c.name.toLowerCase().contains(
                 query.toLowerCase().trim(),
               );
@@ -521,8 +554,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                     ),
                     const SizedBox(height: 12),
                     Expanded(
-                      child:
-                      filtered.isEmpty
+                      child: filtered.isEmpty
                           ? const Center(
                         child: Text(
                           'Nenhuma pessoa avulsa encontrada.',
@@ -533,8 +565,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                         itemCount: filtered.length,
                         itemBuilder: (context, index) {
                           final item = filtered[index];
-                          final badge =
-                          item.isRegisteredUser
+                          final badge = item.isRegisteredUser
                               ? 'Com Conta no App'
                               : 'Membro Sem Conta';
 
@@ -593,8 +624,7 @@ class _CellDetailPageState extends State<CellDetailPage>
     String selectedRole = 'membro';
 
     final isPastorOrCoord = widget.currentUser?.isPastorOrCoordinator ?? false;
-    final Map<String, String> roleOptions =
-    isPastorOrCoord
+    final Map<String, String> roleOptions = isPastorOrCoord
         ? {
       'membro': 'Membro',
       'anfitriao': 'Anfitrião',
@@ -634,8 +664,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                         labelText: 'Função na Célula',
                         border: OutlineInputBorder(),
                       ),
-                      items:
-                      roleOptions.entries.map((entry) {
+                      items: roleOptions.entries.map((entry) {
                         return DropdownMenuItem<String>(
                           value: entry.key,
                           child: Text(entry.value),
@@ -667,8 +696,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                       return;
                     }
 
-                    final words =
-                    rawName
+                    final words = rawName
                         .split(' ')
                         .where((w) => w.trim().isNotEmpty)
                         .toList();
@@ -755,8 +783,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                       labelText: 'Sua Função',
                       border: OutlineInputBorder(),
                     ),
-                    items:
-                    roleOptions.entries.map((entry) {
+                    items: roleOptions.entries.map((entry) {
                       return DropdownMenuItem<String>(
                         value: entry.key,
                         child: Text(entry.value),
@@ -791,8 +818,7 @@ class _CellDetailPageState extends State<CellDetailPage>
         id: '',
         cellId: _currentCell.id,
         userId: widget.currentUser!.id,
-        name:
-        widget.currentUser!.name ??
+        name: widget.currentUser!.name ??
             widget.currentUser!.email.split('@').first,
         role: selectedRole,
         joinedAt: DateTime.now(),
@@ -849,8 +875,7 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (unlinkedMembers.isEmpty) {
       await showDialog(
         context: context,
-        builder:
-            (ctx) => AlertDialog(
+        builder: (ctx) => AlertDialog(
           title: const Text('Nenhum Membro Sem Conta'),
           content: const Text(
             'Não existem membros avulsos cadastrados no sistema.',
@@ -889,8 +914,7 @@ class _CellDetailPageState extends State<CellDetailPage>
         String searchQuery = '';
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final filtered =
-            unlinkedMembers.where((m) {
+            final filtered = unlinkedMembers.where((m) {
               return m.name.toLowerCase().contains(
                 searchQuery.toLowerCase().trim(),
               );
@@ -915,8 +939,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                     ),
                     const SizedBox(height: 12),
                     Expanded(
-                      child:
-                      filtered.isEmpty
+                      child: filtered.isEmpty
                           ? const Center(
                         child: Text('Nenhum membro encontrado.'),
                       )
@@ -925,8 +948,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                         itemCount: filtered.length,
                         itemBuilder: (context, index) {
                           final member = filtered[index];
-                          final cellName =
-                              member.cellName ?? 'Sem Célula';
+                          final cellName = member.cellName ?? 'Sem Célula';
                           return ListTile(
                             leading: CircleAvatar(
                               child: Text(
@@ -965,8 +987,7 @@ class _CellDetailPageState extends State<CellDetailPage>
 
     final option = await showDialog<String>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: Text('Aprovar ${request.userName}'),
         content: Text(
           'Deseja vincular ${request.userName} a um membro já existente (sem conta) ou aprová-lo(a) como um novo membro?',
@@ -998,8 +1019,7 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (isLeaderEmpty) {
       final shouldBeLeader = await showDialog<bool>(
         context: context,
-        builder:
-            (ctx) => AlertDialog(
+        builder: (ctx) => AlertDialog(
           title: const Text('Definir como Líder?'),
           content: Text(
             'Esta célula ainda não possui um líder definido. Deseja aprovar ${request.userName} já definindo-o(a) como Líder desta célula?',
@@ -1078,15 +1098,13 @@ class _CellDetailPageState extends State<CellDetailPage>
                     _currentCell.leaderId?.trim().toLowerCase() ==
                         widget.currentUser!.name!.trim().toLowerCase()));
 
-    final message =
-    isUserLeaderOfThisCell
+    final message = isUserLeaderOfThisCell
         ? 'Você é o líder desta célula. Ao sair, a célula ficará sem líder e você será desvinculado. Deseja continuar?'
         : 'Tem certeza de que deseja sair desta célula? Você ficará sem célula vinculada.';
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Sair da Célula'),
         content: Text(message),
         actions: [
@@ -1121,8 +1139,7 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _showRoleChangeDialog(CellMemberEntity member) async {
     final isPastorOrCoord = widget.currentUser?.isPastorOrCoordinator ?? false;
 
-    final Map<String, String> roleOptions =
-    isPastorOrCoord
+    final Map<String, String> roleOptions = isPastorOrCoord
         ? {
       'lider': 'Líder',
       'colider': 'Co-líder',
@@ -1150,8 +1167,7 @@ class _CellDetailPageState extends State<CellDetailPage>
               title: Text('Alterar Função de ${member.name}'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
-                children:
-                roleOptions.entries.map((entry) {
+                children: roleOptions.entries.map((entry) {
                   return RadioListTile<String>(
                     title: Text(entry.value),
                     value: entry.key,
@@ -1187,8 +1203,7 @@ class _CellDetailPageState extends State<CellDetailPage>
         if (isCurrentlyLeader && newRole != 'lider') {
           final confirmLeaderless = await showDialog<bool>(
             context: context,
-            builder:
-                (ctx) => AlertDialog(
+            builder: (ctx) => AlertDialog(
               title: const Text('Célula Sem Líder'),
               content: Text(
                 'Ao alterar a função de ${member.name}, a célula ficará sem um líder definido. Deseja continuar?',
@@ -1214,8 +1229,7 @@ class _CellDetailPageState extends State<CellDetailPage>
               .cast<CellMemberEntity>()
               .firstWhere(
                 (m) => _normalizeRole(m.role) == newRole && m.id != member.id,
-            orElse:
-                () => CellMemberEntity(
+            orElse: () => CellMemberEntity(
               id: '',
               cellId: '',
               name: '',
@@ -1228,8 +1242,7 @@ class _CellDetailPageState extends State<CellDetailPage>
             final String roleTitle = roleOptions[newRole] ?? newRole;
             final confirmReplacement = await showDialog<bool>(
               context: context,
-              builder:
-                  (ctx) => AlertDialog(
+              builder: (ctx) => AlertDialog(
                 title: Text('Substituir $roleTitle?'),
                 content: Text(
                   'A célula já possui ${existingOccupant.name} como $roleTitle. '
@@ -1371,8 +1384,7 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _removeMemberCompletely(CellMemberEntity member) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Remover Membro'),
         content: Text(
           'Tem certeza de que deseja remover ${member.name} desta célula?',
@@ -1400,7 +1412,192 @@ class _CellDetailPageState extends State<CellDetailPage>
     }
   }
 
-  // ================= REUNIÕES & FUNÇÕES DA CÉLULA =================
+  Future<void> _showEditMeetingConfigDialog() async {
+    String status = _currentMeeting?.status ?? 'normal';
+    String eventName = _currentMeeting?.eventName ?? '';
+    String statusNote = _currentMeeting?.statusNote ?? '';
+
+    DateTime meetingDate = (_currentMeeting != null && !_isMeetingExpired(_currentMeeting))
+        ? _currentMeeting!.meetingDate
+        : _calculateNextMeetingDate(_currentCell.meetingDay);
+
+    String defaultTime = _currentMeeting?.meetingTime ?? _currentCell.meetingTime ?? '19:30';
+    TimeOfDay selectedTime = TimeOfDay(
+      hour: int.tryParse(defaultTime.split(':').first) ?? 19,
+      minute: int.tryParse(defaultTime.split(':').last) ?? 30,
+    );
+
+    String defaultLocation = _currentMeeting?.meetingLocation ?? _currentCell.address ?? '';
+    final locationController = TextEditingController(text: defaultLocation);
+    final eventNameController = TextEditingController(text: eventName);
+    final noteController = TextEditingController(text: statusNote);
+
+    if (!mounted) return;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Configurar Reunião'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: status,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo / Status da Reunião',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'normal',
+                          child: Text('Reunião Normal'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'bridge_event',
+                          child: Text('Evento Ponte'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'rescheduled',
+                          child: Text('Reunião Remarcada'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'canceled',
+                          child: Text('Reunião Cancelada'),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) setDialogState(() => status = val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    if (status == 'bridge_event') ...[
+                      TextField(
+                        controller: eventNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Nome / Título do Evento Ponte',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    if (status == 'canceled') ...[
+                      TextField(
+                        controller: noteController,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Justificativa do Cancelamento',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ] else if (status != 'normal') ...[
+                      ListTile(
+                        title: Text(
+                          'Data: ${meetingDate.day.toString().padLeft(2, '0')}/${meetingDate.month.toString().padLeft(2, '0')}/${meetingDate.year}',
+                        ),
+                        trailing: const Icon(Icons.calendar_today),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: meetingDate,
+                            firstDate: DateTime.now().subtract(const Duration(days: 7)),
+                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                          );
+                          if (picked != null) {
+                            setDialogState(() => meetingDate = picked);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      ListTile(
+                        title: Text('Horário: ${selectedTime.format(context)}'),
+                        trailing: const Icon(Icons.access_time),
+                        onTap: () async {
+                          final TimeOfDay? picked = await showTimePicker(
+                            context: context,
+                            initialTime: selectedTime,
+                          );
+                          if (picked != null && picked != selectedTime) {
+                            setDialogState(() => selectedTime = picked);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: locationController,
+                        decoration: const InputDecoration(
+                          labelText: 'Local da Reunião / Evento',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Salvar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true) {
+      final formattedTime = '${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}';
+
+      final meetingId = (_currentMeeting == null || _isMeetingExpired(_currentMeeting)) ? '' : _currentMeeting!.id;
+
+      // CORREÇÃO: Para reuniões do tipo 'normal' ou 'canceled', a data deve ser sempre a próxima data calculada da célula
+      final DateTime finalMeetingDate = (status == 'normal' || status == 'canceled')
+          ? _calculateNextMeetingDate(_currentCell.meetingDay)
+          : meetingDate;
+
+      final updatedMeeting = CellMeetingModel(
+        id: meetingId,
+        cellId: _currentCell.id,
+        meetingDate: finalMeetingDate,
+        status: status,
+        eventName: status == 'bridge_event' ? eventNameController.text.trim() : null,
+        statusNote: status == 'canceled' ? noteController.text.trim() : (status == 'bridge_event' || status == 'rescheduled' ? locationController.text.trim() : null),
+        meetingTime: status != 'normal' && status != 'canceled' ? formattedTime : null,
+        meetingLocation: status != 'normal' && status != 'canceled' ? locationController.text.trim() : null,
+        initialPrayerName: _currentMeeting?.initialPrayerName,
+        icebreakerName: _currentMeeting?.icebreakerName,
+        worshipName: _currentMeeting?.worshipName,
+        wordName: _currentMeeting?.wordName,
+        finalPrayerName: _currentMeeting?.finalPrayerName,
+        snackName: _currentMeeting?.snackName,
+        officialPhotoName: _currentMeeting?.officialPhotoName,
+        reportFillerName: _currentMeeting?.reportFillerName,
+        isReportFilled: _currentMeeting?.isReportFilled ?? false,
+      );
+
+      final dataSource = getIt<ICellRemoteDataSource>();
+      await dataSource.saveOrUpdateMeeting(updatedMeeting);
+      await _loadMeetingAndPrayerRequests();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Configuração da reunião atualizada com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _showEditMeetingRolesDialog() async {
     List<CellMemberEntity> members = [];
     try {
@@ -1426,7 +1623,6 @@ class _CellDetailPageState extends State<CellDetailPage>
     String snack = _currentMeeting?.snackName ?? 'Não definido';
     String officialPhoto = _currentMeeting?.officialPhotoName ?? 'Não definido';
 
-    // Regra padrão para preenchimento do relatório: Co-líder -> Líder -> Não definido
     String reportFiller = _currentMeeting?.reportFillerName ?? '';
     if (reportFiller.isEmpty || reportFiller == 'Não definido') {
       final coLeader = members.cast<CellMemberEntity>().firstWhere(
@@ -1444,9 +1640,6 @@ class _CellDetailPageState extends State<CellDetailPage>
       }
     }
 
-    String status = _currentMeeting?.status ?? 'normal';
-    String statusNote = _currentMeeting?.statusNote ?? '';
-
     if (!mounted) return;
 
     final result = await showDialog<bool>(
@@ -1460,48 +1653,6 @@ class _CellDetailPageState extends State<CellDetailPage>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    DropdownButtonFormField<String>(
-                      value: status,
-                      decoration: const InputDecoration(
-                        labelText: 'Status da Reunião',
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'normal',
-                          child: Text('Reunião Normal'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'bridge_event',
-                          child: Text('Evento Ponte'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'rescheduled',
-                          child: Text('Remarcada'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'canceled',
-                          child: Text('Cancelada'),
-                        ),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) setDialogState(() => status = val);
-                      },
-                    ),
-                    if (status != 'normal') ...[
-                      const SizedBox(height: 8),
-                      TextField(
-                        decoration: InputDecoration(
-                          labelText:
-                          status == 'bridge_event'
-                              ? 'Título / Detalhes do Evento'
-                              : status == 'canceled'
-                              ? 'Motivo do Cancelamento'
-                              : 'Nova Data / Horário',
-                        ),
-                        onChanged: (val) => statusNote = val,
-                      ),
-                    ],
-                    const Divider(height: 24),
                     _buildRoleDropdown(
                       'Oração Inicial',
                       initialPrayer,
@@ -1570,14 +1721,26 @@ class _CellDetailPageState extends State<CellDetailPage>
     );
 
     if (result == true) {
+      final meetingId = (_currentMeeting == null || _isMeetingExpired(_currentMeeting)) ? '' : _currentMeeting!.id;
+
+      // CORREÇÃO: Respeita a regra do status da reunião atual (se cancelada ou normal, usa a próxima data calculada)
+      final currentStatus = _currentMeeting?.status ?? 'normal';
+      final DateTime meetingDate = (currentStatus == 'normal' || currentStatus == 'canceled')
+          ? _calculateNextMeetingDate(_currentCell.meetingDay)
+          : ((_currentMeeting != null && !_isMeetingExpired(_currentMeeting))
+          ? _currentMeeting!.meetingDate
+          : _calculateNextMeetingDate(_currentCell.meetingDay));
+
       final updatedMeeting = CellMeetingModel(
-        id: _currentMeeting?.id ?? '',
+        id: meetingId,
         cellId: _currentCell.id,
-        meetingDate: DateTime.now(),
-        status: status,
-        statusNote: statusNote,
-        initialPrayerName:
-        initialPrayer == 'Não definido' ? null : initialPrayer,
+        meetingDate: meetingDate,
+        status: currentStatus,
+        statusNote: _currentMeeting?.statusNote,
+        eventName: _currentMeeting?.eventName,
+        meetingTime: _currentMeeting?.meetingTime,
+        meetingLocation: _currentMeeting?.meetingLocation,
+        initialPrayerName: initialPrayer == 'Não definido' ? null : initialPrayer,
         icebreakerName: icebreaker == 'Não definido' ? null : icebreaker,
         worshipName: worship == 'Não definido' ? null : worship,
         wordName: word == 'Não definido' ? null : word,
@@ -1608,8 +1771,7 @@ class _CellDetailPageState extends State<CellDetailPage>
       List<String> options,
       Function(String) onChanged,
       ) {
-    final String val =
-    options.contains(currentValue) ? currentValue : options.first;
+    final String val = options.contains(currentValue) ? currentValue : options.first;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: DropdownButtonFormField<String>(
@@ -1619,8 +1781,7 @@ class _CellDetailPageState extends State<CellDetailPage>
           isDense: true,
           border: const OutlineInputBorder(),
         ),
-        items:
-        options
+        items: options
             .map((opt) => DropdownMenuItem(value: opt, child: Text(opt)))
             .toList(),
         onChanged: (v) {
@@ -1630,13 +1791,11 @@ class _CellDetailPageState extends State<CellDetailPage>
     );
   }
 
-  // ================= PEDIDOS DE ORAÇÃO =================
   Future<void> _showAddPrayerRequestDialog() async {
     final ctrl = TextEditingController();
     final result = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Novo Pedido de Oração'),
         content: TextField(
           controller: ctrl,
@@ -1735,8 +1894,7 @@ class _CellDetailPageState extends State<CellDetailPage>
     final ctrl = TextEditingController(text: prayer.request);
     final result = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Editar Pedido de Oração'),
         content: TextField(
           controller: ctrl,
@@ -1783,8 +1941,7 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _deletePrayerRequest(PrayerRequestModel prayer) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Excluir Pedido'),
         content: const Text(
           'Tem certeza de que deseja excluir este pedido de oração?',
@@ -1825,9 +1982,6 @@ class _CellDetailPageState extends State<CellDetailPage>
   Widget build(BuildContext context) {
     final cell = _currentCell;
     final cellName = cell.name ?? 'Detalhes da Célula';
-    final meetingDay = cell.meetingDay ?? '';
-    final meetingTime = cell.meetingTime ?? '';
-    final address = cell.address ?? '';
 
     final user = widget.currentUser;
     final isPastorOrCoord = user?.isPastorOrCoordinator ?? false;
@@ -1838,23 +1992,9 @@ class _CellDetailPageState extends State<CellDetailPage>
                     cell.leaderId?.trim().toLowerCase() ==
                         user.name!.trim().toLowerCase()));
 
-    final bool isUserCoLeaderOfThisCell =
-        user != null &&
-            (cell.coLeaderId == user.id ||
-                (cell.coLeaderId != null &&
-                    user.name != null &&
-                    cell.coLeaderId!.trim().toLowerCase() ==
-                        user.name!.trim().toLowerCase()));
-
-    final bool isUserReportFiller =
-        user != null &&
-            _currentMeeting?.reportFillerName != null &&
-            _currentMeeting!.reportFillerName!.trim().toLowerCase() ==
-                user.name!.trim().toLowerCase();
-
     final bool canEditCell = isPastorOrCoord || isUserLeaderOfThisCell;
     final bool canManageCellStatus = isPastorOrCoord;
-    final bool canEditMeeting = user != null;
+    final bool canEditMeeting = canEditCell;
 
     return Scaffold(
       appBar: AppBar(
@@ -1867,8 +2007,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                 if (val == 'toggle') _toggleCellStatus();
                 if (val == 'delete') _deleteCellCompletely();
               },
-              itemBuilder:
-                  (context) => [
+              itemBuilder: (context) => [
                 const PopupMenuItem(
                   value: 'edit',
                   child: Text('Editar Célula'),
@@ -1932,9 +2071,6 @@ class _CellDetailPageState extends State<CellDetailPage>
                 _buildMembersTab(
                   isPastorOrCoord,
                   isUserLeaderOfThisCell,
-                  meetingDay,
-                  meetingTime,
-                  address,
                 ),
                 _buildMeetingTab(canEditMeeting),
                 _buildPrayerTab(),
@@ -1946,13 +2082,9 @@ class _CellDetailPageState extends State<CellDetailPage>
     );
   }
 
-  // TAB 1: MEMBROS
   Widget _buildMembersTab(
       bool isPastorOrCoord,
       bool isUserLeaderOfThisCell,
-      String meetingDay,
-      String meetingTime,
-      String address,
       ) {
     final cell = _currentCell;
     final isLeaderEmpty =
@@ -1963,6 +2095,26 @@ class _CellDetailPageState extends State<CellDetailPage>
         user != null && (isPastorOrCoord || isUserLeaderOfThisCell);
     final bool canAddMember =
         user != null && (isPastorOrCoord || isUserLeaderOfThisCell);
+
+    final rawMeeting = _currentMeeting;
+    final meeting = _isMeetingExpired(rawMeeting) ? null : rawMeeting;
+    final status = meeting?.status ?? 'normal';
+
+    String displayLabel;
+    String displayValue;
+    String displayAddress;
+
+    if (meeting != null && (status == 'bridge_event' || status == 'rescheduled')) {
+      final formattedDate = '${meeting.meetingDate.day.toString().padLeft(2, '0')}/${meeting.meetingDate.month.toString().padLeft(2, '0')}/${meeting.meetingDate.year}';
+      final time = meeting.meetingTime ?? cell.meetingTime ?? '';
+      displayLabel = status == 'bridge_event' ? 'Data do Evento' : 'Data Remarcada';
+      displayValue = '$formattedDate às $time';
+      displayAddress = meeting.meetingLocation?.isNotEmpty == true ? meeting.meetingLocation! : (cell.address ?? '');
+    } else {
+      displayLabel = 'Reuniões';
+      displayValue = '${cell.meetingDay ?? ''} às ${cell.meetingTime ?? ''}';
+      displayAddress = cell.address ?? '';
+    }
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -2037,7 +2189,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                         color: Colors.grey,
                       ),
                       const SizedBox(width: 8),
-                      Text('Reuniões: $meetingDay às $meetingTime'),
+                      Expanded(child: Text('$displayLabel: $displayValue')),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -2049,9 +2201,59 @@ class _CellDetailPageState extends State<CellDetailPage>
                         color: Colors.grey,
                       ),
                       const SizedBox(width: 8),
-                      Text('Endereço: $address'),
+                      Expanded(child: Text('Endereço: $displayAddress')),
                     ],
                   ),
+                  if (status != 'normal') ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: status == 'bridge_event'
+                            ? Colors.blue.shade50
+                            : status == 'canceled'
+                            ? Colors.red.shade50
+                            : Colors.purple.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            status == 'bridge_event'
+                                ? Icons.star
+                                : status == 'canceled'
+                                ? Icons.cancel
+                                : Icons.edit_calendar,
+                            size: 18,
+                            color: status == 'bridge_event'
+                                ? Colors.blue
+                                : status == 'canceled'
+                                ? Colors.red
+                                : Colors.purple,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              status == 'bridge_event'
+                                  ? 'Evento Ponte: ${meeting?.eventName ?? meeting?.statusNote ?? ''}'
+                                  : status == 'canceled'
+                                  ? 'Reunião Cancelada: ${meeting?.statusNote ?? ''}'
+                                  : 'Reunião Remarcada: ${meeting?.meetingTime ?? ""} (${meeting?.meetingLocation ?? ""})',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: status == 'bridge_event'
+                                    ? Colors.blue.shade800
+                                    : status == 'canceled'
+                                    ? Colors.red.shade800
+                                    : Colors.purple.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -2298,14 +2500,12 @@ class _CellDetailPageState extends State<CellDetailPage>
                                       formattedRole,
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color:
-                                        formattedRole == 'Líder'
+                                        color: formattedRole == 'Líder'
                                             ? Colors.blue.shade700
                                             : Colors.grey.shade700,
                                       ),
                                     ),
-                                    trailing:
-                                    canEditMember
+                                    trailing: canEditMember
                                         ? PopupMenuButton<String>(
                                       onSelected: (value) {
                                         if (value == 'role') {
@@ -2323,8 +2523,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                                           }
                                         }
                                       },
-                                      itemBuilder:
-                                          (context) => [
+                                      itemBuilder: (context) => [
                                         const PopupMenuItem(
                                           value: 'role',
                                           child: Text(
@@ -2385,13 +2584,13 @@ class _CellDetailPageState extends State<CellDetailPage>
     );
   }
 
-  // TAB 2: REUNIÃO DA CÉLULA & ATIVIDADES
   Widget _buildMeetingTab(bool canEdit) {
     if (_isLoadingMeetingData) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final meeting = _currentMeeting;
+    final rawMeeting = _currentMeeting;
+    final meeting = _isMeetingExpired(rawMeeting) ? null : rawMeeting;
     final status = meeting?.status ?? 'normal';
     final bool showLeaderWarning = canEdit && _hasUnassignedRolesOrPendingReport();
 
@@ -2425,21 +2624,37 @@ class _CellDetailPageState extends State<CellDetailPage>
             const SizedBox(height: 12),
           ],
 
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Configuração da Reunião',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              if (canEdit)
+                ElevatedButton.icon(
+                  onPressed: _showEditMeetingConfigDialog,
+                  icon: const Icon(Icons.settings, size: 16),
+                  label: const Text('Configurar'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
           if (status == 'bridge_event')
             Card(
               color: Colors.blue.shade50,
               child: ListTile(
                 leading: const Icon(Icons.star, color: Colors.blue, size: 32),
-                title: const Text(
-                  'EVENTO PONTE DA CÉLULA',
-                  style: TextStyle(
+                title: Text(
+                  'EVENTO PONTE: ${meeting?.eventName ?? "Especial"}',
+                  style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.blue,
                   ),
                 ),
                 subtitle: Text(
-                  meeting?.statusNote ??
-                      'Esta reunião será um evento de conexão especial!',
+                  'Data: ${meeting?.meetingDate.day.toString().padLeft(2, '0')}/${meeting?.meetingDate.month.toString().padLeft(2, '0')}/${meeting?.meetingDate.year} às ${meeting?.meetingTime ?? _currentCell.meetingTime}\nLocal: ${meeting?.meetingLocation ?? _currentCell.address}',
                 ),
               ),
             )
@@ -2481,12 +2696,26 @@ class _CellDetailPageState extends State<CellDetailPage>
                     ),
                   ),
                   subtitle: Text(
-                    'Nova data/horário: ${meeting?.statusNote ?? "A definir"}',
+                    'Nova Data: ${meeting?.meetingDate.day.toString().padLeft(2, '0')}/${meeting?.meetingDate.month.toString().padLeft(2, '0')}/${meeting?.meetingDate.year} às ${meeting?.meetingTime ?? _currentCell.meetingTime}\nLocal: ${meeting?.meetingLocation ?? _currentCell.address}',
+                  ),
+                ),
+              )
+            else
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.event, color: Colors.green, size: 32),
+                  title: const Text(
+                    'Reunião Normal',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(
+                    'Padrão: ${_currentCell.meetingDay ?? "Sem dia"} às ${_currentCell.meetingTime ?? "Sem horário"} em ${_currentCell.address ?? "Sem endereço"}',
                   ),
                 ),
               ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
+
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -2498,7 +2727,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                 ElevatedButton.icon(
                   onPressed: _showEditMeetingRolesDialog,
                   icon: const Icon(Icons.edit, size: 16),
-                  label: const Text('Definir'),
+                  label: const Text('Definir Funções'),
                 ),
             ],
           ),
@@ -2590,12 +2819,10 @@ class _CellDetailPageState extends State<CellDetailPage>
           assignedName ?? 'Não definido',
           style: TextStyle(
             color: assignedName != null ? Colors.black87 : Colors.grey,
-            fontWeight:
-            assignedName != null ? FontWeight.bold : FontWeight.normal,
+            fontWeight: assignedName != null ? FontWeight.bold : FontWeight.normal,
           ),
         ),
-        trailing:
-        highlightPrayerAlert && assignedName != null
+        trailing: highlightPrayerAlert && assignedName != null
             ? Container(
           padding: const EdgeInsets.symmetric(
             horizontal: 8,
@@ -2619,7 +2846,6 @@ class _CellDetailPageState extends State<CellDetailPage>
     );
   }
 
-  // TAB 3: PEDIDOS DE ORAÇÃO
   Widget _buildPrayerTab() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -2641,8 +2867,7 @@ class _CellDetailPageState extends State<CellDetailPage>
           ),
           const SizedBox(height: 12),
           Expanded(
-            child:
-            _prayerRequests.isEmpty
+            child: _prayerRequests.isEmpty
                 ? const Center(
               child: Text(
                 'Nenhum pedido de oração registrado nesta célula.',
@@ -2673,8 +2898,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                               size: 20,
                               color: Colors.blue,
                             ),
-                            onPressed:
-                                () => _showEditPrayerDialog(prayer),
+                            onPressed: () => _showEditPrayerDialog(prayer),
                           ),
                         if (canDelete)
                           IconButton(
@@ -2683,8 +2907,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                               size: 20,
                               color: Colors.red,
                             ),
-                            onPressed:
-                                () => _deletePrayerRequest(prayer),
+                            onPressed: () => _deletePrayerRequest(prayer),
                           ),
                       ],
                     ),

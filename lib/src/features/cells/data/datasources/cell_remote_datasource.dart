@@ -1,3 +1,4 @@
+// lib/src/features/cells/data/datasources/cell_remote_datasource.dart
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_join_request_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_member_model.dart';
@@ -65,8 +66,8 @@ abstract class ICellRemoteDataSource {
   Future<void> requestCellJoin(CellJoinRequestEntity request);
 
   Future<List<CellJoinRequestEntity>> getPendingRequestsByLeader(
-    String leaderId,
-  );
+      String leaderId,
+      );
 
   Future<List<CellJoinRequestEntity>> getPendingRequestsForCell(String cellId);
 
@@ -100,10 +101,13 @@ abstract class ICellRemoteDataSource {
     required String memberName,
   });
 
-  // Reuniões & Atividades da Célula
+  // Reuniões & Relatórios
   Future<CellMeetingModel?> getLatestMeeting(String cellId);
-
+  Future<List<CellMeetingModel>> getAllMeetingsForCell(String cellId);
+  Future<List<CellMeetingModel>> getPendingMeetingsForCell(String cellId);
   Future<void> saveOrUpdateMeeting(CellMeetingModel meeting);
+  Future<void> requestReportDeletion(String cellId, String meetingId, String reason);
+  Future<void> deleteMeetingReport(String cellId, String meetingId);
 
   // Pedidos de Oração
   Future<List<PrayerRequestModel>> getPrayerRequests(String cellId);
@@ -120,7 +124,6 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
 
   CellRemoteDataSourceImpl(this._firestore);
 
-  // ================= CÉLULAS =================
   @override
   Future<List<CellModel>> getCells({
     String? filterByUserId,
@@ -141,8 +144,8 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     return snapshot.docs
         .map(
           (doc) =>
-              CellModel.fromMap(doc.data() as Map<String, dynamic>, doc.id),
-        )
+          CellModel.fromMap(doc.data() as Map<String, dynamic>, doc.id),
+    )
         .toList();
   }
 
@@ -163,14 +166,14 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     }
 
     return query.snapshots().map(
-      (snapshot) =>
+          (snapshot) =>
           snapshot.docs
               .map(
                 (doc) => CellModel.fromMap(
-                  doc.data() as Map<String, dynamic>,
-                  doc.id,
-                ),
-              )
+              doc.data() as Map<String, dynamic>,
+              doc.id,
+            ),
+          )
               .toList(),
     );
   }
@@ -185,12 +188,18 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         .limit(1)
         .snapshots()
         .map((snapshot) {
-          if (snapshot.docs.isEmpty) return null;
-          return CellMeetingModel.fromMap(
-            snapshot.docs.first.data(),
-            snapshot.docs.first.id,
-          );
-        });
+      if (snapshot.docs.isEmpty) return null;
+      final meeting = CellMeetingModel.fromMap(
+        snapshot.docs.first.data(),
+        snapshot.docs.first.id,
+      );
+
+      if (meeting.isExpired) {
+        return null;
+      }
+
+      return meeting;
+    });
   }
 
   @override
@@ -215,10 +224,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
 
           if (memberUserId != null && memberUserId.trim().isNotEmpty) {
             final linkedUserDoc =
-                await _firestore.collection('users').doc(memberUserId).get();
+            await _firestore.collection('users').doc(memberUserId).get();
             if (linkedUserDoc.exists) {
               final linkedUserData =
-                  linkedUserDoc.data() as Map<String, dynamic>;
+              linkedUserDoc.data() as Map<String, dynamic>;
               final linkedName = linkedUserData['name'] as String?;
               if (linkedName != null && linkedName.trim().isNotEmpty) {
                 return linkedName;
@@ -259,9 +268,9 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
   @override
   Future<void> createCell(CellModel cell) async {
     final docRef =
-        cell.id.isEmpty
-            ? _firestore.collection('cells').doc()
-            : _firestore.collection('cells').doc(cell.id);
+    cell.id.isEmpty
+        ? _firestore.collection('cells').doc()
+        : _firestore.collection('cells').doc(cell.id);
     await docRef.set(cell.toMap());
   }
 
@@ -276,10 +285,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     final batch = _firestore.batch();
 
     final usersSnapshot =
-        await _firestore
-            .collection('users')
-            .where('primaryCellId', isEqualTo: cellId)
-            .get();
+    await _firestore
+        .collection('users')
+        .where('primaryCellId', isEqualTo: cellId)
+        .get();
 
     for (var userDoc in usersSnapshot.docs) {
       batch.update(userDoc.reference, {
@@ -289,10 +298,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     }
 
     final membersSnapshot =
-        await _firestore
-            .collection('members')
-            .where('cellId', isEqualTo: cellId)
-            .get();
+    await _firestore
+        .collection('members')
+        .where('cellId', isEqualTo: cellId)
+        .get();
 
     for (var doc in membersSnapshot.docs) {
       final data = doc.data();
@@ -310,10 +319,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     }
 
     final requestsSnapshot =
-        await _firestore
-            .collection('cell_requests')
-            .where('cellId', isEqualTo: cellId)
-            .get();
+    await _firestore
+        .collection('cell_requests')
+        .where('cellId', isEqualTo: cellId)
+        .get();
     for (var doc in requestsSnapshot.docs) {
       batch.delete(doc.reference);
     }
@@ -330,10 +339,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
 
     if (!isActive) {
       final usersSnapshot =
-          await _firestore
-              .collection('users')
-              .where('primaryCellId', isEqualTo: cellId)
-              .get();
+      await _firestore
+          .collection('users')
+          .where('primaryCellId', isEqualTo: cellId)
+          .get();
 
       for (var userDoc in usersSnapshot.docs) {
         batch.update(userDoc.reference, {
@@ -343,10 +352,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       }
 
       final membersSnapshot =
-          await _firestore
-              .collection('members')
-              .where('cellId', isEqualTo: cellId)
-              .get();
+      await _firestore
+          .collection('members')
+          .where('cellId', isEqualTo: cellId)
+          .get();
 
       for (var memberDoc in membersSnapshot.docs) {
         final role = (memberDoc.data()['role'] ?? '').toString().toLowerCase();
@@ -359,14 +368,13 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     await batch.commit();
   }
 
-  // ================= MEMBROS =================
   @override
   Future<List<CellMemberModel>> getCellMembers(String cellId) async {
     final snapshot =
-        await _firestore
-            .collection('members')
-            .where('cellId', isEqualTo: cellId)
-            .get();
+    await _firestore
+        .collection('members')
+        .where('cellId', isEqualTo: cellId)
+        .get();
 
     return snapshot.docs
         .map((doc) => CellMemberModel.fromMap(doc.data(), doc.id))
@@ -381,25 +389,25 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         .snapshots()
         .map(
           (snapshot) =>
-              snapshot.docs
-                  .map((doc) => CellMemberModel.fromMap(doc.data(), doc.id))
-                  .toList(),
-        );
+          snapshot.docs
+              .map((doc) => CellMemberModel.fromMap(doc.data(), doc.id))
+              .toList(),
+    );
   }
 
   @override
   Future<void> addCellMember(CellMemberModel member) async {
     final memberRef =
-        member.id.isEmpty
-            ? _firestore.collection('members').doc()
-            : _firestore.collection('members').doc(member.id);
+    member.id.isEmpty
+        ? _firestore.collection('members').doc()
+        : _firestore.collection('members').doc(member.id);
 
     final cellRef = _firestore.collection('cells').doc(member.cellId);
     final normalizedRole = member.role.toLowerCase().trim();
     final actualId =
-        (member.userId != null && member.userId!.isNotEmpty)
-            ? member.userId!
-            : memberRef.id;
+    (member.userId != null && member.userId!.isNotEmpty)
+        ? member.userId!
+        : memberRef.id;
 
     final batch = _firestore.batch();
     batch.set(memberRef, member.toMap());
@@ -413,10 +421,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         });
       }
       final membersSnapshot =
-          await _firestore
-              .collection('members')
-              .where('cellId', isEqualTo: member.cellId)
-              .get();
+      await _firestore
+          .collection('members')
+          .where('cellId', isEqualTo: member.cellId)
+          .get();
       for (var doc in membersSnapshot.docs) {
         if (doc.id != memberRef.id) {
           final role = (doc.data()['role'] ?? '').toString().toLowerCase();
@@ -434,10 +442,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     } else if (normalizedRole == 'colider' || normalizedRole == 'co-leader') {
       batch.update(cellRef, {'coLeaderId': actualId});
       final membersSnapshot =
-          await _firestore
-              .collection('members')
-              .where('cellId', isEqualTo: member.cellId)
-              .get();
+      await _firestore
+          .collection('members')
+          .where('cellId', isEqualTo: member.cellId)
+          .get();
       for (var doc in membersSnapshot.docs) {
         if (doc.id != memberRef.id) {
           final role = (doc.data()['role'] ?? '').toString().toLowerCase();
@@ -449,10 +457,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     } else if (normalizedRole == 'anfitriao' || normalizedRole == 'host') {
       batch.update(cellRef, {'hostId': actualId});
       final membersSnapshot =
-          await _firestore
-              .collection('members')
-              .where('cellId', isEqualTo: member.cellId)
-              .get();
+      await _firestore
+          .collection('members')
+          .where('cellId', isEqualTo: member.cellId)
+          .get();
       for (var doc in membersSnapshot.docs) {
         if (doc.id != memberRef.id) {
           final role = (doc.data()['role'] ?? '').toString().toLowerCase();
@@ -642,7 +650,6 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       for (var doc in cellsSnapshot.docs) doc.id: doc.data(),
     };
 
-    // 1. Utilizadores com conta que não têm célula ativa
     final usersSnapshot = await _firestore.collection('users').get();
     for (var doc in usersSnapshot.docs) {
       final data = doc.data();
@@ -654,7 +661,7 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         final bool cellExists = cellData != null;
         final bool cellIsActive =
             cellExists &&
-            (cellData['isActive'] == true || cellData['isActive'] == 'true');
+                (cellData['isActive'] == true || cellData['isActive'] == 'true');
         if (cellExists && cellIsActive) {
           hasNoActiveCell = false;
         }
@@ -673,7 +680,6 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       }
     }
 
-    // 2. Membros sem conta que NÃO possuem célula ativa
     final membersSnapshot = await _firestore.collection('members').get();
     for (var doc in membersSnapshot.docs) {
       final data = doc.data();
@@ -688,7 +694,7 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
           final bool cellExists = cellData != null;
           final bool cellIsActive =
               cellExists &&
-              (cellData['isActive'] == true || cellData['isActive'] == 'true');
+                  (cellData['isActive'] == true || cellData['isActive'] == 'true');
           if (cellExists && cellIsActive) {
             hasNoActiveCell = false;
           }
@@ -775,11 +781,11 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     }
 
     final pendingRequestsSnap =
-        await _firestore
-            .collection('cell_requests')
-            .where('cellId', isEqualTo: cellId)
-            .where('status', isEqualTo: RequestStatus.pending.name)
-            .get();
+    await _firestore
+        .collection('cell_requests')
+        .where('cellId', isEqualTo: cellId)
+        .where('status', isEqualTo: RequestStatus.pending.name)
+        .get();
 
     for (var reqDoc in pendingRequestsSnap.docs) {
       final reqData = reqDoc.data();
@@ -807,19 +813,19 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
 
   @override
   Future<List<CellJoinRequestEntity>> getPendingRequestsByLeader(
-    String leaderId,
-  ) async {
+      String leaderId,
+      ) async {
     final cells = await getCells(filterByUserId: leaderId);
     if (cells.isEmpty) return [];
 
     final cellIds = cells.map((c) => c.id).toList();
 
     final snapshot =
-        await _firestore
-            .collection('cell_requests')
-            .where('cellId', whereIn: cellIds)
-            .where('status', isEqualTo: RequestStatus.pending.name)
-            .get();
+    await _firestore
+        .collection('cell_requests')
+        .where('cellId', whereIn: cellIds)
+        .where('status', isEqualTo: RequestStatus.pending.name)
+        .get();
 
     return snapshot.docs
         .map((doc) => CellJoinRequestEntity.fromMap(doc.data(), doc.id))
@@ -829,12 +835,12 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
   @override
   Future<CellJoinRequestEntity?> getUserPendingRequest(String userId) async {
     final snapshot =
-        await _firestore
-            .collection('cell_requests')
-            .where('userId', isEqualTo: userId)
-            .where('status', isEqualTo: RequestStatus.pending.name)
-            .limit(1)
-            .get();
+    await _firestore
+        .collection('cell_requests')
+        .where('userId', isEqualTo: userId)
+        .where('status', isEqualTo: RequestStatus.pending.name)
+        .limit(1)
+        .get();
 
     if (snapshot.docs.isEmpty) return null;
     return CellJoinRequestEntity.fromMap(
@@ -845,14 +851,14 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
 
   @override
   Future<List<CellJoinRequestEntity>> getPendingRequestsForCell(
-    String cellId,
-  ) async {
+      String cellId,
+      ) async {
     final snapshot =
-        await _firestore
-            .collection('cell_requests')
-            .where('cellId', isEqualTo: cellId)
-            .where('status', isEqualTo: RequestStatus.pending.name)
-            .get();
+    await _firestore
+        .collection('cell_requests')
+        .where('cellId', isEqualTo: cellId)
+        .where('status', isEqualTo: RequestStatus.pending.name)
+        .get();
 
     return snapshot.docs
         .map((doc) => CellJoinRequestEntity.fromMap(doc.data(), doc.id))
@@ -885,7 +891,7 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
 
     if (matchedMemberId != null && matchedMemberId.trim().isNotEmpty) {
       final foundDoc =
-          await _firestore.collection('members').doc(matchedMemberId).get();
+      await _firestore.collection('members').doc(matchedMemberId).get();
 
       if (foundDoc.exists) {
         final oldData = Map<String, dynamic>.from(
@@ -983,10 +989,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       }
 
       final membersSnapshot =
-          await _firestore
-              .collection('members')
-              .where('cellId', isEqualTo: cellId)
-              .get();
+      await _firestore
+          .collection('members')
+          .where('cellId', isEqualTo: cellId)
+          .get();
       for (var doc in membersSnapshot.docs) {
         if (doc.id != targetMemberRef.id) {
           final role = (doc.data()['role'] ?? '').toString().toLowerCase();
@@ -1037,7 +1043,7 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       final cellRef = _firestore.collection('cells').doc(cellId);
       final memberRef = _firestore.collection('members').doc(memberId);
       final userRef =
-          userId.isNotEmpty ? _firestore.collection('users').doc(userId) : null;
+      userId.isNotEmpty ? _firestore.collection('users').doc(userId) : null;
 
       final memberDoc = await memberRef.get();
       if (!memberDoc.exists) {
@@ -1047,7 +1053,7 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       }
 
       final currentRole =
-          (memberDoc.data()?['role'] ?? '').toString().toLowerCase().trim();
+      (memberDoc.data()?['role'] ?? '').toString().toLowerCase().trim();
       final normalizedNewRole = newRole.toLowerCase().trim();
 
       final batch = _firestore.batch();
@@ -1076,10 +1082,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       }
 
       final membersSnapshot =
-          await _firestore
-              .collection('members')
-              .where('cellId', isEqualTo: cellId)
-              .get();
+      await _firestore
+          .collection('members')
+          .where('cellId', isEqualTo: cellId)
+          .get();
 
       if (normalizedNewRole == 'lider' || normalizedNewRole == 'leader') {
         cellUpdates['leaderId'] = actualId;
@@ -1165,9 +1171,9 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     }
 
     final userRef =
-        actualUserId.isNotEmpty
-            ? _firestore.collection('users').doc(actualUserId)
-            : null;
+    actualUserId.isNotEmpty
+        ? _firestore.collection('users').doc(actualUserId)
+        : null;
 
     final batch = _firestore.batch();
 
@@ -1220,23 +1226,60 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     await batch.commit();
   }
 
-  // ================= REUNIÕES & ATIVIDADES =================
+  // ================= REUNIÕES & RELATÓRIOS =================
   @override
   Future<CellMeetingModel?> getLatestMeeting(String cellId) async {
     final snapshot =
-        await _firestore
-            .collection('cells')
-            .doc(cellId)
-            .collection('meetings')
-            .orderBy('meetingDate', descending: true)
-            .limit(1)
-            .get();
+    await _firestore
+        .collection('cells')
+        .doc(cellId)
+        .collection('meetings')
+        .orderBy('meetingDate', descending: true)
+        .limit(1)
+        .get();
 
     if (snapshot.docs.isEmpty) return null;
-    return CellMeetingModel.fromMap(
+    final meeting = CellMeetingModel.fromMap(
       snapshot.docs.first.data(),
       snapshot.docs.first.id,
     );
+
+    if (meeting.isExpired) {
+      return null;
+    }
+
+    return meeting;
+  }
+
+  @override
+  Future<List<CellMeetingModel>> getAllMeetingsForCell(String cellId) async {
+    final snapshot =
+    await _firestore
+        .collection('cells')
+        .doc(cellId)
+        .collection('meetings')
+        .orderBy('meetingDate', descending: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => CellMeetingModel.fromMap(doc.data(), doc.id))
+        .toList();
+  }
+
+  @override
+  Future<List<CellMeetingModel>> getPendingMeetingsForCell(String cellId) async {
+    final snapshot =
+    await _firestore
+        .collection('cells')
+        .doc(cellId)
+        .collection('meetings')
+        .where('isReportFilled', isEqualTo: false)
+        .orderBy('meetingDate', descending: true)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => CellMeetingModel.fromMap(doc.data(), doc.id))
+        .toList();
   }
 
   @override
@@ -1247,20 +1290,43 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         .collection('meetings');
 
     final docRef =
-        meeting.id.isEmpty ? meetingsRef.doc() : meetingsRef.doc(meeting.id);
+    meeting.id.isEmpty ? meetingsRef.doc() : meetingsRef.doc(meeting.id);
     await docRef.set(meeting.toMap(), SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> requestReportDeletion(String cellId, String meetingId, String reason) async {
+    await _firestore
+        .collection('cells')
+        .doc(cellId)
+        .collection('meetings')
+        .doc(meetingId)
+        .update({
+      'deletionRequested': true,
+      'deletionReason': reason,
+    });
+  }
+
+  @override
+  Future<void> deleteMeetingReport(String cellId, String meetingId) async {
+    await _firestore
+        .collection('cells')
+        .doc(cellId)
+        .collection('meetings')
+        .doc(meetingId)
+        .delete();
   }
 
   // ================= PEDIDOS DE ORAÇÃO =================
   @override
   Future<List<PrayerRequestModel>> getPrayerRequests(String cellId) async {
     final snapshot =
-        await _firestore
-            .collection('cells')
-            .doc(cellId)
-            .collection('prayer_requests')
-            .orderBy('createdAt', descending: true)
-            .get();
+    await _firestore
+        .collection('cells')
+        .doc(cellId)
+        .collection('prayer_requests')
+        .orderBy('createdAt', descending: true)
+        .get();
 
     return snapshot.docs
         .map((doc) => PrayerRequestModel.fromMap(doc.data(), doc.id))
@@ -1277,10 +1343,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         .snapshots()
         .map(
           (snapshot) =>
-              snapshot.docs
-                  .map((doc) => PrayerRequestModel.fromMap(doc.data(), doc.id))
-                  .toList(),
-        );
+          snapshot.docs
+              .map((doc) => PrayerRequestModel.fromMap(doc.data(), doc.id))
+              .toList(),
+    );
   }
 
   @override
@@ -1291,7 +1357,7 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         .collection('prayer_requests');
 
     final docRef =
-        request.id.isEmpty ? requestsRef.doc() : requestsRef.doc(request.id);
+    request.id.isEmpty ? requestsRef.doc() : requestsRef.doc(request.id);
     await docRef.set(request.toMap());
   }
 

@@ -199,9 +199,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _getUserRoleLabel(UserEntity user) {
-    if (user.roles.contains(UserRole.pastor)) return 'Pastor';
-    if (user.roles.contains(UserRole.coordinator)) return 'Coordenador';
-    if (user.roles.contains(UserRole.leader)) return 'Líder de Célula';
+    final bool isPastor = user.roles.contains(UserRole.pastor);
+    final bool isCoordinator = user.roles.contains(UserRole.coordinator);
+    final bool isLeader = user.roles.contains(UserRole.leader);
+
+    if (isPastor && isLeader) return 'Pastor / Líder de Célula';
+    if (isCoordinator && isLeader) return 'Coordenador / Líder de Célula';
+    if (isPastor) return 'Pastor';
+    if (isCoordinator) return 'Coordenador';
+    if (isLeader) return 'Líder de Célula';
     return 'Membro';
   }
 }
