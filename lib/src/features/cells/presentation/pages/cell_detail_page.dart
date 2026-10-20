@@ -1401,21 +1401,24 @@ class _CellDetailPageState extends State<CellDetailPage>
   }
 
   Future<void> _showEditMeetingConfigDialog() async {
-    String status = _currentMeeting?.status ?? 'normal';
-    String eventName = _currentMeeting?.eventName ?? '';
-    String statusNote = _currentMeeting?.statusNote ?? '';
+    // Se a reunião atual expirou (já passou do dia), consideramos uma reunião nova (resetada)
+    final bool isExpiredOrNull = _isMeetingExpired(_currentMeeting);
 
-    DateTime meetingDate = (_currentMeeting != null && !_isMeetingExpired(_currentMeeting))
+    String status = isExpiredOrNull ? 'normal' : (_currentMeeting?.status ?? 'normal');
+    String eventName = isExpiredOrNull ? '' : (_currentMeeting?.eventName ?? '');
+    String statusNote = isExpiredOrNull ? '' : (_currentMeeting?.statusNote ?? '');
+
+    DateTime meetingDate = (!isExpiredOrNull && _currentMeeting != null)
         ? _currentMeeting!.meetingDate
         : _calculateNextMeetingDate(_currentCell.meetingDay);
 
-    String defaultTime = _currentMeeting?.meetingTime ?? _currentCell.meetingTime ?? '19:30';
+    String defaultTime = (!isExpiredOrNull ? _currentMeeting?.meetingTime : null) ?? _currentCell.meetingTime ?? '19:30';
     TimeOfDay selectedTime = TimeOfDay(
       hour: int.tryParse(defaultTime.split(':').first) ?? 19,
       minute: int.tryParse(defaultTime.split(':').last) ?? 30,
     );
 
-    String defaultLocation = _currentMeeting?.meetingLocation ?? _currentCell.address ?? '';
+    String defaultLocation = (!isExpiredOrNull ? _currentMeeting?.meetingLocation : null) ?? _currentCell.address ?? '';
     final locationController = TextEditingController(text: defaultLocation);
     final eventNameController = TextEditingController(text: eventName);
     final noteController = TextEditingController(text: statusNote);
@@ -1545,7 +1548,8 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (result == true) {
       final formattedTime = '${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}';
 
-      final meetingId = (_currentMeeting == null || _isMeetingExpired(_currentMeeting)) ? '' : _currentMeeting!.id;
+      // Se expirou, passamos id vazio para criar uma nova reunião no Firestore
+      final meetingId = isExpiredOrNull ? '' : _currentMeeting!.id;
 
       final DateTime finalMeetingDate = (status == 'normal' || status == 'canceled')
           ? _calculateNextMeetingDate(_currentCell.meetingDay)
@@ -1560,15 +1564,15 @@ class _CellDetailPageState extends State<CellDetailPage>
         statusNote: status == 'canceled' ? noteController.text.trim() : (status == 'bridge_event' || status == 'rescheduled' ? locationController.text.trim() : null),
         meetingTime: status != 'normal' && status != 'canceled' ? formattedTime : null,
         meetingLocation: status != 'normal' && status != 'canceled' ? locationController.text.trim() : null,
-        initialPrayerName: _currentMeeting?.initialPrayerName,
-        icebreakerName: _currentMeeting?.icebreakerName,
-        worshipName: _currentMeeting?.worshipName,
-        wordName: _currentMeeting?.wordName,
-        finalPrayerName: _currentMeeting?.finalPrayerName,
-        snackName: _currentMeeting?.snackName,
-        officialPhotoName: _currentMeeting?.officialPhotoName,
-        reportFillerName: _currentMeeting?.reportFillerName,
-        isReportFilled: _currentMeeting?.isReportFilled ?? false,
+        initialPrayerName: isExpiredOrNull ? null : _currentMeeting?.initialPrayerName,
+        icebreakerName: isExpiredOrNull ? null : _currentMeeting?.icebreakerName,
+        worshipName: isExpiredOrNull ? null : _currentMeeting?.worshipName,
+        wordName: isExpiredOrNull ? null : _currentMeeting?.wordName,
+        finalPrayerName: isExpiredOrNull ? null : _currentMeeting?.finalPrayerName,
+        snackName: isExpiredOrNull ? null : _currentMeeting?.snackName,
+        officialPhotoName: isExpiredOrNull ? null : _currentMeeting?.officialPhotoName,
+        reportFillerName: isExpiredOrNull ? null : _currentMeeting?.reportFillerName,
+        isReportFilled: false,
       );
 
       final dataSource = getIt<ICellRemoteDataSource>();
@@ -1602,16 +1606,19 @@ class _CellDetailPageState extends State<CellDetailPage>
       memberNames.insert(0, 'Não definido');
     }
 
-    String initialPrayer = _currentMeeting?.initialPrayerName ?? 'Não definido';
-    String icebreaker = _currentMeeting?.icebreakerName ?? 'Não definido';
-    String worship = _currentMeeting?.worshipName ?? 'Não definido';
-    String word = _currentMeeting?.wordName ?? 'Não definido';
-    String finalPrayer = _currentMeeting?.finalPrayerName ?? 'Não definido';
-    String snack = _currentMeeting?.snackName ?? 'Não definido';
-    String officialPhoto = _currentMeeting?.officialPhotoName ?? 'Não definido';
+    final bool isExpiredOrNull = _isMeetingExpired(_currentMeeting);
 
-    // Pré-preenche o preenchedor de relatório com o Líder por padrão
-    String reportFiller = _currentMeeting?.reportFillerName ?? '';
+    // Se a reunião expirou, todas as funções voltam para "Não definido"
+    String initialPrayer = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.initialPrayerName ?? 'Não definido');
+    String icebreaker = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.icebreakerName ?? 'Não definido');
+    String worship = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.worshipName ?? 'Não definido');
+    String word = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.wordName ?? 'Não definido');
+    String finalPrayer = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.finalPrayerName ?? 'Não definido');
+    String snack = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.snackName ?? 'Não definido');
+    String officialPhoto = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.officialPhotoName ?? 'Não definido');
+
+    // Pré-preenche o preenchedor de relatório com o Líder por padrão se estiver vazio/expirado
+    String reportFiller = isExpiredOrNull ? '' : (_currentMeeting?.reportFillerName ?? '');
     if (reportFiller.isEmpty || reportFiller == 'Não definido') {
       final leader = members.cast<CellMemberEntity>().firstWhere(
             (m) => _normalizeRole(m.role) == 'lider',
@@ -1709,12 +1716,12 @@ class _CellDetailPageState extends State<CellDetailPage>
     );
 
     if (result == true) {
-      final meetingId = (_currentMeeting == null || _isMeetingExpired(_currentMeeting)) ? '' : _currentMeeting!.id;
+      final meetingId = isExpiredOrNull ? '' : _currentMeeting!.id;
 
-      final currentStatus = _currentMeeting?.status ?? 'normal';
+      final currentStatus = isExpiredOrNull ? 'normal' : (_currentMeeting?.status ?? 'normal');
       final DateTime meetingDate = (currentStatus == 'normal' || currentStatus == 'canceled')
           ? _calculateNextMeetingDate(_currentCell.meetingDay)
-          : ((_currentMeeting != null && !_isMeetingExpired(_currentMeeting))
+          : ((_currentMeeting != null && !isExpiredOrNull)
           ? _currentMeeting!.meetingDate
           : _calculateNextMeetingDate(_currentCell.meetingDay));
 
@@ -1723,10 +1730,10 @@ class _CellDetailPageState extends State<CellDetailPage>
         cellId: _currentCell.id,
         meetingDate: meetingDate,
         status: currentStatus,
-        statusNote: _currentMeeting?.statusNote,
-        eventName: _currentMeeting?.eventName,
-        meetingTime: _currentMeeting?.meetingTime,
-        meetingLocation: _currentMeeting?.meetingLocation,
+        statusNote: isExpiredOrNull ? null : _currentMeeting?.statusNote,
+        eventName: isExpiredOrNull ? null : _currentMeeting?.eventName,
+        meetingTime: isExpiredOrNull ? null : _currentMeeting?.meetingTime,
+        meetingLocation: isExpiredOrNull ? null : _currentMeeting?.meetingLocation,
         initialPrayerName: initialPrayer == 'Não definido' ? null : initialPrayer,
         icebreakerName: icebreaker == 'Não definido' ? null : icebreaker,
         worshipName: worship == 'Não definido' ? null : worship,
@@ -1735,7 +1742,7 @@ class _CellDetailPageState extends State<CellDetailPage>
         snackName: snack == 'Não definido' ? null : snack,
         officialPhotoName: officialPhoto == 'Não definido' ? null : officialPhoto,
         reportFillerName: reportFiller == 'Não definido' ? null : reportFiller,
-        isReportFilled: _currentMeeting?.isReportFilled ?? false,
+        isReportFilled: false,
       );
 
       final dataSource = getIt<ICellRemoteDataSource>();
