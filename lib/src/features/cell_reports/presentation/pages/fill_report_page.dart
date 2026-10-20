@@ -32,7 +32,7 @@ class _FillReportPageState extends State<FillReportPage> {
 
   bool _isLoading = true;
   bool _isSaving = false;
-  String? _existingReportId; // Variável para armazenar o ID do relatório caso já exista
+  String? _existingReportId;
 
   ReportStatus _reportStatus = ReportStatus.occurred;
   String _eventType = 'normal';
@@ -43,7 +43,29 @@ class _FillReportPageState extends State<FillReportPage> {
 
   List<CellMemberEntity> _members = [];
   Map<String, bool> _attendanceMap = {};
-  Map<String, List<String>> _memberRolesPerformed = {};
+
+  // Mapeamento centralizado de funções da reunião (Função -> ID do Membro)
+  final Map<String, String?> _meetingRoles = {
+    'Oração Inicial': null,
+    'Quebra-gelo': null,
+    'Louvor': null,
+    'Palavra': null,
+    'Oração Final': null,
+    'Lanche': null,
+    'Foto Oficial': null,
+    'Preenchimento do Relatório': null,
+  };
+
+  final List<String> _allRolesList = [
+    'Oração Inicial',
+    'Quebra-gelo',
+    'Louvor',
+    'Palavra',
+    'Oração Final',
+    'Lanche',
+    'Foto Oficial',
+    'Preenchimento do Relatório',
+  ];
 
   List<VisitorModel> _visitors = [];
   List<VisitorModel> _conversions = [];
@@ -60,7 +82,6 @@ class _FillReportPageState extends State<FillReportPage> {
     _reportsRepository = getIt<ICellReportsRepository>();
     _cellDataSource = getIt<ICellRemoteDataSource>();
 
-    // Pré-preenche os campos com base na configuração da reunião atual
     if (widget.meeting.status == 'canceled') {
       _reportStatus = ReportStatus.cacelled;
       _eventType = 'normal';
@@ -78,6 +99,13 @@ class _FillReportPageState extends State<FillReportPage> {
     _studyTopicCtrl = TextEditingController();
     _testimoniesNotesCtrl = TextEditingController();
     _offeringValueCtrl = TextEditingController();
+
+    // Pré-preenche o tema com o nome do evento ponte se aplicável
+    if (_reportStatus == ReportStatus.bridgeEvent &&
+        widget.meeting.eventName != null &&
+        widget.meeting.eventName!.trim().isNotEmpty) {
+      _studyTopicCtrl.text = widget.meeting.eventName!.trim();
+    }
 
     _loadData();
   }
@@ -100,15 +128,14 @@ class _FillReportPageState extends State<FillReportPage> {
     try {
       final members = await _cellDataSource.getCellMembers(widget.cell.id);
 
+      // A frequência inicia zerada (todos desmarcados)
       for (var member in members) {
-        _attendanceMap[member.id] = true;
-        _memberRolesPerformed[member.id] = [];
+        _attendanceMap[member.id] = false;
       }
 
       final existingReports =
       await _reportsRepository.getReportsByCell(widget.cell.id);
 
-      // Procura relatório existente para esta exata reunião/data
       final existingReport = existingReports.cast<CellReportModel?>().firstWhere(
             (r) =>
         r != null &&
@@ -119,7 +146,7 @@ class _FillReportPageState extends State<FillReportPage> {
       );
 
       if (existingReport != null) {
-        _existingReportId = existingReport.id; // Armazena o ID do relatório existente para edição
+        _existingReportId = existingReport.id;
         _reportStatus = existingReport.status;
         _eventType = existingReport.eventType ?? 'normal';
         if (existingReport.cancellationReason != null) {
@@ -130,15 +157,19 @@ class _FillReportPageState extends State<FillReportPage> {
           final notes = existingReport.testimoniesAndNotes!;
           List<String> testimonyLines = [];
 
-          // Correção do bug de concatenação: faz o parse limpo sem duplicar rótulos
           for (var line in notes.split('\n')) {
             final trimmed = line.trim();
             if (trimmed.startsWith('Estudo/Tema:')) {
-              _studyTopicCtrl.text = trimmed.replaceFirst('Estudo/Tema:', '').trim();
-            } else if (trimmed.startsWith('Oferta: R\$') || trimmed.startsWith('Oferta:')) {
-              _offeringValueCtrl.text = trimmed.replaceAll(RegExp(r'Oferta:\s*R\$\s*|Oferta:\s*'), '').trim();
+              _studyTopicCtrl.text =
+                  trimmed.replaceFirst('Estudo/Tema:', '').trim();
+            } else if (trimmed.startsWith('Oferta: R\$') ||
+                trimmed.startsWith('Oferta:')) {
+              _offeringValueCtrl.text = trimmed
+                  .replaceAll(RegExp(r'Oferta:\s*R\$\s*|Oferta:\s*'), '')
+                  .trim();
             } else if (trimmed.startsWith('Testemunhos e Obs:')) {
-              testimonyLines.add(trimmed.replaceFirst('Testemunhos e Obs:', '').trim());
+              testimonyLines
+                  .add(trimmed.replaceFirst('Testemunhos e Obs:', '').trim());
             } else if (trimmed.isNotEmpty) {
               testimonyLines.add(trimmed);
             }
@@ -148,8 +179,11 @@ class _FillReportPageState extends State<FillReportPage> {
 
         for (var att in existingReport.attendances) {
           _attendanceMap[att.cellMemberId] = att.isPresent;
-          _memberRolesPerformed[att.cellMemberId] =
-          List<String>.from(att.rolesPerformed);
+          for (var role in att.rolesPerformed) {
+            if (_meetingRoles.containsKey(role)) {
+              _meetingRoles[role] = att.cellMemberId;
+            }
+          }
         }
 
         _visitors = existingReport.visitors
@@ -160,45 +194,42 @@ class _FillReportPageState extends State<FillReportPage> {
             .map((v) => VisitorModel(name: v.name, phone: v.phone))
             .toList();
       } else {
-        // Se ainda não existe relatório salvo, resgata quem ficou definido na reunião para pré-preencher
+        // Pré-preenche as funções com base na configuração da reunião atual
         for (var member in members) {
-          List<String> assignedRoles = [];
           final mName = member.name.trim().toLowerCase();
 
           if (widget.meeting.initialPrayerName != null &&
               widget.meeting.initialPrayerName!.trim().toLowerCase() == mName) {
-            assignedRoles.add('Oração Inicial');
+            _meetingRoles['Oração Inicial'] = member.id;
           }
           if (widget.meeting.icebreakerName != null &&
               widget.meeting.icebreakerName!.trim().toLowerCase() == mName) {
-            assignedRoles.add('Quebra-gelo');
+            _meetingRoles['Quebra-gelo'] = member.id;
           }
           if (widget.meeting.worshipName != null &&
               widget.meeting.worshipName!.trim().toLowerCase() == mName) {
-            assignedRoles.add('Louvor');
+            _meetingRoles['Louvor'] = member.id;
           }
           if (widget.meeting.wordName != null &&
               widget.meeting.wordName!.trim().toLowerCase() == mName) {
-            assignedRoles.add('Palavra');
+            _meetingRoles['Palavra'] = member.id;
           }
           if (widget.meeting.finalPrayerName != null &&
               widget.meeting.finalPrayerName!.trim().toLowerCase() == mName) {
-            assignedRoles.add('Oração Final');
+            _meetingRoles['Oração Final'] = member.id;
           }
           if (widget.meeting.snackName != null &&
               widget.meeting.snackName!.trim().toLowerCase() == mName) {
-            assignedRoles.add('Lanche');
+            _meetingRoles['Lanche'] = member.id;
           }
           if (widget.meeting.officialPhotoName != null &&
               widget.meeting.officialPhotoName!.trim().toLowerCase() == mName) {
-            assignedRoles.add('Foto Oficial');
+            _meetingRoles['Foto Oficial'] = member.id;
           }
           if (widget.meeting.reportFillerName != null &&
               widget.meeting.reportFillerName!.trim().toLowerCase() == mName) {
-            assignedRoles.add('Preenchimento do Relatório');
+            _meetingRoles['Preenchimento do Relatório'] = member.id;
           }
-
-          _memberRolesPerformed[member.id] = assignedRoles;
         }
       }
 
@@ -214,22 +245,6 @@ class _FillReportPageState extends State<FillReportPage> {
     }
   }
 
-  void _toggleMemberRole(String memberId, String role) {
-    setState(() {
-      final currentRoles = _memberRolesPerformed[memberId] ?? [];
-      if (currentRoles.contains(role)) {
-        currentRoles.remove(role);
-      } else {
-        // Remove essa função de qualquer outro membro para manter exclusividade
-        for (var key in _memberRolesPerformed.keys) {
-          _memberRolesPerformed[key]?.remove(role);
-        }
-        currentRoles.add(role);
-      }
-      _memberRolesPerformed[memberId] = currentRoles;
-    });
-  }
-
   void _addVisitor() {
     final name = _visitorNameCtrl.text.trim();
     final phone = _visitorPhoneCtrl.text.trim();
@@ -242,10 +257,70 @@ class _FillReportPageState extends State<FillReportPage> {
     }
 
     setState(() {
-      _visitors.add(VisitorModel(name: name, phone: phone.isEmpty ? null : phone));
+      _visitors
+          .add(VisitorModel(name: name, phone: phone.isEmpty ? null : phone));
       _visitorNameCtrl.clear();
       _visitorPhoneCtrl.clear();
     });
+  }
+
+  void _editVisitor(int index) {
+    final visitor = _visitors[index];
+    final nameCtrl = TextEditingController(text: visitor.name);
+    final phoneCtrl = TextEditingController(text: visitor.phone ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Editar Visitante'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nome do Visitante',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Telefone (Opcional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newName = nameCtrl.text.trim();
+              if (newName.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Informe o nome do visitante.')),
+                );
+                return;
+              }
+              setState(() {
+                _visitors[index] = VisitorModel(
+                  name: newName,
+                  phone: phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
+                );
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _addConversion() {
@@ -260,10 +335,70 @@ class _FillReportPageState extends State<FillReportPage> {
     }
 
     setState(() {
-      _conversions.add(VisitorModel(name: name, phone: phone.isEmpty ? null : phone));
+      _conversions
+          .add(VisitorModel(name: name, phone: phone.isEmpty ? null : phone));
       _conversionNameCtrl.clear();
       _conversionPhoneCtrl.clear();
     });
+  }
+
+  void _editConversion(int index) {
+    final conversion = _conversions[index];
+    final nameCtrl = TextEditingController(text: conversion.name);
+    final phoneCtrl = TextEditingController(text: conversion.phone ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Editar Conversão / Decisão'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nome da Pessoa',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'Telefone (Opcional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newName = nameCtrl.text.trim();
+              if (newName.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Informe o nome da pessoa.')),
+                );
+                return;
+              }
+              setState(() {
+                _conversions[index] = VisitorModel(
+                  name: newName,
+                  phone: phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
+                );
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _submitReport() async {
@@ -280,9 +415,17 @@ class _FillReportPageState extends State<FillReportPage> {
     setState(() => _isSaving = true);
 
     try {
+      // Reconstrói as funções realizadas por cada membro com base no mapa centralizado
+      final Map<String, List<String>> memberRolesMap = {};
+      _meetingRoles.forEach((role, memberId) {
+        if (memberId != null) {
+          memberRolesMap.putIfAbsent(memberId, () => []).add(role);
+        }
+      });
+
       final List<AttendanceModel> attendances = _members.map((m) {
         final isPresent = _attendanceMap[m.id] ?? false;
-        final roles = _memberRolesPerformed[m.id] ?? [];
+        final roles = memberRolesMap[m.id] ?? [];
         return AttendanceModel(
           cellMemberId: m.id,
           isPresent: isPresent,
@@ -298,11 +441,12 @@ class _FillReportPageState extends State<FillReportPage> {
         notesBuffer.writeln('Oferta: R\$ ${_offeringValueCtrl.text.trim()}');
       }
       if (_testimoniesNotesCtrl.text.trim().isNotEmpty) {
-        notesBuffer.writeln('Testemunhos e Obs: ${_testimoniesNotesCtrl.text.trim()}');
+        notesBuffer
+            .writeln('Testemunhos e Obs: ${_testimoniesNotesCtrl.text.trim()}');
       }
 
       final report = CellReportModel(
-        id: _existingReportId ?? '', // Passa o ID existente se houver, garantindo atualização em vez de duplicação
+        id: _existingReportId ?? '',
         cellId: widget.cell.id,
         scheduledDate: widget.meeting.meetingDate,
         actualDate: DateTime.now(),
@@ -372,17 +516,6 @@ class _FillReportPageState extends State<FillReportPage> {
     final formattedDate =
         '${widget.meeting.meetingDate.day.toString().padLeft(2, '0')}/${widget.meeting.meetingDate.month.toString().padLeft(2, '0')}/${widget.meeting.meetingDate.year}';
 
-    const allRoles = [
-      'Oração Inicial',
-      'Quebra-gelo',
-      'Louvor',
-      'Palavra',
-      'Oração Final',
-      'Lanche',
-      'Foto Oficial',
-      'Preenchimento do Relatório',
-    ];
-
     return Scaffold(
       appBar: AppBar(
         title: Text('Relatório - $formattedDate'),
@@ -394,7 +527,7 @@ class _FillReportPageState extends State<FillReportPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // CARD STATUS REUNIÃO
+            // STATUS DA REUNIÃO
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(
@@ -427,7 +560,8 @@ class _FillReportPageState extends State<FillReportPage> {
                       },
                     ),
                     RadioListTile<ReportStatus>(
-                      title: const Text('Evento Ponte / Atividade Especial'),
+                      title:
+                      const Text('Evento Ponte / Atividade Especial'),
                       value: ReportStatus.bridgeEvent,
                       groupValue: _reportStatus,
                       onChanged: (val) {
@@ -435,6 +569,11 @@ class _FillReportPageState extends State<FillReportPage> {
                           setState(() {
                             _reportStatus = val;
                             _eventType = 'bridge_event';
+                            if (widget.meeting.eventName != null &&
+                                widget.meeting.eventName!.trim().isNotEmpty &&
+                                _studyTopicCtrl.text.trim().isEmpty) {
+                              _studyTopicCtrl.text = widget.meeting.eventName!.trim();
+                            }
                           });
                         }
                       },
@@ -470,7 +609,7 @@ class _FillReportPageState extends State<FillReportPage> {
             if (_reportStatus != ReportStatus.cacelled) ...[
               const SizedBox(height: 20),
 
-              // LISTA DE FREQUÊNCIA DOS MEMBROS E FUNÇÕES REALIZADAS
+              // LISTA DE FREQUÊNCIA DOS MEMBROS (ZERADA NO INÍCIO)
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
@@ -485,7 +624,7 @@ class _FillReportPageState extends State<FillReportPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Frequência & Funções dos Membros',
+                            'Frequência dos Membros',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -500,82 +639,147 @@ class _FillReportPageState extends State<FillReportPage> {
                           ),
                         ],
                       ),
+                      const Text(
+                        'Marque quem compareceu à reunião:',
+                        style:
+                        TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
                       const Divider(height: 20),
                       _members.isEmpty
-                          ? const Text('Nenhum membro vinculado a esta célula.')
+                          ? const Text(
+                          'Nenhum membro vinculado a esta célula.')
                           : ListView.separated(
                         shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
+                        physics:
+                        const NeverScrollableScrollPhysics(),
                         itemCount: _members.length,
-                        separatorBuilder: (_, __) => const Divider(height: 12),
+                        separatorBuilder: (_, __) =>
+                        const Divider(height: 8),
                         itemBuilder: (context, index) {
                           final member = _members[index];
-                          final isPresent = _attendanceMap[member.id] ?? false;
-                          final assignedRoles = _memberRolesPerformed[member.id] ?? [];
+                          final isPresent =
+                              _attendanceMap[member.id] ?? false;
 
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              CheckboxListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  member.name,
-                                  style: TextStyle(
-                                    fontWeight: isPresent
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                                subtitle: Text('Função na Célula: ${member.role}'),
-                                value: isPresent,
-                                onChanged: (val) {
-                                  setState(() {
-                                    _attendanceMap[member.id] = val ?? false;
-                                    if (!(val ?? false)) {
-                                      _memberRolesPerformed[member.id] = [];
-                                    }
-                                  });
-                                },
+                          final memberRoles = _meetingRoles.entries
+                              .where((entry) =>
+                          entry.value == member.id)
+                              .map((entry) => entry.key)
+                              .toList();
+
+                          return CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              member.name,
+                              style: TextStyle(
+                                fontWeight: isPresent
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
-                              if (isPresent) ...[
-                                const Padding(
-                                  padding: EdgeInsets.only(left: 4.0, bottom: 6),
-                                  child: Text(
-                                    'Funções realizadas nesta reunião:',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.grey,
-                                    ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                    'Função na Célula: ${member.role}'),
+                                if (memberRoles.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Wrap(
+                                    spacing: 4,
+                                    children: memberRoles
+                                        .map((r) => Chip(
+                                      label: Text(r,
+                                          style:
+                                          const TextStyle(
+                                              fontSize:
+                                              10)),
+                                      backgroundColor:
+                                      Colors
+                                          .blue.shade50,
+                                      padding:
+                                      EdgeInsets.zero,
+                                      materialTapTargetSize:
+                                      MaterialTapTargetSize
+                                          .shrinkWrap,
+                                    ))
+                                        .toList(),
                                   ),
-                                ),
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 4,
-                                  children: allRoles.map((role) {
-                                    final isSelected = assignedRoles.contains(role);
-                                    return FilterChip(
-                                      label: Text(
-                                        role,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: isSelected ? Colors.white : Colors.black87,
-                                        ),
-                                      ),
-                                      selected: isSelected,
-                                      selectedColor: Theme.of(context).primaryColor,
-                                      checkmarkColor: Colors.white,
-                                      onSelected: (_) {
-                                        _toggleMemberRole(member.id, role);
-                                      },
-                                    );
-                                  }).toList(),
-                                ),
+                                ],
                               ],
-                            ],
+                            ),
+                            value: isPresent,
+                            onChanged: (val) {
+                              setState(() {
+                                _attendanceMap[member.id] =
+                                    val ?? false;
+                              });
+                            },
                           );
                         },
                       ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // ATRIBUIÇÃO DE FUNÇÕES DA REUNIÃO
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Funções Realizadas na Reunião',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Text(
+                        'Defina quem liderou cada parte nesta reunião:',
+                        style:
+                        TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      const Divider(height: 20),
+                      ..._allRolesList.map((role) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12.0),
+                          child: DropdownButtonFormField<String?>(
+                            value: _meetingRoles[role],
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: role,
+                              isDense: true,
+                              border: const OutlineInputBorder(),
+                            ),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text(
+                                  'Nenhum / Não atribuído',
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              ),
+                              ..._members.map((m) => DropdownMenuItem<String?>(
+                                value: m.id,
+                                child: Text(m.name),
+                              )),
+                            ],
+                            onChanged: (selectedId) {
+                              setState(() {
+                                _meetingRoles[role] = selectedId;
+                              });
+                            },
+                          ),
+                        );
+                      }),
                     ],
                   ),
                 ),
@@ -643,16 +847,29 @@ class _FillReportPageState extends State<FillReportPage> {
                             final v = _visitors[index];
                             return ListTile(
                               dense: true,
-                              leading: const Icon(Icons.person, color: Colors.blue),
+                              leading: const Icon(Icons.person,
+                                  color: Colors.blue),
                               title: Text(v.name),
-                              subtitle: Text(v.phone ?? 'Sem telefone'),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                                onPressed: () {
-                                  setState(() {
-                                    _visitors.removeAt(index);
-                                  });
-                                },
+                              subtitle:
+                              Text(v.phone ?? 'Sem telefone'),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit,
+                                        color: Colors.blue, size: 20),
+                                    onPressed: () => _editVisitor(index),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.red, size: 20),
+                                    onPressed: () {
+                                      setState(() {
+                                        _visitors.removeAt(index);
+                                      });
+                                    },
+                                  ),
+                                ],
                               ),
                             );
                           },
@@ -711,7 +928,8 @@ class _FillReportPageState extends State<FillReportPage> {
                           ),
                           const SizedBox(width: 8),
                           IconButton.filled(
-                            style: IconButton.styleFrom(backgroundColor: Colors.green),
+                            style: IconButton.styleFrom(
+                                backgroundColor: Colors.green),
                             onPressed: _addConversion,
                             icon: const Icon(Icons.add),
                           ),
@@ -727,16 +945,29 @@ class _FillReportPageState extends State<FillReportPage> {
                             final c = _conversions[index];
                             return ListTile(
                               dense: true,
-                              leading: const Icon(Icons.favorite, color: Colors.green),
+                              leading: const Icon(Icons.favorite,
+                                  color: Colors.green),
                               title: Text(c.name),
-                              subtitle: Text(c.phone ?? 'Sem telefone'),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                                onPressed: () {
-                                  setState(() {
-                                    _conversions.removeAt(index);
-                                  });
-                                },
+                              subtitle:
+                              Text(c.phone ?? 'Sem telefone'),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit,
+                                        color: Colors.blue, size: 20),
+                                    onPressed: () => _editConversion(index),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.red, size: 20),
+                                    onPressed: () {
+                                      setState(() {
+                                        _conversions.removeAt(index);
+                                      });
+                                    },
+                                  ),
+                                ],
                               ),
                             );
                           },
@@ -778,7 +1009,9 @@ class _FillReportPageState extends State<FillReportPage> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: _offeringValueCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType:
+                        const TextInputType.numberWithOptions(
+                            decimal: true),
                         decoration: const InputDecoration(
                           labelText: 'Valor da Oferta (R\$)',
                           border: OutlineInputBorder(),
