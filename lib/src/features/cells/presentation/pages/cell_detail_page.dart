@@ -1,3 +1,4 @@
+// lib/src/features/cells/presentation/pages/cell_detail_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
@@ -11,6 +12,7 @@ import 'package:celulas_app/src/features/cells/data/models/cell_member_model.dar
 import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/prayer_request_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/unlinked_user_or_member_model.dart';
+import 'package:celulas_app/src/features/cell_reports/presentation/pages/reports_page.dart';
 
 import '../../data/models/cell_join_request_model.dart';
 
@@ -42,6 +44,7 @@ class _CellDetailPageState extends State<CellDetailPage>
   bool _isLoadingRequests = false;
 
   CellMeetingModel? _currentMeeting;
+  List<CellMeetingModel> _allMeetings = [];
   List<PrayerRequestModel> _prayerRequests = [];
   bool _isLoadingMeetingData = false;
 
@@ -72,7 +75,6 @@ class _CellDetailPageState extends State<CellDetailPage>
     super.dispose();
   }
 
-  /// Calcula a próxima data de reunião com base no dia da semana configurado na célula
   DateTime _calculateNextMeetingDate(String? meetingDayStr) {
     final now = DateTime.now();
     if (meetingDayStr == null || meetingDayStr.trim().isEmpty) {
@@ -107,27 +109,11 @@ class _CellDetailPageState extends State<CellDetailPage>
 
   bool _isMeetingExpired(CellMeetingModel? meeting) {
     if (meeting == null) return true;
-    final targetDate = meeting.meetingDate;
-    final expiry = DateTime(targetDate.year, targetDate.month, targetDate.day + 1);
-    return DateTime.now().isAfter(expiry);
+    return meeting.isExpired;
   }
 
-  bool _hasUnassignedRolesOrPendingReport() {
-    final rawMeeting = _currentMeeting;
-    final m = _isMeetingExpired(rawMeeting) ? null : rawMeeting;
-    if (m == null) return true;
-    if (!m.isReportFilled) return true;
-
-    final isNullOrEmpty = (String? val) => val == null || val.trim().isEmpty || val == 'Não definido';
-
-    return isNullOrEmpty(m.initialPrayerName) ||
-        isNullOrEmpty(m.icebreakerName) ||
-        isNullOrEmpty(m.worshipName) ||
-        isNullOrEmpty(m.wordName) ||
-        isNullOrEmpty(m.finalPrayerName) ||
-        isNullOrEmpty(m.snackName) ||
-        isNullOrEmpty(m.officialPhotoName) ||
-        isNullOrEmpty(m.reportFillerName);
+  bool get _hasAnyPendingReport {
+    return _allMeetings.any((m) => m.isExpired && !m.isReportFilled);
   }
 
   Future<void> _loadPendingRequests() async {
@@ -161,11 +147,13 @@ class _CellDetailPageState extends State<CellDetailPage>
     try {
       final dataSource = getIt<ICellRemoteDataSource>();
       final meeting = await dataSource.getLatestMeeting(_currentCell.id);
+      final allMeetings = await dataSource.getAllMeetingsForCell(_currentCell.id);
       final prayers = await dataSource.getPrayerRequests(_currentCell.id);
 
       if (mounted) {
         setState(() {
           _currentMeeting = meeting;
+          _allMeetings = allMeetings;
           _prayerRequests = prayers;
           _isLoadingMeetingData = false;
         });
@@ -1559,7 +1547,6 @@ class _CellDetailPageState extends State<CellDetailPage>
 
       final meetingId = (_currentMeeting == null || _isMeetingExpired(_currentMeeting)) ? '' : _currentMeeting!.id;
 
-      // CORREÇÃO: Para reuniões do tipo 'normal' ou 'canceled', a data deve ser sempre a próxima data calculada da célula
       final DateTime finalMeetingDate = (status == 'normal' || status == 'canceled')
           ? _calculateNextMeetingDate(_currentCell.meetingDay)
           : meetingDate;
@@ -1623,20 +1610,21 @@ class _CellDetailPageState extends State<CellDetailPage>
     String snack = _currentMeeting?.snackName ?? 'Não definido';
     String officialPhoto = _currentMeeting?.officialPhotoName ?? 'Não definido';
 
+    // Pré-preenche o preenchedor de relatório com o Líder por padrão
     String reportFiller = _currentMeeting?.reportFillerName ?? '';
     if (reportFiller.isEmpty || reportFiller == 'Não definido') {
-      final coLeader = members.cast<CellMemberEntity>().firstWhere(
-            (m) => _normalizeRole(m.role) == 'colider',
+      final leader = members.cast<CellMemberEntity>().firstWhere(
+            (m) => _normalizeRole(m.role) == 'lider',
         orElse: () => CellMemberEntity(id: '', cellId: '', name: '', role: '', joinedAt: DateTime.now()),
       );
-      if (coLeader.name.isNotEmpty) {
-        reportFiller = coLeader.name;
+      if (leader.name.isNotEmpty) {
+        reportFiller = leader.name;
       } else {
-        final leader = members.cast<CellMemberEntity>().firstWhere(
-              (m) => _normalizeRole(m.role) == 'lider',
+        final coLeader = members.cast<CellMemberEntity>().firstWhere(
+              (m) => _normalizeRole(m.role) == 'colider',
           orElse: () => CellMemberEntity(id: '', cellId: '', name: '', role: '', joinedAt: DateTime.now()),
         );
-        reportFiller = leader.name.isNotEmpty ? leader.name : 'Não definido';
+        reportFiller = coLeader.name.isNotEmpty ? coLeader.name : 'Não definido';
       }
     }
 
@@ -1696,7 +1684,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                           (v) => officialPhoto = v,
                     ),
                     _buildRoleDropdown(
-                      'Preenchimento do Relatório',
+                      'Preenchimento do Relatório (Líder)',
                       reportFiller,
                       memberNames,
                           (v) => reportFiller = v,
@@ -1723,7 +1711,6 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (result == true) {
       final meetingId = (_currentMeeting == null || _isMeetingExpired(_currentMeeting)) ? '' : _currentMeeting!.id;
 
-      // CORREÇÃO: Respeita a regra do status da reunião atual (se cancelada ou normal, usa a próxima data calculada)
       final currentStatus = _currentMeeting?.status ?? 'normal';
       final DateTime meetingDate = (currentStatus == 'normal' || currentStatus == 'canceled')
           ? _calculateNextMeetingDate(_currentCell.meetingDay)
@@ -2592,31 +2579,46 @@ class _CellDetailPageState extends State<CellDetailPage>
     final rawMeeting = _currentMeeting;
     final meeting = _isMeetingExpired(rawMeeting) ? null : rawMeeting;
     final status = meeting?.status ?? 'normal';
-    final bool showLeaderWarning = canEdit && _hasUnassignedRolesOrPendingReport();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (showLeaderWarning) ...[
+          if (_hasAnyPendingReport) ...[
             Card(
-              color: Colors.amber.shade50,
+              color: Colors.amber.shade100,
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Row(
-                  children: const [
-                    Icon(Icons.warning_amber, color: Colors.orange),
-                    SizedBox(width: 8),
-                    Expanded(
+                  children: [
+                    const Icon(Icons.warning_amber, color: Colors.amber),
+                    const SizedBox(width: 8),
+                    const Expanded(
                       child: Text(
-                        'Aviso ao Líder: Lembre-se de definir as funções da próxima reunião e preencher o relatório da reunião passada.',
+                        'Existem relatórios pendentes de reuniões anteriores.',
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
+                    if (widget.currentUser != null)
+                      ElevatedButton(
+                        onPressed: () {
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          } else {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ReportsPage(currentUser: widget.currentUser!),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text('Ver Relatórios'),
+                      ),
                   ],
                 ),
               ),
@@ -2749,7 +2751,7 @@ class _CellDetailPageState extends State<CellDetailPage>
           ),
           _buildRoleCard('Lanche', meeting?.snackName, Icons.restaurant),
           _buildRoleCard('Foto Oficial', meeting?.officialPhotoName, Icons.camera_alt),
-          _buildRoleCard('Preenchimento do Relatório', meeting?.reportFillerName, Icons.description),
+          _buildRoleCard('Preenchimento do Relatório (Líder)', meeting?.reportFillerName, Icons.description),
 
           const SizedBox(height: 24),
           const Text(

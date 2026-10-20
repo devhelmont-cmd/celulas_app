@@ -1,7 +1,9 @@
+// lib/src/features/home/presentation/pages/home_page.dart
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:celulas_app/src/features/auth/presentation/pages/login_page.dart';
+import 'package:celulas_app/src/features/cell_reports/presentation/pages/reports_page.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:celulas_app/src/features/cells/presentation/pages/cells_list_page.dart';
@@ -99,7 +101,7 @@ class _HomePageState extends State<HomePage> {
             onRefresh: _loadCells,
             currentUser: _currentUser,
           ),
-          const Center(child: Text('Tela de Relatórios')),
+          ReportsPage(currentUser: _currentUser),
           const Center(child: Text('Perfil')),
         ],
       ),
@@ -126,7 +128,6 @@ class _HomePageState extends State<HomePage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // 1. Cabeçalho de Identificação
         Row(
           children: [
             CircleAvatar(
@@ -135,15 +136,6 @@ class _HomePageState extends State<HomePage> {
               _currentUser.photoUrl != null &&
                   _currentUser.photoUrl!.isNotEmpty
                   ? NetworkImage(_currentUser.photoUrl!)
-                  : null,
-              onBackgroundImageError:
-              _currentUser.photoUrl != null &&
-                  _currentUser.photoUrl!.isNotEmpty
-                  ? (exception, stackTrace) {
-                debugPrint(
-                  'Erro ao carregar foto de perfil: $exception',
-                );
-              }
                   : null,
               child:
               (_currentUser.photoUrl == null ||
@@ -180,14 +172,16 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: 24),
 
-        // 2. Renderização Condicional por Perfil (Hierárquica)
         if (_currentUser.isPastorOrCoordinator) ...[
           const PastorDashboardWidget(),
           const SizedBox(height: 20),
         ],
 
         if (_currentUser.isLeader) ...[
-          LeaderDashboardWidget(user: _currentUser),
+          LeaderDashboardWidget(
+            user: _currentUser,
+            onNavigateToReports: () => setState(() => _currentIndex = 2),
+          ),
           const SizedBox(height: 20),
         ],
 

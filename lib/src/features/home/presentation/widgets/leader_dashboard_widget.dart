@@ -1,3 +1,4 @@
+// lib/src/features/home/presentation/widgets/leader_dashboard_widget.dart
 import 'package:flutter/material.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
@@ -5,11 +6,17 @@ import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_data
 import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:celulas_app/src/features/cells/presentation/pages/cell_detail_page.dart';
+import 'package:celulas_app/src/features/cell_reports/presentation/pages/reports_page.dart';
 
 class LeaderDashboardWidget extends StatelessWidget {
   final UserEntity user;
+  final VoidCallback? onNavigateToReports;
 
-  const LeaderDashboardWidget({super.key, required this.user});
+  const LeaderDashboardWidget({
+    super.key,
+    required this.user,
+    this.onNavigateToReports,
+  });
 
   bool _hasUnassignedRoles(CellMeetingModel? meeting) {
     if (meeting == null) return true;
@@ -50,18 +57,19 @@ class LeaderDashboardWidget extends StatelessWidget {
 
         final cell = cellSnapshot.data!;
 
-        return StreamBuilder<CellMeetingModel?>(
-          stream: dataSource.watchLatestMeeting(cell.id),
-          builder: (context, meetingSnapshot) {
-            final meeting = meetingSnapshot.data;
+        return FutureBuilder<List<CellMeetingModel>>(
+          future: dataSource.getAllMeetingsForCell(cell.id),
+          builder: (context, meetingsSnapshot) {
+            final meetings = meetingsSnapshot.data ?? [];
+            final latestMeeting = meetings.isNotEmpty ? meetings.first : null;
 
-            final bool isReportPending = meeting == null || !meeting.isReportFilled;
-            final bool areRolesPending = _hasUnassignedRoles(meeting);
+            final bool hasAnyPendingReport = meetings.any((m) => m.isExpired && !m.isReportFilled);
+            final bool areRolesPending = _hasUnassignedRoles(latestMeeting);
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (isReportPending) ...[
+                if (hasAnyPendingReport) ...[
                   Card(
                     color: Colors.amber.shade100,
                     elevation: 0,
@@ -80,7 +88,7 @@ class LeaderDashboardWidget extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
-                                  'Relatório da Semana Pendente',
+                                  'Relatório(s) Pendente(s)',
                                   style: TextStyle(fontWeight: FontWeight.bold),
                                 ),
                                 Text(
@@ -92,19 +100,18 @@ class LeaderDashboardWidget extends StatelessWidget {
                           ),
                           ElevatedButton(
                             onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CellDetailPage(
-                                    cell: cell,
-                                    currentUser: user,
-                                    initialTabIndex: 1,
-                                    autoOpenEditMeeting: true,
+                              if (onNavigateToReports != null) {
+                                onNavigateToReports!();
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ReportsPage(currentUser: user),
                                   ),
-                                ),
-                              );
+                                );
+                              }
                             },
-                            child: const Text('Preencher'),
+                            child: const Text('Ver Relatórios'),
                           ),
                         ],
                       ),

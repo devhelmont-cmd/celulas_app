@@ -1,5 +1,4 @@
-import 'dart:math';
-
+// lib/src/features/cell_reports/data/models/cell_report_model.dart
 import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -28,7 +27,7 @@ class AttendanceModel extends AttendanceEntity {
     return AttendanceModel(
       cellMemberId: map['cellMemberId'] ?? '',
       isPresent: map['isPresent'] ?? false,
-      isJustified: map['cellMemberId'] ?? false,
+      isJustified: map['isJustified'] ?? false,
       justificationReason: map['justificationReason'],
       rolesPerformed: List<String>.from(map['rolesPerformed'] ?? []),
     );
@@ -70,25 +69,25 @@ class CellReportModel extends CellReportEntity {
       scheduledDate: (map['scheduledDate'] as Timestamp).toDate(),
       actualDate: (map['actualDate'] as Timestamp?)?.toDate(),
       status: ReportStatus.values.firstWhere(
-        (e) => e.name == map['status'],
+            (e) => e.name == map['status'],
         orElse: () => ReportStatus.occurred,
       ),
       eventType: map['eventType'],
       cancellationReason: map['cancellationReason'],
       attendances:
-          (map['attendances'] as List<dynamic>?)
-              ?.map((e) => AttendanceModel.fromMap(e as Map<String, dynamic>))
-              .toList() ??
+      (map['attendances'] as List<dynamic>?)
+          ?.map((e) => AttendanceModel.fromMap(e as Map<String, dynamic>))
+          .toList() ??
           [],
       visitors:
-          (map['visitors'] as List<dynamic>?)
-              ?.map((e) => VisitorModel.fromMap(e as Map<String, dynamic>))
-              .toList() ??
+      (map['visitors'] as List<dynamic>?)
+          ?.map((e) => VisitorModel.fromMap(e as Map<String, dynamic>))
+          .toList() ??
           [],
       conversions:
-          (map['conversions'] as List<dynamic>?)
-              ?.map((e) => VisitorModel.fromMap(e as Map<String, dynamic>))
-              .toList() ??
+      (map['conversions'] as List<dynamic>?)
+          ?.map((e) => VisitorModel.fromMap(e as Map<String, dynamic>))
+          .toList() ??
           [],
       testimoniesAndNotes: map['testimoniesAndNotes'],
       filledByUserId: map['filledByUserId'] ?? '',
@@ -99,16 +98,16 @@ class CellReportModel extends CellReportEntity {
   Map<String, dynamic> toMap() {
     return {
       'cellId': cellId,
-      'scheduçedDate': Timestamp.fromDate(scheduledDate),
+      'scheduledDate': Timestamp.fromDate(scheduledDate),
       if (actualDate != null) 'actualDate': Timestamp.fromDate(actualDate!),
       'status': status.name,
       if (eventType != null) 'eventType': eventType,
       if (cancellationReason != null) 'cancellationReason': cancellationReason,
       'attendances':
-          attendances.map((e) => (e as AttendanceModel).toMap()).toList(),
+      attendances.map((e) => (e as AttendanceModel).toMap()).toList(),
       'visitors': visitors.map((e) => (e as VisitorModel).toMap()).toList(),
       'conversions':
-          conversions.map((e) => (e as VisitorModel).toMap()).toList(),
+      conversions.map((e) => (e as VisitorModel).toMap()).toList(),
       if (testimoniesAndNotes != null)
         'testimoniesAndNotes': testimoniesAndNotes,
       'filledByUserId': filledByUserId,

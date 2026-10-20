@@ -28,6 +28,11 @@ import 'package:celulas_app/src/features/cells/presentation/controllers/cell_con
 import 'package:celulas_app/src/features/cells/presentation/controllers/cell_member_controller.dart';
 import 'package:celulas_app/src/features/cells/presentation/controllers/user_cell_onboarding_controller.dart';
 
+// Imports de Cell Reports
+import 'package:celulas_app/src/features/cell_reports/data/datasources/cell_reports_remote_datasource.dart';
+import 'package:celulas_app/src/features/cell_reports/data/repositories/cell_reports_repository_impl.dart';
+import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
+
 final getIt = GetIt.instance;
 
 Future<void> initInjection() async {
@@ -64,6 +69,10 @@ Future<void> initInjection() async {
         () => CellRemoteDataSourceImpl(getIt<FirebaseFirestore>()),
   );
 
+  getIt.registerLazySingleton<ICellReportsRemoteDataSource>(
+        () => CellReportsRemoteDataSourceImpl(getIt<FirebaseFirestore>()),
+  );
+
   // -----------------------------------------------------------------------
   // Repositories
   // -----------------------------------------------------------------------
@@ -75,6 +84,9 @@ Future<void> initInjection() async {
   );
   getIt.registerLazySingleton<ICellRepository>(
         () => CellRepositoryImpl(getIt<ICellRemoteDataSource>()),
+  );
+  getIt.registerLazySingleton<ICellReportsRepository>(
+        () => CellReportsRepositoryImpl(getIt<ICellReportsRemoteDataSource>()),
   );
 
   // -----------------------------------------------------------------------
