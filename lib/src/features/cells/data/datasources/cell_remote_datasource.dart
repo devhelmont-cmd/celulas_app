@@ -1199,8 +1199,143 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
   }
 
   // ================= REUNIÕES & RELATÓRIOS =================
+
+  /// Método auxiliar interno para garantir que, caso a última reunião tenha expirado,
+  /// a próxima reunião no dia padrão seja gerada automaticamente na subcoleção 'meetings'.
+  Future<void> _ensureUpcomingMeetings(String cellId) async {
+    try {
+      final cellDoc = await _firestore.collection('cells').doc(cellId).get();
+      if (!cellDoc.exists) return;
+      final cellData = cellDoc.data()!;
+      final meetingDay = cellData['meetingDay'] as String?;
+
+      final meetingsRef = _firestore
+          .collection('cells')
+          .doc(cellId)
+          .collection('meetings');
+
+      final snapshot = await meetingsRef
+          .orderBy('meetingDate', descending: true)
+          .get();
+
+      List<CellMeetingModel> meetings = snapshot.docs
+          .map((doc) => CellMeetingModel.fromMap(doc.data(), doc.id))
+          .toList();
+
+      DateTime now = DateTime.now();
+
+      if (meetings.isEmpty) {
+        DateTime firstDate = _calculateNextMeetingDateStatic(meetingDay, now);
+        final newMeeting = CellMeetingModel(
+          id: '',
+          cellId: cellId,
+          meetingDate: firstDate,
+          status: 'normal',
+          isReportFilled: false,
+        );
+        await meetingsRef.add(newMeeting.toMap());
+        return;
+      }
+
+      meetings.sort((a, b) => a.meetingDate.compareTo(b.meetingDate));
+      CellMeetingModel latestMeeting = meetings.last;
+
+      int safetyCounter = 0;
+      while (latestMeeting.isExpired && safetyCounter < 10) {
+        safetyCounter++;
+        DateTime nextDate = _calculateNextMeetingDateAfter(latestMeeting.meetingDate, meetingDay);
+
+        bool exists = meetings.any((m) =>
+        m.meetingDate.year == nextDate.year &&
+            m.meetingDate.month == nextDate.month &&
+            m.meetingDate.day == nextDate.day
+        );
+
+        if (!exists) {
+          final newMeeting = CellMeetingModel(
+            id: '',
+            cellId: cellId,
+            meetingDate: nextDate,
+            status: 'normal',
+            isReportFilled: false,
+          );
+          final docRef = await meetingsRef.add(newMeeting.toMap());
+          latestMeeting = CellMeetingModel.fromMap(newMeeting.toMap(), docRef.id);
+          meetings.add(latestMeeting);
+        } else {
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint('Erro em _ensureUpcomingMeetings: $e');
+    }
+  }
+
+  DateTime _calculateNextMeetingDateStatic(String? meetingDayStr, DateTime fromDate) {
+    if (meetingDayStr == null || meetingDayStr.trim().isEmpty) {
+      return fromDate;
+    }
+
+    int targetWeekday = 2; // Terça-feira por padrão
+    final lower = meetingDayStr.toLowerCase().trim();
+    if (lower.contains('segunda')) {
+      targetWeekday = DateTime.monday;
+    } else if (lower.contains('terça') || lower.contains('terca')) {
+      targetWeekday = DateTime.tuesday;
+    } else if (lower.contains('quarta')) {
+      targetWeekday = DateTime.wednesday;
+    } else if (lower.contains('quinta')) {
+      targetWeekday = DateTime.thursday;
+    } else if (lower.contains('sexta')) {
+      targetWeekday = DateTime.friday;
+    } else if (lower.contains('sábado') || lower.contains('sabado')) {
+      targetWeekday = DateTime.saturday;
+    } else if (lower.contains('domingo')) {
+      targetWeekday = DateTime.sunday;
+    }
+
+    int daysUntil = targetWeekday - fromDate.weekday;
+    if (daysUntil <= 0) {
+      daysUntil += 7;
+    }
+
+    return DateTime(fromDate.year, fromDate.month, fromDate.day).add(Duration(days: daysUntil));
+  }
+
+  DateTime _calculateNextMeetingDateAfter(DateTime afterDate, String? meetingDayStr) {
+    if (meetingDayStr == null || meetingDayStr.trim().isEmpty) {
+      return afterDate.add(const Duration(days: 7));
+    }
+
+    int targetWeekday = 2; // Terça-feira por padrão
+    final lower = meetingDayStr.toLowerCase().trim();
+    if (lower.contains('segunda')) {
+      targetWeekday = DateTime.monday;
+    } else if (lower.contains('terça') || lower.contains('terca')) {
+      targetWeekday = DateTime.tuesday;
+    } else if (lower.contains('quarta')) {
+      targetWeekday = DateTime.wednesday;
+    } else if (lower.contains('quinta')) {
+      targetWeekday = DateTime.thursday;
+    } else if (lower.contains('sexta')) {
+      targetWeekday = DateTime.friday;
+    } else if (lower.contains('sábado') || lower.contains('sabado')) {
+      targetWeekday = DateTime.saturday;
+    } else if (lower.contains('domingo')) {
+      targetWeekday = DateTime.sunday;
+    }
+
+    DateTime candidate = DateTime(afterDate.year, afterDate.month, afterDate.day).add(const Duration(days: 1));
+    while (candidate.weekday != targetWeekday) {
+      candidate = candidate.add(const Duration(days: 1));
+    }
+
+    return candidate;
+  }
+
   @override
   Future<CellMeetingModel?> getLatestMeeting(String cellId) async {
+    await _ensureUpcomingMeetings(cellId);
     final snapshot = await _firestore
         .collection('cells')
         .doc(cellId)
@@ -1218,6 +1353,7 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
 
   @override
   Future<List<CellMeetingModel>> getAllMeetingsForCell(String cellId) async {
+    await _ensureUpcomingMeetings(cellId);
     final snapshot = await _firestore
         .collection('cells')
         .doc(cellId)
@@ -1232,6 +1368,7 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
 
   @override
   Future<List<CellMeetingModel>> getPendingMeetingsForCell(String cellId) async {
+    await _ensureUpcomingMeetings(cellId);
     final snapshot = await _firestore
         .collection('cells')
         .doc(cellId)

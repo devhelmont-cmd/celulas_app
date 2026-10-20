@@ -128,16 +128,22 @@ class _FillReportPageState extends State<FillReportPage> {
 
         if (existingReport.testimoniesAndNotes != null) {
           final notes = existingReport.testimoniesAndNotes!;
-          _testimoniesNotesCtrl.text = notes;
+          List<String> testimonyLines = [];
 
-          // Tenta extrair valores salvos anteriormente para os campos individuais, se houver
+          // Correção do bug de concatenação: faz o parse limpo sem duplicar rótulos
           for (var line in notes.split('\n')) {
-            if (line.startsWith('Estudo/Tema:')) {
-              _studyTopicCtrl.text = line.replaceFirst('Estudo/Tema:', '').trim();
-            } else if (line.startsWith('Oferta: R\$')) {
-              _offeringValueCtrl.text = line.replaceFirst('Oferta: R\$', '').trim();
+            final trimmed = line.trim();
+            if (trimmed.startsWith('Estudo/Tema:')) {
+              _studyTopicCtrl.text = trimmed.replaceFirst('Estudo/Tema:', '').trim();
+            } else if (trimmed.startsWith('Oferta: R\$') || trimmed.startsWith('Oferta:')) {
+              _offeringValueCtrl.text = trimmed.replaceAll(RegExp(r'Oferta:\s*R\$\s*|Oferta:\s*'), '').trim();
+            } else if (trimmed.startsWith('Testemunhos e Obs:')) {
+              testimonyLines.add(trimmed.replaceFirst('Testemunhos e Obs:', '').trim());
+            } else if (trimmed.isNotEmpty) {
+              testimonyLines.add(trimmed);
             }
           }
+          _testimoniesNotesCtrl.text = testimonyLines.join('\n').trim();
         }
 
         for (var att in existingReport.attendances) {
@@ -153,6 +159,47 @@ class _FillReportPageState extends State<FillReportPage> {
         _conversions = existingReport.conversions
             .map((v) => VisitorModel(name: v.name, phone: v.phone))
             .toList();
+      } else {
+        // Se ainda não existe relatório salvo, resgata quem ficou definido na reunião para pré-preencher
+        for (var member in members) {
+          List<String> assignedRoles = [];
+          final mName = member.name.trim().toLowerCase();
+
+          if (widget.meeting.initialPrayerName != null &&
+              widget.meeting.initialPrayerName!.trim().toLowerCase() == mName) {
+            assignedRoles.add('Oração Inicial');
+          }
+          if (widget.meeting.icebreakerName != null &&
+              widget.meeting.icebreakerName!.trim().toLowerCase() == mName) {
+            assignedRoles.add('Quebra-gelo');
+          }
+          if (widget.meeting.worshipName != null &&
+              widget.meeting.worshipName!.trim().toLowerCase() == mName) {
+            assignedRoles.add('Louvor');
+          }
+          if (widget.meeting.wordName != null &&
+              widget.meeting.wordName!.trim().toLowerCase() == mName) {
+            assignedRoles.add('Palavra');
+          }
+          if (widget.meeting.finalPrayerName != null &&
+              widget.meeting.finalPrayerName!.trim().toLowerCase() == mName) {
+            assignedRoles.add('Oração Final');
+          }
+          if (widget.meeting.snackName != null &&
+              widget.meeting.snackName!.trim().toLowerCase() == mName) {
+            assignedRoles.add('Lanche');
+          }
+          if (widget.meeting.officialPhotoName != null &&
+              widget.meeting.officialPhotoName!.trim().toLowerCase() == mName) {
+            assignedRoles.add('Foto Oficial');
+          }
+          if (widget.meeting.reportFillerName != null &&
+              widget.meeting.reportFillerName!.trim().toLowerCase() == mName) {
+            assignedRoles.add('Preenchimento do Relatório');
+          }
+
+          _memberRolesPerformed[member.id] = assignedRoles;
+        }
       }
 
       if (mounted) {
@@ -165,6 +212,22 @@ class _FillReportPageState extends State<FillReportPage> {
       if (mounted) setState(() => _isLoading = false);
       debugPrint('Erro ao carregar dados do relatório: $e');
     }
+  }
+
+  void _toggleMemberRole(String memberId, String role) {
+    setState(() {
+      final currentRoles = _memberRolesPerformed[memberId] ?? [];
+      if (currentRoles.contains(role)) {
+        currentRoles.remove(role);
+      } else {
+        // Remove essa função de qualquer outro membro para manter exclusividade
+        for (var key in _memberRolesPerformed.keys) {
+          _memberRolesPerformed[key]?.remove(role);
+        }
+        currentRoles.add(role);
+      }
+      _memberRolesPerformed[memberId] = currentRoles;
+    });
   }
 
   void _addVisitor() {
@@ -309,6 +372,17 @@ class _FillReportPageState extends State<FillReportPage> {
     final formattedDate =
         '${widget.meeting.meetingDate.day.toString().padLeft(2, '0')}/${widget.meeting.meetingDate.month.toString().padLeft(2, '0')}/${widget.meeting.meetingDate.year}';
 
+    const allRoles = [
+      'Oração Inicial',
+      'Quebra-gelo',
+      'Louvor',
+      'Palavra',
+      'Oração Final',
+      'Lanche',
+      'Foto Oficial',
+      'Preenchimento do Relatório',
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Relatório - $formattedDate'),
@@ -396,7 +470,7 @@ class _FillReportPageState extends State<FillReportPage> {
             if (_reportStatus != ReportStatus.cacelled) ...[
               const SizedBox(height: 20),
 
-              // LISTA DE FREQUÊNCIA DOS MEMBROS
+              // LISTA DE FREQUÊNCIA DOS MEMBROS E FUNÇÕES REALIZADAS
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
@@ -411,7 +485,7 @@ class _FillReportPageState extends State<FillReportPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Frequência dos Membros',
+                            'Frequência & Funções dos Membros',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -433,27 +507,72 @@ class _FillReportPageState extends State<FillReportPage> {
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemCount: _members.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (_, __) => const Divider(height: 12),
                         itemBuilder: (context, index) {
                           final member = _members[index];
                           final isPresent = _attendanceMap[member.id] ?? false;
+                          final assignedRoles = _memberRolesPerformed[member.id] ?? [];
 
-                          return CheckboxListTile(
-                            title: Text(
-                              member.name,
-                              style: TextStyle(
-                                fontWeight: isPresent
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              CheckboxListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  member.name,
+                                  style: TextStyle(
+                                    fontWeight: isPresent
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                                subtitle: Text('Função na Célula: ${member.role}'),
+                                value: isPresent,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _attendanceMap[member.id] = val ?? false;
+                                    if (!(val ?? false)) {
+                                      _memberRolesPerformed[member.id] = [];
+                                    }
+                                  });
+                                },
                               ),
-                            ),
-                            subtitle: Text('Função: ${member.role}'),
-                            value: isPresent,
-                            onChanged: (val) {
-                              setState(() {
-                                _attendanceMap[member.id] = val ?? false;
-                              });
-                            },
+                              if (isPresent) ...[
+                                const Padding(
+                                  padding: EdgeInsets.only(left: 4.0, bottom: 6),
+                                  child: Text(
+                                    'Funções realizadas nesta reunião:',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: allRoles.map((role) {
+                                    final isSelected = assignedRoles.contains(role);
+                                    return FilterChip(
+                                      label: Text(
+                                        role,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: isSelected ? Colors.white : Colors.black87,
+                                        ),
+                                      ),
+                                      selected: isSelected,
+                                      selectedColor: Theme.of(context).primaryColor,
+                                      checkmarkColor: Colors.white,
+                                      onSelected: (_) {
+                                        _toggleMemberRole(member.id, role);
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ],
                           );
                         },
                       ),
