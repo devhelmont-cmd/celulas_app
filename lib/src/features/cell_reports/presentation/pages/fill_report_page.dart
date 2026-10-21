@@ -2,13 +2,14 @@
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/data/models/cell_report_model.dart';
-import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
 import 'package:flutter/material.dart';
+
+import '../../domain/entities/cell_report_entity.dart';
 
 class FillReportPage extends StatefulWidget {
   final CellEntity cell;
@@ -415,21 +416,34 @@ class _FillReportPageState extends State<FillReportPage> {
     setState(() => _isSaving = true);
 
     try {
-      // Reconstrói as funções realizadas por cada membro com base no mapa centralizado
       final Map<String, List<String>> memberRolesMap = {};
-      _meetingRoles.forEach((role, memberId) {
-        if (memberId != null) {
-          memberRolesMap.putIfAbsent(memberId, () => []).add(role);
-        }
-      });
+
+      // Se a reunião for cancelada, nenhum membro fica com nenhuma função (abono geral)
+      if (_reportStatus != ReportStatus.cacelled) {
+        _meetingRoles.forEach((role, memberId) {
+          if (memberId != null) {
+            memberRolesMap.putIfAbsent(memberId, () => []).add(role);
+          }
+        });
+      }
 
       final List<AttendanceModel> attendances = _members.map((m) {
+        if (_reportStatus == ReportStatus.cacelled) {
+          // Reunião cancelada: abono automático para todos (sem falta, sem presença, sem funções)
+          return AttendanceModel(
+            cellMemberId: m.id,
+            isPresent: false,
+            isExcused: true,
+            rolesPerformed: [],
+          );
+        }
         final isPresent = _attendanceMap[m.id] ?? false;
         final roles = memberRolesMap[m.id] ?? [];
         return AttendanceModel(
           cellMemberId: m.id,
           isPresent: isPresent,
           rolesPerformed: roles,
+          isExcused: false,
         );
       }).toList();
 
@@ -456,9 +470,9 @@ class _FillReportPageState extends State<FillReportPage> {
             ? _cancellationReasonCtrl.text.trim()
             : null,
         attendances: attendances,
-        visitors: _visitors,
-        conversions: _conversions,
-        testimoniesAndNotes: notesBuffer.toString().trim(),
+        visitors: _reportStatus == ReportStatus.cacelled ? [] : _visitors,
+        conversions: _reportStatus == ReportStatus.cacelled ? [] : _conversions,
+        testimoniesAndNotes: _reportStatus == ReportStatus.cacelled ? null : notesBuffer.toString().trim(),
         filledByUserId: widget.currentUser.id,
         createdAt: DateTime.now(),
       );
@@ -599,6 +613,27 @@ class _FillReportPageState extends State<FillReportPage> {
                           border: OutlineInputBorder(),
                         ),
                         maxLines: 2,
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amber.shade200),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.amberAccent),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Como a reunião foi cancelada, nenhum membro receberá falta nem presença (abonado automaticamente), e nenhuma função será contabilizada.',
+                                style: TextStyle(fontSize: 12, color: Colors.amberAccent),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ],

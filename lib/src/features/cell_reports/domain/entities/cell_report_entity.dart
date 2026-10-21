@@ -38,6 +38,7 @@ class AttendanceEntity {
   final bool isJustified;
   final String? justificationReason;
   final List<String> rolesPerformed;
+  final bool isExcused; // Novo campo para abono (reunião cancelada)
 
   const AttendanceEntity({
     required this.cellMemberId,
@@ -45,6 +46,7 @@ class AttendanceEntity {
     this.isJustified = false,
     this.justificationReason,
     this.rolesPerformed = const [],
+    this.isExcused = false,
   });
 }
 

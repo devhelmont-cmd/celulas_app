@@ -20,6 +20,9 @@ class LeaderDashboardWidget extends StatelessWidget {
 
   bool _hasUnassignedRoles(CellMeetingModel? meeting) {
     if (meeting == null) return true;
+    // Se a reunião estiver cancelada, não há funções pendentes a serem exigidas
+    if (meeting.status == 'canceled') return false;
+
     return (meeting.initialPrayerName == null || meeting.initialPrayerName!.isEmpty) ||
         (meeting.icebreakerName == null || meeting.icebreakerName!.isEmpty) ||
         (meeting.worshipName == null || meeting.worshipName!.isEmpty) ||

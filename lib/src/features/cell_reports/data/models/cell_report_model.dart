@@ -1,6 +1,6 @@
-// lib/src/features/cell_reports/data/models/cell_report_model.dart
-import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../../domain/entities/cell_report_entity.dart';
 
 class VisitorModel extends VisitorEntity {
   const VisitorModel({required super.name, super.phone});
@@ -21,6 +21,7 @@ class AttendanceModel extends AttendanceEntity {
     super.isJustified,
     super.justificationReason,
     super.rolesPerformed,
+    super.isExcused,
   });
 
   factory AttendanceModel.fromMap(Map<String, dynamic> map) {
@@ -30,6 +31,7 @@ class AttendanceModel extends AttendanceEntity {
       isJustified: map['isJustified'] ?? false,
       justificationReason: map['justificationReason'],
       rolesPerformed: List<String>.from(map['rolesPerformed'] ?? []),
+      isExcused: map['isExcused'] ?? false,
     );
   }
 
@@ -41,6 +43,7 @@ class AttendanceModel extends AttendanceEntity {
       if (justificationReason != null)
         'justificationReason': justificationReason,
       'rolesPerformed': rolesPerformed,
+      'isExcused': isExcused,
     };
   }
 }

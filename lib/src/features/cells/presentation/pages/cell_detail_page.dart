@@ -2586,13 +2586,26 @@ class _CellDetailPageState extends State<CellDetailPage>
     final rawMeeting = _currentMeeting;
     final meeting = _isMeetingExpired(rawMeeting) ? null : rawMeeting;
     final status = meeting?.status ?? 'normal';
+    final bool isCanceled = status == 'canceled';
+
+    final user = widget.currentUser;
+    final isPastorOrCoord = user?.isPastorOrCoordinator ?? false;
+    final bool isUserLeaderOfThisCell =
+        user != null &&
+            (_currentCell.leaderId == user.id ||
+                (user.name != null &&
+                    _currentCell.leaderId?.trim().toLowerCase() ==
+                        user.name!.trim().toLowerCase()));
+
+    // O aviso de relatórios pendentes só aparece para líderes ou pastores/coordenadores, nunca para membros comuns
+    final bool canManageCell = isPastorOrCoord || isUserLeaderOfThisCell;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_hasAnyPendingReport) ...[
+          if (canManageCell && _hasAnyPendingReport) ...[
             Card(
               color: Colors.amber.shade100,
               child: Padding(
@@ -2667,7 +2680,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                 ),
               ),
             )
-          else if (status == 'canceled')
+          else if (isCanceled)
             Card(
               color: Colors.red.shade50,
               child: ListTile(
@@ -2725,40 +2738,63 @@ class _CellDetailPageState extends State<CellDetailPage>
 
           const SizedBox(height: 24),
 
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Funções da Próxima Reunião',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              if (canEdit)
-                ElevatedButton.icon(
-                  onPressed: _showEditMeetingRolesDialog,
-                  icon: const Icon(Icons.edit, size: 16),
-                  label: const Text('Definir Funções'),
+          if (!isCanceled) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Funções da Próxima Reunião',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-            ],
-          ),
-          const SizedBox(height: 12),
+                if (canEdit)
+                  ElevatedButton.icon(
+                    onPressed: _showEditMeetingRolesDialog,
+                    icon: const Icon(Icons.edit, size: 16),
+                    label: const Text('Definir Funções'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
 
-          _buildRoleCard(
-            'Oração Inicial',
-            meeting?.initialPrayerName,
-            Icons.nature_people,
-          ),
-          _buildRoleCard('Quebra-gelo', meeting?.icebreakerName, Icons.games),
-          _buildRoleCard('Louvor', meeting?.worshipName, Icons.music_note),
-          _buildRoleCard('Palavra', meeting?.wordName, Icons.menu_book),
-          _buildRoleCard(
-            'Oração Final',
-            meeting?.finalPrayerName,
-            Icons.volunteer_activism,
-            highlightPrayerAlert: true,
-          ),
-          _buildRoleCard('Lanche', meeting?.snackName, Icons.restaurant),
-          _buildRoleCard('Foto Oficial', meeting?.officialPhotoName, Icons.camera_alt),
-          _buildRoleCard('Preenchimento do Relatório (Líder)', meeting?.reportFillerName, Icons.description),
+            _buildRoleCard(
+              'Oração Inicial',
+              meeting?.initialPrayerName,
+              Icons.nature_people,
+            ),
+            _buildRoleCard('Quebra-gelo', meeting?.icebreakerName, Icons.games),
+            _buildRoleCard('Louvor', meeting?.worshipName, Icons.music_note),
+            _buildRoleCard('Palavra', meeting?.wordName, Icons.menu_book),
+            _buildRoleCard(
+              'Oração Final',
+              meeting?.finalPrayerName,
+              Icons.volunteer_activism,
+              highlightPrayerAlert: true,
+            ),
+            _buildRoleCard('Lanche', meeting?.snackName, Icons.restaurant),
+            _buildRoleCard('Foto Oficial', meeting?.officialPhotoName, Icons.camera_alt),
+            _buildRoleCard('Preenchimento do Relatório (Líder)', meeting?.reportFillerName, Icons.description),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.grey),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Esta reunião está cancelada. Não há funções a serem realizadas.',
+                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           const SizedBox(height: 24),
           const Text(
