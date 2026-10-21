@@ -264,6 +264,23 @@ class _ReportsPageState extends State<ReportsPage>
     }
   }
 
+  String _formatDateWithWeekday(DateTime date) {
+    const weekdays = [
+      'Segunda-feira',
+      'Terça-feira',
+      'Quarta-feira',
+      'Quinta-feira',
+      'Sexta-feira',
+      'Sábado',
+      'Domingo'
+    ];
+    final weekdayName = weekdays[date.weekday - 1];
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = date.year;
+    return '$weekdayName, $day/$month/$year';
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = widget.currentUser;
@@ -446,74 +463,95 @@ class _ReportsPageState extends State<ReportsPage>
       itemCount: meetings.length,
       itemBuilder: (context, index) {
         final meeting = meetings[index];
-        final formattedDate =
-            '${meeting.meetingDate.day.toString().padLeft(2, '0')}/${meeting.meetingDate.month.toString().padLeft(2, '0')}/${meeting.meetingDate.year}';
+        final dateFormatted = _formatDateWithWeekday(meeting.meetingDate);
         final isFilled = meeting.isReportFilled;
         final isPastMeeting = meeting.isExpired;
 
         String statusLabel = "Aguardando Reunião";
-        Color statusColor = Colors.blue.shade700;
+        Color statusColor = Colors.blue.shade800;
 
         if (isFilled) {
           statusLabel = "Preenchido (OK)";
-          statusColor = Colors.green;
+          statusColor = Colors.green.shade800;
         } else if (isPastMeeting) {
           statusLabel = "Pendente de Preenchimento";
-          statusColor = Colors.orange.shade800;
+          statusColor = Colors.deepOrange.shade800;
         }
 
-        // Identificação do tipo e tema/nome da reunião
+        // Estilos e cores personalizados por tipo de reunião
         String meetingTypeDesc = "Reunião Normal";
-        Color typeBadgeColor = Colors.blue.shade50;
-        Color typeTextColor = Colors.blue.shade800;
+        String statusBadgeText = "Normal";
+        Color cardBgColor = Colors.blue.shade50.withOpacity(0.4);
+        Color cardBorderColor = Colors.blue.shade200;
+        Color typeTextColor = Colors.blue.shade900;
         IconData typeIcon = Icons.event;
 
         final meetingDateKey = '${meeting.meetingDate.year}-${meeting.meetingDate.month}-${meeting.meetingDate.day}';
         final studyTopic = topicsMap[meetingDateKey];
 
         if (meeting.status == 'bridge_event') {
-          meetingTypeDesc = "Evento Ponte: ${meeting.eventName ?? 'Especial'}";
-          typeBadgeColor = Colors.indigo.shade50;
-          typeTextColor = Colors.indigo.shade800;
+          // Se o relatório tiver um tema preenchido, usa o tema. Caso contrário, usa o nome da configuração do evento.
+          final eventTitle = (studyTopic != null && studyTopic.isNotEmpty)
+              ? studyTopic
+              : (meeting.eventName ?? 'Especial');
+          meetingTypeDesc = "Evento Ponte: $eventTitle";
+          statusBadgeText = "Evento Ponte";
+          cardBgColor = Colors.blue.shade50;
+          cardBorderColor = Colors.blue.shade200;
+          typeTextColor = Colors.blue.shade900;
           typeIcon = Icons.star;
         } else if (meeting.status == 'canceled') {
           meetingTypeDesc = "Reunião Cancelada";
-          typeBadgeColor = Colors.red.shade50;
-          typeTextColor = Colors.red.shade800;
+          statusBadgeText = "Cancelada";
+          cardBgColor = Colors.red.shade50;
+          cardBorderColor = Colors.red.shade200;
+          typeTextColor = Colors.red.shade900;
           typeIcon = Icons.cancel;
         } else if (meeting.status == 'rescheduled') {
           meetingTypeDesc = "Reunião Remarcada";
-          typeBadgeColor = Colors.purple.shade50;
-          typeTextColor = Colors.purple.shade800;
+          statusBadgeText = "Remarcada";
+          cardBgColor = Colors.purple.shade50;
+          cardBorderColor = Colors.purple.shade200;
+          typeTextColor = Colors.purple.shade900;
           typeIcon = Icons.edit_calendar;
         } else if (studyTopic != null && studyTopic.isNotEmpty) {
           meetingTypeDesc = "Tema: $studyTopic";
-          typeBadgeColor = Colors.teal.shade50;
-          typeTextColor = Colors.teal.shade800;
+          statusBadgeText = "Normal / Tema";
+          cardBgColor = Colors.teal.shade50;
+          cardBorderColor = Colors.teal.shade200;
+          typeTextColor = Colors.teal.shade900;
           typeIcon = Icons.menu_book;
         }
 
-        return Card(
+        return Container(
           margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: cardBgColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: cardBorderColor, width: 1),
+          ),
           child: Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.all(14.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Reunião em $formattedDate',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    Expanded(
+                      child: Text(
+                        'Reunião em $dateFormatted',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: Colors.black87,
+                        ),
                       ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: typeBadgeColor,
+                        color: Colors.white.withOpacity(0.85),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -522,11 +560,7 @@ class _ReportsPageState extends State<ReportsPage>
                           Icon(typeIcon, size: 14, color: typeTextColor),
                           const SizedBox(width: 4),
                           Text(
-                            meeting.status == 'bridge_event'
-                                ? 'Evento Ponte'
-                                : (meeting.status == 'canceled'
-                                ? 'Cancelada'
-                                : (studyTopic != null && studyTopic.isNotEmpty ? 'Normal / Tema' : 'Normal')),
+                            statusBadgeText,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
@@ -547,16 +581,23 @@ class _ReportsPageState extends State<ReportsPage>
                     color: typeTextColor,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Status: $statusLabel',
-                      style: TextStyle(
-                        color: statusColor,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Status: $statusLabel',
+                        style: TextStyle(
+                          color: statusColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                     PopupMenuButton<String>(
@@ -630,10 +671,14 @@ class _ReportsPageState extends State<ReportsPage>
                 ),
                 if (meeting.statusNote != null &&
                     meeting.statusNote!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
                     'Nota: ${meeting.statusNote}',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.grey.shade800,
+                    ),
                   ),
                 ],
               ],
