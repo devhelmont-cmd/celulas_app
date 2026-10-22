@@ -1,3 +1,4 @@
+// lib/src/features/cell_reports/data/repositories/cell_reports_repository_impl.dart
 import 'package:celulas_app/src/features/cell_reports/data/datasources/cell_reports_remote_datasource.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 
@@ -9,14 +10,17 @@ class CellReportsRepositoryImpl implements ICellReportsRepository {
 
   CellReportsRepositoryImpl(this._dataSource);
 
+  @override
   Future<List<CellReportEntity>> getReportsByCell(String cellId) async {
     return await _dataSource.getReportsByCell(cellId);
   }
 
+  @override
   Stream<List<CellReportEntity>> watchReportsByCell(String cellId) {
     return _dataSource.watchReportsByCell(cellId);
   }
 
+  @override
   Future<List<CellReportEntity>> getAllReports({
     DateTime? startDate,
     DateTime? endDate,
@@ -27,30 +31,32 @@ class CellReportsRepositoryImpl implements ICellReportsRepository {
     );
   }
 
+  @override
   Future<void> saveReport(CellReportEntity report) async {
     // Verifica se já é modelo, senão cria através de um map (workaround para heranças complexas)
     final model =
-        report is CellReportModel
-            ? report
-            : CellReportModel(
-              id: report.id,
-              cellId: report.cellId,
-              scheduledDate: report.scheduledDate,
-              actualDate: report.actualDate,
-              status: report.status,
-              eventType: report.eventType,
-              cancellationReason: report.cancellationReason,
-              attendances: report.attendances, // Será convertido via toMap/fromMap na DataSource se necessário
-              visitors: report.visitors,
-              conversions: report.conversions,
-              testimoniesAndNotes: report.testimoniesAndNotes,
-              filledByUserId: report.filledByUserId,
-              createdAt: report.createdAt,
-            );
+    report is CellReportModel
+        ? report
+        : CellReportModel(
+      id: report.id,
+      cellId: report.cellId,
+      scheduledDate: report.scheduledDate,
+      actualDate: report.actualDate,
+      status: report.status,
+      eventType: report.eventType,
+      cancellationReason: report.cancellationReason,
+      attendances: report.attendances, // Será convertido via toMap/fromMap na DataSource se necessário
+      visitors: report.visitors,
+      conversions: report.conversions,
+      testimoniesAndNotes: report.testimoniesAndNotes,
+      filledByUserId: report.filledByUserId,
+      createdAt: report.createdAt,
+    );
 
     await _dataSource.saveReport(model);
   }
 
+  @override
   Future<void> justifyAbsence({
     required String reportId,
     required String cellMemberId,
@@ -60,6 +66,17 @@ class CellReportsRepositoryImpl implements ICellReportsRepository {
       reportId: reportId,
       cellMemberId: cellMemberId,
       justification: justification,
+    );
+  }
+
+  @override
+  Future<void> deleteReportByCellAndDate({
+    required String cellId,
+    required DateTime date,
+  }) async {
+    await _dataSource.deleteReportByCellAndDate(
+      cellId: cellId,
+      date: date,
     );
   }
 }

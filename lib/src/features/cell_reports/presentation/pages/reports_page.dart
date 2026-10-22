@@ -2,7 +2,6 @@
 import 'dart:async';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
-import 'package:celulas_app/src/features/cell_reports/data/models/cell_report_model.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/pages/fill_report_page.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/pages/view_report_page.dart';
@@ -41,10 +40,7 @@ class _ReportsPageState extends State<ReportsPage>
   Map<String, Map<String, String>> _cellReportTopicsMap = {}; // cellId -> {dateKey -> studyTopic}
   CellModel? _leaderCell;
 
-  // Modo de visão alternável para Pastores que também são líderes
   ReportViewMode _currentViewMode = ReportViewMode.leader;
-
-  // Célula selecionada na visão pastoral para expandir em tela cheia com scroll único
   CellModel? _selectedPastoralCell;
 
   List<StreamSubscription> _reportSubscriptions = [];
@@ -200,7 +196,6 @@ class _ReportsPageState extends State<ReportsPage>
 
       if (user.isPastorOrCoordinator) {
         cells = allCells;
-        // Define o modo padrão somente no primeiro carregamento do widget
         if (_isInitialLoad) {
           _currentViewMode = (foundLeaderCell != null)
               ? ReportViewMode.leader
@@ -226,7 +221,7 @@ class _ReportsPageState extends State<ReportsPage>
           _cells = cells;
           _leaderCell = foundLeaderCell;
           _isLoading = false;
-          _isInitialLoad = false; // Trava para não resetar a visão nos recarregamentos
+          _isInitialLoad = false;
         });
       }
     } catch (e) {
@@ -313,7 +308,6 @@ class _ReportsPageState extends State<ReportsPage>
       onRefresh: _loadData,
       child: Column(
         children: [
-          // Seletor de Visão (Sua Célula vs Todas as Células) - visível para pastores/coordenadores quando nenhuma célula está expandida
           if (canToggleMode && _selectedPastoralCell == null) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -351,7 +345,6 @@ class _ReportsPageState extends State<ReportsPage>
     );
   }
 
-  // VISÃO DE LÍDER DE CÉLULA
   Widget _buildLeaderView() {
     if (_leaderCell == null) {
       return const Center(
@@ -370,7 +363,6 @@ class _ReportsPageState extends State<ReportsPage>
     return _buildCellMeetingsList(_leaderCell!, meetings, isLeaderView: true);
   }
 
-  // VISÃO PASTORAL DINÂMICA
   Widget _buildPastoralView(UserEntity user) {
     if (_cells.isEmpty) {
       return const Center(
@@ -378,7 +370,6 @@ class _ReportsPageState extends State<ReportsPage>
       );
     }
 
-    // Se uma célula foi selecionada, exibe a célula expandida em tela cheia com scroll único
     if (_selectedPastoralCell != null) {
       final cell = _selectedPastoralCell!;
       final meetings = _cellMeetingsMap[cell.id] ?? [];
@@ -386,7 +377,6 @@ class _ReportsPageState extends State<ReportsPage>
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cabeçalho para voltar/retrair
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -456,7 +446,6 @@ class _ReportsPageState extends State<ReportsPage>
       );
     }
 
-    // Lista principal de todas as células do ministério
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _cells.length,
@@ -771,7 +760,7 @@ class _ReportsPageState extends State<ReportsPage>
                               _showDeletionRequestDialog(cell.id, meeting.id);
                             } else if (action == 'admin_delete' &&
                                 widget.currentUser.isPastorOrCoordinator) {
-                              _showAdminDeleteDialog(cell.id, meeting.id);
+                              _showAdminDeleteDialog(cell.id, meeting);
                             }
                           },
                           itemBuilder: (context) => [
@@ -877,38 +866,113 @@ class _ReportsPageState extends State<ReportsPage>
     );
   }
 
-  void _showAdminDeleteDialog(String cellId, String meetingId) {
+  void _showAdminDeleteDialog(String cellId, CellMeetingModel meeting) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Excluir Relatório'),
-        content: const Text(
-          'Tem certeza de que deseja excluir este relatório permanentemente?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              await _dataSource.deleteMeetingReport(cellId, meetingId);
-              Navigator.pop(ctx);
-              _loadData();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Relatório excluído com sucesso!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            child: const Text(
-              'Excluir',
-              style: TextStyle(color: Colors.white),
+      barrierDismissible: false, // Impede fechar clicando fora durante a exclusão
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          bool isDeleting = false;
+
+          return AlertDialog(
+            title: const Text('Excluir Relatório'),
+            content: isDeleting
+                ? const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Processando exclusão no banco de dados...'),
+              ],
+            )
+                : const Text(
+              'Selecione como deseja proceder com a exclusão:\n\n'
+                  '• Excluir Apenas Relatório: O relatório na coleção raiz é removido e a reunião permanece na lista marcada como "Pendente", permitindo que o líder preencha novamente.\n\n'
+                  '• Excluir Reunião Completa: Remove a reunião da subcoleção e o relatório correspondente permanentemente.',
             ),
-          ),
-        ],
+            actionsAlignment: MainAxisAlignment.spaceBetween,
+            actionsOverflowDirection: VerticalDirection.down,
+            actions: isDeleting
+                ? []
+                : [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                onPressed: () async {
+                  setDialogState(() => isDeleting = true);
+                  try {
+                    // Executa a exclusão apenas do relatório na raiz e marca a reunião como pendente
+                    await _dataSource.deleteOnlyReport(cellId, meeting.id, meeting.meetingDate);
+
+                    if (mounted) {
+                      Navigator.pop(ctx); // Fecha o diálogo
+                      await _loadData();  // Recarrega os dados imediatamente na tela
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Relatório excluído da coleção raiz! Reunião mantida como pendente.'),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    setDialogState(() => isDeleting = false);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Erro ao excluir relatório: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: const Text(
+                  'Excluir Apenas Relatório',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+              const SizedBox(height: 4),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () async {
+                  setDialogState(() => isDeleting = true);
+                  try {
+                    // Exclui a reunião e o relatório correspondente
+                    await _dataSource.deleteMeetingAndReport(cellId, meeting.id, meeting.meetingDate);
+
+                    if (mounted) {
+                      Navigator.pop(ctx); // Fecha o diálogo
+                      await _loadData();  // Recarrega os dados imediatamente na tela
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Reunião e relatório excluídos com sucesso!'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    setDialogState(() => isDeleting = false);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Erro ao excluir reunião e relatório: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: const Text(
+                  'Excluir Reunião Completa',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

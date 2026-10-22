@@ -1,3 +1,4 @@
+// lib/src/features/cells/presentation/pages/cells_list_page.dart
 import 'package:flutter/material.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:celulas_app/src/features/cells/presentation/pages/cell_detail_page.dart';
@@ -174,29 +175,54 @@ class CellsListPage extends StatelessWidget {
                         const SizedBox(height: 6),
                       ],
 
-                      // Exibição Dinâmica e Clara (Evitando confusão com o dia padrão)
-                      FutureBuilder<CellMeetingModel?>(
-                        future: dataSource.getLatestMeeting(cell.id),
+                      // Exibição Dinâmica e Verificação de Status/Funções/Relatórios
+                      FutureBuilder<List<CellMeetingModel>>(
+                        future: dataSource.getAllMeetingsForCell(cell.id),
                         builder: (context, meetingSnapshot) {
-                          final rawMeeting = meetingSnapshot.data;
-                          final meeting = _isMeetingExpired(rawMeeting) ? null : rawMeeting;
-                          final status = meeting?.status ?? 'normal';
+                          if (!meetingSnapshot.hasData) {
+                            return const SizedBox.shrink();
+                          }
+                          final meetings = meetingSnapshot.data!;
+
+                          CellMeetingModel? latestMeeting = meetings.isNotEmpty ? meetings.first : null;
+                          final bool isLatestExpired = _isMeetingExpired(latestMeeting);
+                          final activeMeeting = isLatestExpired ? null : latestMeeting;
+                          final status = activeMeeting?.status ?? 'normal';
+
+                          // Verifica se há relatórios pendentes (reuniões expiradas sem relatório preenchido)
+                          final bool hasPendingReport = meetings.any((m) => m.isExpired && !m.isReportFilled);
+
+                          bool areRolesPending = false;
+                          bool areRolesDefined = false;
+
+                          if (activeMeeting != null && activeMeeting.status != 'canceled') {
+                            areRolesDefined = (activeMeeting.initialPrayerName != null && activeMeeting.initialPrayerName!.trim().isNotEmpty && activeMeeting.initialPrayerName != 'Não definido') ||
+                                (activeMeeting.icebreakerName != null && activeMeeting.icebreakerName!.trim().isNotEmpty && activeMeeting.icebreakerName != 'Não definido') ||
+                                (activeMeeting.worshipName != null && activeMeeting.worshipName!.trim().isNotEmpty && activeMeeting.worshipName != 'Não definido') ||
+                                (activeMeeting.wordName != null && activeMeeting.wordName!.trim().isNotEmpty && activeMeeting.wordName != 'Não definido');
+
+                            areRolesPending = !areRolesDefined;
+                          } else if (activeMeeting == null) {
+                            areRolesPending = true;
+                          }
 
                           String displayLabel;
                           String displayValue;
                           String displayAddress;
 
-                          if (meeting != null && (status == 'bridge_event' || status == 'rescheduled')) {
-                            final formattedDate = '${meeting.meetingDate.day.toString().padLeft(2, '0')}/${meeting.meetingDate.month.toString().padLeft(2, '0')}/${meeting.meetingDate.year}';
-                            final time = meeting.meetingTime ?? cell.meetingTime ?? '';
+                          if (activeMeeting != null && (status == 'bridge_event' || status == 'rescheduled')) {
+                            final formattedDate = '${activeMeeting.meetingDate.day.toString().padLeft(2, '0')}/${activeMeeting.meetingDate.month.toString().padLeft(2, '0')}/${activeMeeting.meetingDate.year}';
+                            final time = activeMeeting.meetingTime ?? cell.meetingTime ?? '';
                             displayLabel = status == 'bridge_event' ? 'Data do Evento' : 'Data Remarcada';
                             displayValue = '$formattedDate às $time';
-                            displayAddress = meeting.meetingLocation?.isNotEmpty == true ? meeting.meetingLocation! : (cell.address ?? '');
+                            displayAddress = activeMeeting.meetingLocation?.isNotEmpty == true ? activeMeeting.meetingLocation! : (cell.address ?? '');
                           } else {
                             displayLabel = 'Reuniões';
                             displayValue = '${cell.meetingDay ?? ''} às ${cell.meetingTime ?? ''}';
                             displayAddress = cell.address ?? '';
                           }
+
+                          final bool isPastorOrCoord = currentUser?.isPastorOrCoordinator ?? false;
 
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,6 +242,64 @@ class CellsListPage extends StatelessWidget {
                                   Expanded(child: Text(displayAddress)),
                                 ],
                               ),
+
+                              // Avisos específicos para Pastor / Coordenador
+                              if (isPastorOrCoord) ...[
+                                if (hasPendingReport) ...[
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 8),
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade100,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: const [
+                                        Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange),
+                                        SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            'Aviso: Relatório pendente nesta célula',
+                                            style: TextStyle(
+                                              color: Colors.orangeAccent,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                if (areRolesPending) ...[
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 8),
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: const [
+                                        Icon(Icons.assignment_late_outlined, size: 16, color: Colors.deepOrange),
+                                        SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            'Aviso: Funções da próxima reunião pendentes',
+                                            style: TextStyle(
+                                              color: Colors.deepOrange,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+
+                              // Status especial ou reunião normal com funções definidas
                               if (status != 'normal') ...[
                                 Container(
                                   margin: const EdgeInsets.only(top: 8),
@@ -247,10 +331,10 @@ class CellsListPage extends StatelessWidget {
                                       Expanded(
                                         child: Text(
                                           status == 'bridge_event'
-                                              ? 'Evento Ponte: ${meeting!.eventName ?? meeting.statusNote ?? ""}'
+                                              ? 'Evento Ponte: ${activeMeeting!.eventName ?? activeMeeting.statusNote ?? ""}'
                                               : status == 'canceled'
-                                              ? 'Reunião Cancelada: ${meeting!.statusNote ?? ""}'
-                                              : 'Reunião Remarcada: ${meeting!.meetingTime ?? ""} (${meeting.meetingLocation ?? ""})',
+                                              ? 'Reunião Cancelada: ${activeMeeting!.statusNote ?? ""}'
+                                              : 'Reunião Remarcada: ${activeMeeting!.meetingTime ?? ""} (${activeMeeting.meetingLocation ?? ""})',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 12,
@@ -259,6 +343,31 @@ class CellsListPage extends StatelessWidget {
                                                 : status == 'canceled'
                                                 ? Colors.red.shade800
                                                 : Colors.purple.shade800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ] else if (areRolesDefined) ...[
+                                Container(
+                                  margin: const EdgeInsets.only(top: 8),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: const [
+                                      Icon(Icons.edit_calendar, size: 16, color: Colors.green),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Reunião padrão',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                            color: Colors.green,
                                           ),
                                         ),
                                       ),

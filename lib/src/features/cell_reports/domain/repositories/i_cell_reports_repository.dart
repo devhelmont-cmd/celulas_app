@@ -1,3 +1,4 @@
+// lib/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart
 import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
 
 abstract class ICellReportsRepository {
@@ -22,5 +23,11 @@ abstract class ICellReportsRepository {
     required String reportId,
     required String cellMemberId,
     required String justification,
+  });
+
+  /// Exclui o relatório da coleção com base na célula e na data agendada
+  Future<void> deleteReportByCellAndDate({
+    required String cellId,
+    required DateTime date,
   });
 }
