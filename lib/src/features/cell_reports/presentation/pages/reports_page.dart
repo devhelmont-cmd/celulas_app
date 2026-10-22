@@ -5,6 +5,7 @@ import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/data/models/cell_report_model.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/pages/fill_report_page.dart';
+import 'package:celulas_app/src/features/cell_reports/presentation/pages/view_report_page.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
@@ -15,6 +16,8 @@ import 'package:celulas_app/src/features/home/presentation/widgets/member_dashbo
 import 'package:celulas_app/src/features/home/presentation/widgets/pastor_dashboard_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
+enum ReportViewMode { leader, pastoral }
 
 class ReportsPage extends StatefulWidget {
   final UserEntity currentUser;
@@ -32,10 +35,17 @@ class _ReportsPageState extends State<ReportsPage>
   TabController? _tabController;
 
   bool _isLoading = true;
+  bool _isInitialLoad = true;
   List<CellModel> _cells = [];
   Map<String, List<CellMeetingModel>> _cellMeetingsMap = {};
   Map<String, Map<String, String>> _cellReportTopicsMap = {}; // cellId -> {dateKey -> studyTopic}
   CellModel? _leaderCell;
+
+  // Modo de visão alternável para Pastores que também são líderes
+  ReportViewMode _currentViewMode = ReportViewMode.leader;
+
+  // Célula selecionada na visão pastoral para expandir em tela cheia com scroll único
+  CellModel? _selectedPastoralCell;
 
   List<StreamSubscription> _reportSubscriptions = [];
 
@@ -52,6 +62,7 @@ class _ReportsPageState extends State<ReportsPage>
     if (!isPureMember) {
       _tabController = TabController(length: 2, vsync: this, initialIndex: 1);
     }
+
     _loadData();
   }
 
@@ -76,8 +87,6 @@ class _ReportsPageState extends State<ReportsPage>
           .where('cellId', isEqualTo: cell.id)
           .snapshots()
           .listen((snapshot) {
-        // Quando houver qualquer alteração na coleção 'reports' (ex: exclusão por admin),
-        // reprocessamos a sincronização e atualizamos a tela em tempo real.
         if (mounted) {
           _syncCellReportsAndMeetings(cell);
         }
@@ -113,7 +122,6 @@ class _ReportsPageState extends State<ReportsPage>
                 r.scheduledDate.day == meeting.meetingDate.day,
           );
           if (!exists) {
-            // Relatório foi excluído no Firestore! Volta a ser pendente automaticamente.
             final correctedMeeting = CellMeetingModel(
               id: meeting.id,
               cellId: meeting.cellId,
@@ -170,78 +178,41 @@ class _ReportsPageState extends State<ReportsPage>
       List<CellModel> cells = [];
       CellModel? foundLeaderCell;
 
+      final allCells = await _dataSource.getCells(currentUser: user);
+
+      if (user.primaryCellId != null && user.primaryCellId!.trim().isNotEmpty) {
+        try {
+          foundLeaderCell = allCells.firstWhere((c) => c.id == user.primaryCellId);
+        } catch (_) {}
+      }
+
+      if (foundLeaderCell == null) {
+        for (var c in allCells) {
+          if (c.leaderId == user.id ||
+              (user.name != null &&
+                  c.leaderId?.trim().toLowerCase() ==
+                      user.name!.trim().toLowerCase())) {
+            foundLeaderCell = c;
+            break;
+          }
+        }
+      }
+
       if (user.isPastorOrCoordinator) {
-        cells = await _dataSource.getCells(currentUser: user);
+        cells = allCells;
+        // Define o modo padrão somente no primeiro carregamento do widget
+        if (_isInitialLoad) {
+          _currentViewMode = (foundLeaderCell != null)
+              ? ReportViewMode.leader
+              : ReportViewMode.pastoral;
+        }
       } else {
-        final allCells = await _dataSource.getCells(currentUser: user);
-
-        if (user.primaryCellId != null &&
-            user.primaryCellId!.trim().isNotEmpty) {
-          try {
-            final cell = allCells.firstWhere((c) => c.id == user.primaryCellId);
-            cells = [cell];
-            foundLeaderCell = cell;
-          } catch (_) {
-            try {
-              final cell = await _dataSource.getCellById(user.primaryCellId!);
-              cells = [cell];
-              foundLeaderCell = cell;
-            } catch (e) {
-              debugPrint('Erro ao buscar célula por primaryCellId: $e');
-            }
-          }
+        if (foundLeaderCell != null) {
+          cells = [foundLeaderCell];
+        } else {
+          cells = allCells;
         }
-
-        if (cells.isEmpty) {
-          for (var c in allCells) {
-            if (c.leaderId == user.id ||
-                (user.name != null &&
-                    c.leaderId?.trim().toLowerCase() ==
-                        user.name!.trim().toLowerCase())) {
-              foundLeaderCell = c;
-              cells = [c];
-              break;
-            }
-          }
-        }
-
-        if (cells.isEmpty) {
-          try {
-            final firestore = FirebaseFirestore.instance;
-            final memberSnap =
-            await firestore
-                .collection('members')
-                .where('userId', isEqualTo: user.id)
-                .get();
-
-            for (var doc in memberSnap.docs) {
-              final data = doc.data();
-              final cellId = data['cellId'] as String?;
-              if (cellId != null && cellId.trim().isNotEmpty) {
-                try {
-                  final cell = allCells.firstWhere((c) => c.id == cellId);
-                  foundLeaderCell = cell;
-                  cells = [cell];
-                  break;
-                } catch (_) {
-                  try {
-                    final cell = await _dataSource.getCellById(cellId);
-                    foundLeaderCell = cell;
-                    cells = [cell];
-                    break;
-                  } catch (__) {}
-                }
-              }
-            }
-          } catch (e) {
-            debugPrint('Erro ao buscar membros por userId para relatório: $e');
-          }
-        }
-
-        if (cells.isEmpty && allCells.isNotEmpty && user.isLeader) {
-          foundLeaderCell = allCells.first;
-          cells = [allCells.first];
-        }
+        _currentViewMode = ReportViewMode.leader;
       }
 
       for (var cell in cells) {
@@ -253,9 +224,9 @@ class _ReportsPageState extends State<ReportsPage>
       if (mounted) {
         setState(() {
           _cells = cells;
-          _leaderCell =
-              foundLeaderCell ?? (cells.isNotEmpty ? cells.first : null);
+          _leaderCell = foundLeaderCell;
           _isLoading = false;
+          _isInitialLoad = false; // Trava para não resetar a visão nos recarregamentos
         });
       }
     } catch (e) {
@@ -336,84 +307,212 @@ class _ReportsPageState extends State<ReportsPage>
   }
 
   Widget _buildReportsTab(UserEntity user) {
-    if (user.isLeader) {
-      if (_leaderCell == null) {
-        return const Center(
-          child: Text('Você não está vinculado a uma célula principal.'),
-        );
-      }
+    final bool canToggleMode = user.isPastorOrCoordinator;
 
-      final meetings = _cellMeetingsMap[_leaderCell!.id] ?? [];
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: Column(
+        children: [
+          // Seletor de Visão (Sua Célula vs Todas as Células) - visível para pastores/coordenadores quando nenhuma célula está expandida
+          if (canToggleMode && _selectedPastoralCell == null) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: SegmentedButton<ReportViewMode>(
+                segments: const [
+                  ButtonSegment<ReportViewMode>(
+                    value: ReportViewMode.leader,
+                    icon: Icon(Icons.home_work_outlined),
+                    label: Text('Sua Célula'),
+                  ),
+                  ButtonSegment<ReportViewMode>(
+                    value: ReportViewMode.pastoral,
+                    icon: Icon(Icons.account_tree_outlined),
+                    label: Text('Todas as Células'),
+                  ),
+                ],
+                selected: {_currentViewMode},
+                onSelectionChanged: (Set<ReportViewMode> newSelection) {
+                  setState(() {
+                    _currentViewMode = newSelection.first;
+                    _selectedPastoralCell = null;
+                  });
+                },
+              ),
+            ),
+          ],
 
-      return RefreshIndicator(
-        onRefresh: _loadData,
-        child: _buildCellMeetingsList(
-          _leaderCell!,
-          meetings,
-          isLeaderView: true,
+          Expanded(
+            child: (_currentViewMode == ReportViewMode.leader || !user.isPastorOrCoordinator)
+                ? _buildLeaderView()
+                : _buildPastoralView(user),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // VISÃO DE LÍDER DE CÉLULA
+  Widget _buildLeaderView() {
+    if (_leaderCell == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Text(
+            'Você não está vinculado como líder de nenhuma célula no momento.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 15, color: Colors.grey),
+          ),
         ),
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _cells.length,
-        itemBuilder: (context, index) {
-          final cell = _cells[index];
-          final meetings = _cellMeetingsMap[cell.id] ?? [];
-          final bool hasPending = meetings.any(
-                (m) => m.isExpired && !m.isReportFilled,
-          );
+    final meetings = _cellMeetingsMap[_leaderCell!.id] ?? [];
+    return _buildCellMeetingsList(_leaderCell!, meetings, isLeaderView: true);
+  }
 
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor:
-                hasPending ? Colors.amber.shade100 : Colors.green.shade100,
-                child: Icon(
-                  hasPending ? Icons.warning_amber_rounded : Icons.check_circle,
-                  color:
-                  hasPending
-                      ? Colors.amber.shade800
-                      : Colors.green.shade800,
+  // VISÃO PASTORAL DINÂMICA
+  Widget _buildPastoralView(UserEntity user) {
+    if (_cells.isEmpty) {
+      return const Center(
+        child: Text('Nenhuma célula cadastrada no sistema.'),
+      );
+    }
+
+    // Se uma célula foi selecionada, exibe a célula expandida em tela cheia com scroll único
+    if (_selectedPastoralCell != null) {
+      final cell = _selectedPastoralCell!;
+      final meetings = _cellMeetingsMap[cell.id] ?? [];
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Cabeçalho para voltar/retrair
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: Colors.blue.shade50,
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Voltar para a lista de células',
+                  onPressed: () {
+                    setState(() {
+                      _selectedPastoralCell = null;
+                    });
+                  },
                 ),
-              ),
-              title: Text(
-                cell.name,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                hasPending
-                    ? 'Possui relatórios pendentes'
-                    : 'Todos os relatórios em dia',
-                style: TextStyle(
-                  color:
-                  hasPending
-                      ? Colors.orange.shade800
-                      : Colors.green.shade800,
-                ),
-              ),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (_) => CellDetailPage(
-                      cell: cell,
-                      currentUser: user,
-                      initialTabIndex: 1,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedPastoralCell = null;
+                      });
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          cell.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueAccent,
+                          ),
+                        ),
+                        const Text(
+                          'Toque aqui ou na seta para voltar às outras células',
+                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
                     ),
                   ),
-                ).then((_) => _loadData());
-              },
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CellDetailPage(
+                          cell: cell,
+                          currentUser: user,
+                          initialTabIndex: 1,
+                        ),
+                      ),
+                    ).then((_) => _loadData());
+                  },
+                  icon: const Icon(Icons.info_outline, size: 16),
+                  label: const Text('Ver Célula'),
+                ),
+              ],
             ),
-          );
-        },
-      ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: _buildCellMeetingsList(cell, meetings, isLeaderView: false),
+          ),
+        ],
+      );
+    }
+
+    // Lista principal de todas as células do ministério
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _cells.length,
+      itemBuilder: (context, index) {
+        final cell = _cells[index];
+        final meetings = _cellMeetingsMap[cell.id] ?? [];
+        final bool hasPending = meetings.any(
+              (m) => m.isExpired && !m.isReportFilled,
+        );
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            leading: CircleAvatar(
+              backgroundColor: hasPending ? Colors.amber.shade100 : Colors.green.shade100,
+              child: Icon(
+                hasPending ? Icons.warning_amber_rounded : Icons.check_circle,
+                color: hasPending ? Colors.amber.shade800 : Colors.green.shade800,
+              ),
+            ),
+            title: Text(
+              cell.name,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    hasPending ? 'Possui relatórios pendentes' : 'Todos os relatórios em dia',
+                    style: TextStyle(
+                      color: hasPending ? Colors.orange.shade800 : Colors.green.shade800,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${meetings.length} Reuniões Registradas',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+            trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+            onTap: () {
+              setState(() {
+                _selectedPastoralCell = cell;
+              });
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -429,27 +528,29 @@ class _ReportsPageState extends State<ReportsPage>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.event_note, size: 64, color: Colors.grey),
-              const SizedBox(height: 16),
+              const Icon(Icons.event_note, size: 48, color: Colors.grey),
+              const SizedBox(height: 8),
               const Text('Nenhuma reunião registrada para esta célula ainda.'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder:
-                          (_) => CellDetailPage(
-                        cell: cell,
-                        currentUser: widget.currentUser,
-                        initialTabIndex: 1,
-                        autoOpenEditMeeting: false,
+              if (isLeaderView) ...[
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (_) => CellDetailPage(
+                          cell: cell,
+                          currentUser: widget.currentUser,
+                          initialTabIndex: 1,
+                          autoOpenEditMeeting: false,
+                        ),
                       ),
-                    ),
-                  ).then((_) => _loadData());
-                },
-                child: const Text('Configurar Reunião / Relatório'),
-              ),
+                    ).then((_) => _loadData());
+                  },
+                  child: const Text('Configurar Reunião / Relatório'),
+                ),
+              ],
             ],
           ),
         ),
@@ -459,7 +560,7 @@ class _ReportsPageState extends State<ReportsPage>
     final topicsMap = _cellReportTopicsMap[cell.id] ?? {};
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       itemCount: meetings.length,
       itemBuilder: (context, index) {
         final meeting = meetings[index];
@@ -478,7 +579,6 @@ class _ReportsPageState extends State<ReportsPage>
           statusColor = Colors.deepOrange.shade800;
         }
 
-        // Estilos e cores personalizados por tipo de reunião
         String meetingTypeDesc = "Reunião Normal";
         String statusBadgeText = "Normal";
         Color cardBgColor = Colors.blue.shade50.withOpacity(0.4);
@@ -490,7 +590,6 @@ class _ReportsPageState extends State<ReportsPage>
         final studyTopic = topicsMap[meetingDateKey];
 
         if (meeting.status == 'bridge_event') {
-          // Se o relatório tiver um tema preenchido, usa o tema. Caso contrário, usa o nome da configuração do evento.
           final eventTitle = (studyTopic != null && studyTopic.isNotEmpty)
               ? studyTopic
               : (meeting.eventName ?? 'Especial');
@@ -524,164 +623,210 @@ class _ReportsPageState extends State<ReportsPage>
         }
 
         return Container(
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
             color: cardBgColor,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: cardBorderColor, width: 1),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(14.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () {
+                if (isFilled) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ViewReportPage(
+                        cell: cell,
+                        meeting: meeting,
+                        currentUser: widget.currentUser,
+                      ),
+                    ),
+                  ).then((_) => _loadData());
+                } else if (isPastMeeting) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FillReportPage(
+                        cell: cell,
+                        meeting: meeting,
+                        currentUser: widget.currentUser,
+                      ),
+                    ),
+                  ).then((_) => _loadData());
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        'Reunião em $dateFormatted',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(typeIcon, size: 14, color: typeTextColor),
-                          const SizedBox(width: 4),
-                          Text(
-                            statusBadgeText,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: typeTextColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  meetingTypeDesc,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: typeTextColor,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'Status: $statusLabel',
-                        style: TextStyle(
-                          color: statusColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    PopupMenuButton<String>(
-                      onSelected: (action) async {
-                        if (action == 'fill' || action == 'edit') {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder:
-                                  (_) => FillReportPage(
-                                cell: cell,
-                                meeting: meeting,
-                                currentUser: widget.currentUser,
-                              ),
-                            ),
-                          ).then((_) => _loadData());
-                        } else if (action == 'config') {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder:
-                                  (_) => CellDetailPage(
-                                cell: cell,
-                                currentUser: widget.currentUser,
-                                initialTabIndex: 1,
-                                autoOpenEditMeeting: false,
-                              ),
-                            ),
-                          ).then((_) => _loadData());
-                        } else if (action == 'delete_request') {
-                          _showDeletionRequestDialog(cell.id, meeting.id);
-                        } else if (action == 'admin_delete' &&
-                            widget.currentUser.isPastorOrCoordinator) {
-                          _showAdminDeleteDialog(cell.id, meeting.id);
-                        }
-                      },
-                      itemBuilder:
-                          (context) => [
-                        PopupMenuItem(
-                          value:
-                          isFilled
-                              ? 'edit'
-                              : (isPastMeeting ? 'fill' : 'config'),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
                           child: Text(
-                            isFilled
-                                ? 'Editar Relatório'
-                                : (isPastMeeting
-                                ? 'Preencher Relatório'
-                                : 'Configurar Reunião'),
+                            'Reunião em $dateFormatted',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Colors.black87,
+                            ),
                           ),
                         ),
-                        if (isLeaderView && isFilled)
-                          const PopupMenuItem(
-                            value: 'delete_request',
-                            child: Text(
-                              'Solicitar Exclusão',
-                              style: TextStyle(color: Colors.red),
-                            ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.85),
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        if (widget.currentUser.isPastorOrCoordinator)
-                          const PopupMenuItem(
-                            value: 'admin_delete',
-                            child: Text(
-                              'Excluir Relatório (Pastor)',
-                              style: TextStyle(color: Colors.red),
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(typeIcon, size: 14, color: typeTextColor),
+                              const SizedBox(width: 4),
+                              Text(
+                                statusBadgeText,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: typeTextColor,
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
                       ],
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      meetingTypeDesc,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: typeTextColor,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Status: $statusLabel',
+                            style: TextStyle(
+                              color: statusColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          onSelected: (action) async {
+                            if (action == 'view') {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ViewReportPage(
+                                    cell: cell,
+                                    meeting: meeting,
+                                    currentUser: widget.currentUser,
+                                  ),
+                                ),
+                              ).then((_) => _loadData());
+                            } else if (action == 'fill' || action == 'edit') {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => FillReportPage(
+                                    cell: cell,
+                                    meeting: meeting,
+                                    currentUser: widget.currentUser,
+                                  ),
+                                ),
+                              ).then((_) => _loadData());
+                            } else if (action == 'config') {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CellDetailPage(
+                                    cell: cell,
+                                    currentUser: widget.currentUser,
+                                    initialTabIndex: 1,
+                                    autoOpenEditMeeting: false,
+                                  ),
+                                ),
+                              ).then((_) => _loadData());
+                            } else if (action == 'delete_request') {
+                              _showDeletionRequestDialog(cell.id, meeting.id);
+                            } else if (action == 'admin_delete' &&
+                                widget.currentUser.isPastorOrCoordinator) {
+                              _showAdminDeleteDialog(cell.id, meeting.id);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            if (isFilled)
+                              const PopupMenuItem(
+                                value: 'view',
+                                child: Text('Visualizar Relatório'),
+                              ),
+                            PopupMenuItem(
+                              value: isFilled
+                                  ? 'edit'
+                                  : (isPastMeeting ? 'fill' : 'config'),
+                              child: Text(
+                                isFilled
+                                    ? 'Editar Relatório'
+                                    : (isPastMeeting
+                                    ? 'Preencher Relatório'
+                                    : 'Configurar Reunião'),
+                              ),
+                            ),
+                            if (isLeaderView && isFilled)
+                              const PopupMenuItem(
+                                value: 'delete_request',
+                                child: Text(
+                                  'Solicitar Exclusão',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                            if (widget.currentUser.isPastorOrCoordinator)
+                              const PopupMenuItem(
+                                value: 'admin_delete',
+                                child: Text(
+                                  'Excluir Relatório (Pastor)',
+                                  style: TextStyle(color: Colors.red),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    if (meeting.statusNote != null &&
+                        meeting.statusNote!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Nota: ${meeting.statusNote}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                if (meeting.statusNote != null &&
-                    meeting.statusNote!.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Nota: ${meeting.statusNote}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                      color: Colors.grey.shade800,
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
         );
@@ -693,8 +838,7 @@ class _ReportsPageState extends State<ReportsPage>
     final reasonController = TextEditingController();
     showDialog(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Solicitar Exclusão de Relatório'),
         content: TextField(
           controller: reasonController,
@@ -721,9 +865,7 @@ class _ReportsPageState extends State<ReportsPage>
               _loadData();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text(
-                    'Solicitação enviada ao pastor com sucesso!',
-                  ),
+                  content: Text('Solicitação enviada ao pastor com sucesso!'),
                   backgroundColor: Colors.blue,
                 ),
               );
@@ -738,8 +880,7 @@ class _ReportsPageState extends State<ReportsPage>
   void _showAdminDeleteDialog(String cellId, String meetingId) {
     showDialog(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Excluir Relatório'),
         content: const Text(
           'Tem certeza de que deseja excluir este relatório permanentemente?',
