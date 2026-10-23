@@ -199,6 +199,9 @@ class _ReportsPageState extends State<ReportsPage>
       }
 
       if (user.isPastorOrCoordinator) {
+        // Ordena a lista de células em ordem alfabética (A-Z)
+        allCells.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
         cells = allCells;
         if (_isInitialLoad) {
           _currentViewMode =
@@ -880,20 +883,40 @@ class _ReportsPageState extends State<ReportsPage>
                                 children: [
                                   TextButton(
                                     onPressed: () async {
-                                      // Recusar/Limpar solicitação
+                                      // Recusar/Limpar solicitação mantendo todas as funções e dados da reunião
                                       await _dataSource.saveOrUpdateMeeting(
                                         CellMeetingModel(
                                           id: meeting.id,
                                           cellId: cell.id,
                                           meetingDate: meeting.meetingDate,
                                           status: meeting.status,
+                                          statusNote: meeting.statusNote,
+                                          eventName: meeting.eventName,
+                                          meetingTime: meeting.meetingTime,
+                                          meetingLocation: meeting.meetingLocation,
                                           isReportFilled: meeting.isReportFilled,
+                                          // Mantém todas as funções preenchidas originalmente:
+                                          initialPrayerName: meeting.initialPrayerName,
+                                          icebreakerName: meeting.icebreakerName,
+                                          worshipName: meeting.worshipName,
+                                          wordName: meeting.wordName,
+                                          finalPrayerName: meeting.finalPrayerName,
+                                          snackName: meeting.snackName,
+                                          officialPhotoName: meeting.officialPhotoName,
+                                          reportFillerName: meeting.reportFillerName,
+                                          // Reseta apenas os campos de solicitação de exclusão:
                                           deletionRequested: false,
                                           deletionReason: null,
                                           deletionType: null,
                                         ),
                                       );
                                       _loadData();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Solicitação de exclusão recusada. Dados mantidos.'),
+                                          backgroundColor: Colors.grey,
+                                        ),
+                                      );
                                     },
                                     child: const Text('Recusar', style: TextStyle(color: Colors.grey)),
                                   ),
