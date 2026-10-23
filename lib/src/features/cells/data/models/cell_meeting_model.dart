@@ -21,6 +21,10 @@ class CellMeetingModel {
   final String? officialPhotoName;
   final String? reportFillerName;
 
+  final bool deletionRequested;
+  final String? deletionReason;
+  final String? deletionType; // 'only_report' ou 'entire_meeting'
+
   CellMeetingModel({
     required this.id,
     required this.cellId,
@@ -39,12 +43,19 @@ class CellMeetingModel {
     this.snackName,
     this.officialPhotoName,
     this.reportFillerName,
+    this.deletionRequested = false,
+    this.deletionReason,
+    this.deletionType,
   });
 
   /// Verifica se esta reunião já aconteceu e expirou (passou o dia da ocorrência)
   bool get isExpired {
     DateTime targetDate = meetingDate;
-    final expiry = DateTime(targetDate.year, targetDate.month, targetDate.day + 1);
+    final expiry = DateTime(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day + 1,
+    );
     return DateTime.now().isAfter(expiry);
   }
 
@@ -52,7 +63,8 @@ class CellMeetingModel {
     return CellMeetingModel(
       id: id,
       cellId: map['cellId'] ?? '',
-      meetingDate: (map['meetingDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      meetingDate:
+          (map['meetingDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
       status: map['status'] ?? 'normal',
       statusNote: map['statusNote'],
       eventName: map['eventName'],
@@ -67,6 +79,9 @@ class CellMeetingModel {
       snackName: map['snackName'],
       officialPhotoName: map['officialPhotoName'],
       reportFillerName: map['reportFillerName'],
+      deletionRequested: map['deletionRequested'] ?? false,
+      deletionReason: map['deletionReason'],
+      deletionType: map['deletionType'],
     );
   }
 
@@ -88,6 +103,9 @@ class CellMeetingModel {
       'snackName': snackName,
       'officialPhotoName': officialPhotoName,
       'reportFillerName': reportFillerName,
+      'deletionRequested': deletionRequested,
+      if (deletionReason != null) 'deletionReason': deletionReason,
+      if (deletionType != null) 'deletionType': deletionType,
     };
   }
 }

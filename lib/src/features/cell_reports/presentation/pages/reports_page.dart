@@ -37,7 +37,8 @@ class _ReportsPageState extends State<ReportsPage>
   bool _isInitialLoad = true;
   List<CellModel> _cells = [];
   Map<String, List<CellMeetingModel>> _cellMeetingsMap = {};
-  Map<String, Map<String, String>> _cellReportTopicsMap = {}; // cellId -> {dateKey -> studyTopic}
+  Map<String, Map<String, String>> _cellReportTopicsMap =
+      {}; // cellId -> {dateKey -> studyTopic}
   CellModel? _leaderCell;
 
   ReportViewMode _currentViewMode = ReportViewMode.leader;
@@ -53,8 +54,8 @@ class _ReportsPageState extends State<ReportsPage>
 
     final bool isPureMember =
         widget.currentUser.isMember &&
-            !widget.currentUser.isLeader &&
-            !widget.currentUser.isPastorOrCoordinator;
+        !widget.currentUser.isLeader &&
+        !widget.currentUser.isPastorOrCoordinator;
     if (!isPureMember) {
       _tabController = TabController(length: 2, vsync: this, initialIndex: 1);
     }
@@ -83,10 +84,10 @@ class _ReportsPageState extends State<ReportsPage>
           .where('cellId', isEqualTo: cell.id)
           .snapshots()
           .listen((snapshot) {
-        if (mounted) {
-          _syncCellReportsAndMeetings(cell);
-        }
-      });
+            if (mounted) {
+              _syncCellReportsAndMeetings(cell);
+            }
+          });
       _reportSubscriptions.add(sub);
     }
   }
@@ -101,7 +102,8 @@ class _ReportsPageState extends State<ReportsPage>
 
       Map<String, String> topicsMap = {};
       for (var r in reports) {
-        final dateKey = '${r.scheduledDate.year}-${r.scheduledDate.month}-${r.scheduledDate.day}';
+        final dateKey =
+            '${r.scheduledDate.year}-${r.scheduledDate.month}-${r.scheduledDate.day}';
         final topic = _extractStudyTopic(r.testimoniesAndNotes);
         if (topic != null && topic.isNotEmpty) {
           topicsMap[dateKey] = topic;
@@ -112,8 +114,8 @@ class _ReportsPageState extends State<ReportsPage>
       for (var meeting in meetings) {
         if (meeting.isReportFilled) {
           final exists = reports.any(
-                (r) =>
-            r.scheduledDate.year == meeting.meetingDate.year &&
+            (r) =>
+                r.scheduledDate.year == meeting.meetingDate.year &&
                 r.scheduledDate.month == meeting.meetingDate.month &&
                 r.scheduledDate.day == meeting.meetingDate.day,
           );
@@ -178,7 +180,9 @@ class _ReportsPageState extends State<ReportsPage>
 
       if (user.primaryCellId != null && user.primaryCellId!.trim().isNotEmpty) {
         try {
-          foundLeaderCell = allCells.firstWhere((c) => c.id == user.primaryCellId);
+          foundLeaderCell = allCells.firstWhere(
+            (c) => c.id == user.primaryCellId,
+          );
         } catch (_) {}
       }
 
@@ -197,9 +201,10 @@ class _ReportsPageState extends State<ReportsPage>
       if (user.isPastorOrCoordinator) {
         cells = allCells;
         if (_isInitialLoad) {
-          _currentViewMode = (foundLeaderCell != null)
-              ? ReportViewMode.leader
-              : ReportViewMode.pastoral;
+          _currentViewMode =
+              (foundLeaderCell != null)
+                  ? ReportViewMode.leader
+                  : ReportViewMode.pastoral;
         }
       } else {
         if (foundLeaderCell != null) {
@@ -238,7 +243,7 @@ class _ReportsPageState extends State<ReportsPage>
       'Quinta-feira',
       'Sexta-feira',
       'Sábado',
-      'Domingo'
+      'Domingo',
     ];
     final weekdayName = weekdays[date.weekday - 1];
     final day = date.day.toString().padLeft(2, '0');
@@ -336,9 +341,11 @@ class _ReportsPageState extends State<ReportsPage>
           ],
 
           Expanded(
-            child: (_currentViewMode == ReportViewMode.leader || !user.isPastorOrCoordinator)
-                ? _buildLeaderView()
-                : _buildPastoralView(user),
+            child:
+                (_currentViewMode == ReportViewMode.leader ||
+                        !user.isPastorOrCoordinator)
+                    ? _buildLeaderView()
+                    : _buildPastoralView(user),
           ),
         ],
       ),
@@ -365,9 +372,7 @@ class _ReportsPageState extends State<ReportsPage>
 
   Widget _buildPastoralView(UserEntity user) {
     if (_cells.isEmpty) {
-      return const Center(
-        child: Text('Nenhuma célula cadastrada no sistema.'),
-      );
+      return const Center(child: Text('Nenhuma célula cadastrada no sistema.'));
     }
 
     if (_selectedPastoralCell != null) {
@@ -424,11 +429,12 @@ class _ReportsPageState extends State<ReportsPage>
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => CellDetailPage(
-                          cell: cell,
-                          currentUser: user,
-                          initialTabIndex: 1,
-                        ),
+                        builder:
+                            (_) => CellDetailPage(
+                              cell: cell,
+                              currentUser: user,
+                              initialTabIndex: 1,
+                            ),
                       ),
                     ).then((_) => _loadData());
                   },
@@ -453,20 +459,27 @@ class _ReportsPageState extends State<ReportsPage>
         final cell = _cells[index];
         final meetings = _cellMeetingsMap[cell.id] ?? [];
         final bool hasPending = meetings.any(
-              (m) => m.isExpired && !m.isReportFilled,
+          (m) => m.isExpired && !m.isReportFilled,
         );
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 10,
+            ),
             leading: CircleAvatar(
-              backgroundColor: hasPending ? Colors.amber.shade100 : Colors.green.shade100,
+              backgroundColor:
+                  hasPending ? Colors.amber.shade100 : Colors.green.shade100,
               child: Icon(
                 hasPending ? Icons.warning_amber_rounded : Icons.check_circle,
-                color: hasPending ? Colors.amber.shade800 : Colors.green.shade800,
+                color:
+                    hasPending ? Colors.amber.shade800 : Colors.green.shade800,
               ),
             ),
             title: Text(
@@ -479,9 +492,14 @@ class _ReportsPageState extends State<ReportsPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    hasPending ? 'Possui relatórios pendentes' : 'Todos os relatórios em dia',
+                    hasPending
+                        ? 'Possui relatórios pendentes'
+                        : 'Todos os relatórios em dia',
                     style: TextStyle(
-                      color: hasPending ? Colors.orange.shade800 : Colors.green.shade800,
+                      color:
+                          hasPending
+                              ? Colors.orange.shade800
+                              : Colors.green.shade800,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -506,10 +524,10 @@ class _ReportsPageState extends State<ReportsPage>
   }
 
   Widget _buildCellMeetingsList(
-      CellEntity cell,
-      List<CellMeetingModel> meetings, {
-        bool isLeaderView = false,
-      }) {
+    CellEntity cell,
+    List<CellMeetingModel> meetings, {
+    bool isLeaderView = false,
+  }) {
     if (meetings.isEmpty) {
       return Center(
         child: Padding(
@@ -529,11 +547,11 @@ class _ReportsPageState extends State<ReportsPage>
                       MaterialPageRoute(
                         builder:
                             (_) => CellDetailPage(
-                          cell: cell,
-                          currentUser: widget.currentUser,
-                          initialTabIndex: 1,
-                          autoOpenEditMeeting: false,
-                        ),
+                              cell: cell,
+                              currentUser: widget.currentUser,
+                              initialTabIndex: 1,
+                              autoOpenEditMeeting: false,
+                            ),
                       ),
                     ).then((_) => _loadData());
                   },
@@ -575,13 +593,15 @@ class _ReportsPageState extends State<ReportsPage>
         Color typeTextColor = Colors.blue.shade900;
         IconData typeIcon = Icons.event;
 
-        final meetingDateKey = '${meeting.meetingDate.year}-${meeting.meetingDate.month}-${meeting.meetingDate.day}';
+        final meetingDateKey =
+            '${meeting.meetingDate.year}-${meeting.meetingDate.month}-${meeting.meetingDate.day}';
         final studyTopic = topicsMap[meetingDateKey];
 
         if (meeting.status == 'bridge_event') {
-          final eventTitle = (studyTopic != null && studyTopic.isNotEmpty)
-              ? studyTopic
-              : (meeting.eventName ?? 'Especial');
+          final eventTitle =
+              (studyTopic != null && studyTopic.isNotEmpty)
+                  ? studyTopic
+                  : (meeting.eventName ?? 'Especial');
           meetingTypeDesc = "Evento Ponte: $eventTitle";
           statusBadgeText = "Evento Ponte";
           cardBgColor = Colors.blue.shade50;
@@ -611,6 +631,8 @@ class _ReportsPageState extends State<ReportsPage>
           typeIcon = Icons.menu_book;
         }
 
+
+
         return Container(
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
@@ -628,22 +650,24 @@ class _ReportsPageState extends State<ReportsPage>
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ViewReportPage(
-                        cell: cell,
-                        meeting: meeting,
-                        currentUser: widget.currentUser,
-                      ),
+                      builder:
+                          (_) => ViewReportPage(
+                            cell: cell,
+                            meeting: meeting,
+                            currentUser: widget.currentUser,
+                          ),
                     ),
                   ).then((_) => _loadData());
                 } else if (isPastMeeting) {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => FillReportPage(
-                        cell: cell,
-                        meeting: meeting,
-                        currentUser: widget.currentUser,
-                      ),
+                      builder:
+                          (_) => FillReportPage(
+                            cell: cell,
+                            meeting: meeting,
+                            currentUser: widget.currentUser,
+                          ),
                     ),
                   ).then((_) => _loadData());
                 }
@@ -668,7 +692,9 @@ class _ReportsPageState extends State<ReportsPage>
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.85),
                             borderRadius: BorderRadius.circular(8),
@@ -706,7 +732,9 @@ class _ReportsPageState extends State<ReportsPage>
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.9),
                             borderRadius: BorderRadius.circular(6),
@@ -726,34 +754,37 @@ class _ReportsPageState extends State<ReportsPage>
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => ViewReportPage(
-                                    cell: cell,
-                                    meeting: meeting,
-                                    currentUser: widget.currentUser,
-                                  ),
+                                  builder:
+                                      (_) => ViewReportPage(
+                                        cell: cell,
+                                        meeting: meeting,
+                                        currentUser: widget.currentUser,
+                                      ),
                                 ),
                               ).then((_) => _loadData());
                             } else if (action == 'fill' || action == 'edit') {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => FillReportPage(
-                                    cell: cell,
-                                    meeting: meeting,
-                                    currentUser: widget.currentUser,
-                                  ),
+                                  builder:
+                                      (_) => FillReportPage(
+                                        cell: cell,
+                                        meeting: meeting,
+                                        currentUser: widget.currentUser,
+                                      ),
                                 ),
                               ).then((_) => _loadData());
                             } else if (action == 'config') {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => CellDetailPage(
-                                    cell: cell,
-                                    currentUser: widget.currentUser,
-                                    initialTabIndex: 1,
-                                    autoOpenEditMeeting: false,
-                                  ),
+                                  builder:
+                                      (_) => CellDetailPage(
+                                        cell: cell,
+                                        currentUser: widget.currentUser,
+                                        initialTabIndex: 1,
+                                        autoOpenEditMeeting: false,
+                                      ),
                                 ),
                               ).then((_) => _loadData());
                             } else if (action == 'delete_request') {
@@ -763,41 +794,43 @@ class _ReportsPageState extends State<ReportsPage>
                               _showAdminDeleteDialog(cell.id, meeting);
                             }
                           },
-                          itemBuilder: (context) => [
-                            if (isFilled)
-                              const PopupMenuItem(
-                                value: 'view',
-                                child: Text('Visualizar Relatório'),
-                              ),
-                            PopupMenuItem(
-                              value: isFilled
-                                  ? 'edit'
-                                  : (isPastMeeting ? 'fill' : 'config'),
-                              child: Text(
-                                isFilled
-                                    ? 'Editar Relatório'
-                                    : (isPastMeeting
-                                    ? 'Preencher Relatório'
-                                    : 'Configurar Reunião'),
-                              ),
-                            ),
-                            if (isLeaderView && isFilled)
-                              const PopupMenuItem(
-                                value: 'delete_request',
-                                child: Text(
-                                  'Solicitar Exclusão',
-                                  style: TextStyle(color: Colors.red),
+                          itemBuilder:
+                              (context) => [
+                                if (isFilled)
+                                  const PopupMenuItem(
+                                    value: 'view',
+                                    child: Text('Visualizar Relatório'),
+                                  ),
+                                PopupMenuItem(
+                                  value:
+                                      isFilled
+                                          ? 'edit'
+                                          : (isPastMeeting ? 'fill' : 'config'),
+                                  child: Text(
+                                    isFilled
+                                        ? 'Editar Relatório'
+                                        : (isPastMeeting
+                                            ? 'Preencher Relatório'
+                                            : 'Configurar Reunião'),
+                                  ),
                                 ),
-                              ),
-                            if (widget.currentUser.isPastorOrCoordinator)
-                              const PopupMenuItem(
-                                value: 'admin_delete',
-                                child: Text(
-                                  'Excluir Relatório (Pastor)',
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                              ),
-                          ],
+                                if (isLeaderView && isFilled)
+                                  const PopupMenuItem(
+                                    value: 'delete_request',
+                                    child: Text(
+                                      'Solicitar Exclusão',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ),
+                                if (widget.currentUser.isPastorOrCoordinator)
+                                  const PopupMenuItem(
+                                    value: 'admin_delete',
+                                    child: Text(
+                                      'Excluir Relatório (Pastor)',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ),
+                              ],
                         ),
                       ],
                     ),
@@ -813,6 +846,79 @@ class _ReportsPageState extends State<ReportsPage>
                         ),
                       ),
                     ],
+                    // Dentro do card de exibição da reunião em _buildCellMeetingsList:
+                    if (meeting.deletionRequested) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.deepOrange),
+                                const SizedBox(width: 4),
+                                Text(
+                                  meeting.deletionType == 'entire_meeting'
+                                      ? 'Solicitação: Excluir Reunião Completa'
+                                      : 'Solicitação: Excluir Apenas Relatório',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.deepOrange),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text('Motivo: "${meeting.deletionReason}"', style: const TextStyle(fontSize: 12)),
+                            if (widget.currentUser.isPastorOrCoordinator) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  TextButton(
+                                    onPressed: () async {
+                                      // Recusar/Limpar solicitação
+                                      await _dataSource.saveOrUpdateMeeting(
+                                        CellMeetingModel(
+                                          id: meeting.id,
+                                          cellId: cell.id,
+                                          meetingDate: meeting.meetingDate,
+                                          status: meeting.status,
+                                          isReportFilled: meeting.isReportFilled,
+                                          deletionRequested: false,
+                                          deletionReason: null,
+                                          deletionType: null,
+                                        ),
+                                      );
+                                      _loadData();
+                                    },
+                                    child: const Text('Recusar', style: TextStyle(color: Colors.grey)),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4)),
+                                    onPressed: () async {
+                                      if (meeting.deletionType == 'entire_meeting') {
+                                        await _dataSource.deleteMeetingAndReport(cell.id, meeting.id, meeting.meetingDate);
+                                      } else {
+                                        await _dataSource.deleteOnlyReport(cell.id, meeting.id, meeting.meetingDate);
+                                      }
+                                      _loadData();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Exclusão aprovada e realizada com sucesso!')),
+                                      );
+                                    },
+                                    child: const Text('Aprovar e Excluir', style: TextStyle(fontSize: 12, color: Colors.white)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -825,155 +931,237 @@ class _ReportsPageState extends State<ReportsPage>
 
   void _showDeletionRequestDialog(String cellId, String meetingId) {
     final reasonController = TextEditingController();
+    String selectedDeletionType = 'only_report'; // Padrão
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Solicitar Exclusão de Relatório'),
-        content: TextField(
-          controller: reasonController,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Motivo da solicitação para o pastor',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (reasonController.text.trim().isEmpty) return;
-              await _dataSource.requestReportDeletion(
-                cellId,
-                meetingId,
-                reasonController.text.trim(),
-              );
-              Navigator.pop(ctx);
-              _loadData();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Solicitação enviada ao pastor com sucesso!'),
-                  backgroundColor: Colors.blue,
+      builder:
+          (ctx) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Solicitar Exclusão ao Pastor'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Selecione o tipo de exclusão desejada:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('Apenas o Relatório'),
+                          subtitle: const Text(
+                            'A reunião continuará pendente para preenchimento.',
+                          ),
+                          value: 'only_report',
+                          groupValue: selectedDeletionType,
+                          onChanged: (val) {
+                            if (val != null)
+                              setDialogState(() => selectedDeletionType = val);
+                          },
+                        ),
+                        RadioListTile<String>(
+                          title: const Text('Reunião Completa'),
+                          subtitle: const Text(
+                            'Remove a reunião e o relatório correspondente.',
+                          ),
+                          value: 'entire_meeting',
+                          groupValue: selectedDeletionType,
+                          onChanged: (val) {
+                            if (val != null)
+                              setDialogState(() => selectedDeletionType = val);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: reasonController,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            labelText: 'Motivo da solicitação',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Cancelar'),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                      ),
+                      onPressed: () async {
+                        if (reasonController.text.trim().isEmpty) return;
+
+                        await _dataSource.requestReportDeletion(
+                          cellId,
+                          meetingId,
+                          reasonController.text.trim(),
+                          selectedDeletionType,
+                        );
+
+                        Navigator.pop(ctx);
+                        _loadData();
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Solicitação de exclusão enviada ao pastor com sucesso!',
+                            ),
+                            backgroundColor: Colors.blue,
+                          ),
+                        );
+                      },
+                      child: const Text(
+                        'Enviar Solicitação',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ],
                 ),
-              );
-            },
-            child: const Text('Enviar'),
           ),
-        ],
-      ),
     );
   }
 
   void _showAdminDeleteDialog(String cellId, CellMeetingModel meeting) {
     showDialog(
       context: context,
-      barrierDismissible: false, // Impede fechar clicando fora durante a exclusão
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          bool isDeleting = false;
+      barrierDismissible: false,
+      // Impede fechar clicando fora durante a exclusão
+      builder:
+          (ctx) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              bool isDeleting = false;
 
-          return AlertDialog(
-            title: const Text('Excluir Relatório'),
-            content: isDeleting
-                ? const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Processando exclusão no banco de dados...'),
-              ],
-            )
-                : const Text(
-              'Selecione como deseja proceder com a exclusão:\n\n'
-                  '• Excluir Apenas Relatório: O relatório na coleção raiz é removido e a reunião permanece na lista marcada como "Pendente", permitindo que o líder preencha novamente.\n\n'
-                  '• Excluir Reunião Completa: Remove a reunião da subcoleção e o relatório correspondente permanentemente.',
-            ),
-            actionsAlignment: MainAxisAlignment.spaceBetween,
-            actionsOverflowDirection: VerticalDirection.down,
-            actions: isDeleting
-                ? []
-                : [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-                onPressed: () async {
-                  setDialogState(() => isDeleting = true);
-                  try {
-                    // Executa a exclusão apenas do relatório na raiz e marca a reunião como pendente
-                    await _dataSource.deleteOnlyReport(cellId, meeting.id, meeting.meetingDate);
+              return AlertDialog(
+                title: const Text('Excluir Relatório'),
+                content:
+                    isDeleting
+                        ? const Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text('Processando exclusão no banco de dados...'),
+                          ],
+                        )
+                        : const Text(
+                          'Selecione como deseja proceder com a exclusão:\n\n'
+                          '• Excluir Apenas Relatório: O relatório na coleção raiz é removido e a reunião permanece na lista marcada como "Pendente", permitindo que o líder preencha novamente.\n\n'
+                          '• Excluir Reunião Completa: Remove a reunião da subcoleção e o relatório correspondente permanentemente.',
+                        ),
+                actionsAlignment: MainAxisAlignment.spaceBetween,
+                actionsOverflowDirection: VerticalDirection.down,
+                actions:
+                    isDeleting
+                        ? []
+                        : [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Cancelar'),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                            ),
+                            onPressed: () async {
+                              setDialogState(() => isDeleting = true);
+                              try {
+                                // Executa a exclusão apenas do relatório na raiz e marca a reunião como pendente
+                                await _dataSource.deleteOnlyReport(
+                                  cellId,
+                                  meeting.id,
+                                  meeting.meetingDate,
+                                );
 
-                    if (mounted) {
-                      Navigator.pop(ctx); // Fecha o diálogo
-                      await _loadData();  // Recarrega os dados imediatamente na tela
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Relatório excluído da coleção raiz! Reunião mantida como pendente.'),
-                          backgroundColor: Colors.orange,
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    setDialogState(() => isDeleting = false);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Erro ao excluir relatório: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: const Text(
-                  'Excluir Apenas Relatório',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-              const SizedBox(height: 4),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () async {
-                  setDialogState(() => isDeleting = true);
-                  try {
-                    // Exclui a reunião e o relatório correspondente
-                    await _dataSource.deleteMeetingAndReport(cellId, meeting.id, meeting.meetingDate);
+                                if (mounted) {
+                                  Navigator.pop(ctx); // Fecha o diálogo
+                                  await _loadData(); // Recarrega os dados imediatamente na tela
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Relatório excluído da coleção raiz! Reunião mantida como pendente.',
+                                      ),
+                                      backgroundColor: Colors.orange,
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                setDialogState(() => isDeleting = false);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Erro ao excluir relatório: $e',
+                                      ),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            child: const Text(
+                              'Excluir Apenas Relatório',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                            ),
+                            onPressed: () async {
+                              setDialogState(() => isDeleting = true);
+                              try {
+                                // Exclui a reunião e o relatório correspondente
+                                await _dataSource.deleteMeetingAndReport(
+                                  cellId,
+                                  meeting.id,
+                                  meeting.meetingDate,
+                                );
 
-                    if (mounted) {
-                      Navigator.pop(ctx); // Fecha o diálogo
-                      await _loadData();  // Recarrega os dados imediatamente na tela
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Reunião e relatório excluídos com sucesso!'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    setDialogState(() => isDeleting = false);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Erro ao excluir reunião e relatório: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: const Text(
-                  'Excluir Reunião Completa',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+                                if (mounted) {
+                                  Navigator.pop(ctx); // Fecha o diálogo
+                                  await _loadData(); // Recarrega os dados imediatamente na tela
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Reunião e relatório excluídos com sucesso!',
+                                      ),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                setDialogState(() => isDeleting = false);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Erro ao excluir reunião e relatório: $e',
+                                      ),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            child: const Text(
+                              'Excluir Reunião Completa',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
+              );
+            },
+          ),
     );
   }
 }

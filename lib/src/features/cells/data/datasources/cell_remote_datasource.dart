@@ -114,6 +114,7 @@ abstract class ICellRemoteDataSource {
       String cellId,
       String meetingId,
       String reason,
+      String deletionType
       );
 
   Future<void> deleteOnlyReport(String cellId, String meetingId, DateTime meetingDate);
@@ -1456,20 +1457,25 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     await docRef.set(meeting.toMap(), SetOptions(merge: true));
   }
 
+// No arquivo cell_remote_datasource.dart
   @override
   Future<void> requestReportDeletion(
       String cellId,
       String meetingId,
       String reason,
+      String deletionType, // 'only_report' ou 'entire_meeting'
       ) async {
     await _firestore
         .collection('cells')
         .doc(cellId)
         .collection('meetings')
         .doc(meetingId)
-        .update({'deletionRequested': true, 'deletionReason': reason});
+        .update({
+      'deletionRequested': true,
+      'deletionReason': reason,
+      'deletionType': deletionType,
+    });
   }
-
   Future<void> deleteOnlyReport(String cellId, String meetingId, DateTime meetingDate) async {
     // 1. Marca isReportFilled = false na subcoleção meetings da célula
     await _firestore
