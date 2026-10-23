@@ -172,19 +172,29 @@ class _HomePageState extends State<HomePage> {
         ),
         const SizedBox(height: 24),
 
+        // 1. Visão do Pastor / Coordenador (com suporte a navegação)
         if (_currentUser.isPastorOrCoordinator) ...[
-          const PastorDashboardWidget(),
-          const SizedBox(height: 20),
-        ],
-
-        if (_currentUser.isLeader) ...[
-          LeaderDashboardWidget(
-            user: _currentUser,
-            onNavigateToReports: () => setState(() => _currentIndex = 2),
+          PastorDashboardWidget(
+            onNavigateTab: (index, {bool selectPastoralView = false}) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
           ),
           const SizedBox(height: 20),
         ],
 
+        // 2. Visão do Líder de Célula
+        if (_currentUser.isLeader) ...[
+          LeaderDashboardWidget(
+            user: _currentUser,
+            onNavigateToReports: () => setState(() => _currentIndex = 2),
+            onNavigateToCells: () => setState(() => _currentIndex = 1),
+          ),
+          const SizedBox(height: 20),
+        ],
+
+        // 3. Visão de Membro
         if (_currentUser.isMember) ...[
           MemberDashboardWidget(user: _currentUser),
         ],

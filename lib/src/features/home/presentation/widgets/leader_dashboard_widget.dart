@@ -1,4 +1,5 @@
 // lib/src/features/home/presentation/widgets/leader_dashboard_widget.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
@@ -11,16 +12,17 @@ import 'package:celulas_app/src/features/cell_reports/presentation/pages/reports
 class LeaderDashboardWidget extends StatelessWidget {
   final UserEntity user;
   final VoidCallback? onNavigateToReports;
+  final VoidCallback? onNavigateToCells; // Callback para navegar para a aba de células (Aba 1)
 
   const LeaderDashboardWidget({
     super.key,
     required this.user,
     this.onNavigateToReports,
+    this.onNavigateToCells,
   });
 
   bool _hasUnassignedRoles(CellMeetingModel? meeting) {
     if (meeting == null) return true;
-    // Se a reunião estiver cancelada, não há funções pendentes a serem exigidas
     if (meeting.status == 'canceled') return false;
 
     return (meeting.initialPrayerName == null || meeting.initialPrayerName!.isEmpty) ||
@@ -31,6 +33,19 @@ class LeaderDashboardWidget extends StatelessWidget {
         (meeting.snackName == null || meeting.snackName!.isEmpty) ||
         (meeting.officialPhotoName == null || meeting.officialPhotoName!.isEmpty) ||
         (meeting.reportFillerName == null || meeting.reportFillerName!.isEmpty);
+  }
+
+  Future<int> _fetchPendingJoinRequestsCount(String cellId) async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('cell_requests')
+          .where('cellId', isEqualTo: cellId)
+          .where('status', isEqualTo: 'pending')
+          .get();
+      return snapshot.docs.length;
+    } catch (_) {
+      return 0;
+    }
   }
 
   @override
@@ -60,10 +75,20 @@ class LeaderDashboardWidget extends StatelessWidget {
 
         final cell = cellSnapshot.data!;
 
-        return FutureBuilder<List<CellMeetingModel>>(
-          future: dataSource.getAllMeetingsForCell(cell.id),
-          builder: (context, meetingsSnapshot) {
-            final meetings = meetingsSnapshot.data ?? [];
+        return FutureBuilder<List<dynamic>>(
+          future: Future.wait([
+            dataSource.getAllMeetingsForCell(cell.id),
+            // Se o usuário NÃO for pastor/coordenador, checa solicitações da célula dele
+            if (!user.isPastorOrCoordinator)
+              _fetchPendingJoinRequestsCount(cell.id)
+            else
+              Future.value(0),
+          ]),
+          builder: (context, snapshot) {
+            final data = snapshot.data;
+            final meetings = (data != null && data.isNotEmpty) ? (data[0] as List<CellMeetingModel>) : <CellMeetingModel>[];
+            final pendingRequestsCount = (data != null && data.length > 1) ? (data[1] as int) : 0;
+
             final latestMeeting = meetings.isNotEmpty ? meetings.first : null;
 
             final bool hasAnyPendingReport = meetings.any((m) => m.isExpired && !m.isReportFilled);
@@ -72,6 +97,66 @@ class LeaderDashboardWidget extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 1. Aviso de Solicitação de Entrada (Apenas para líderes que NÃO são pastores)
+                if (!user.isPastorOrCoordinator && pendingRequestsCount > 0) ...[
+                  Card(
+                    color: Colors.blue.shade50,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.blue.shade200),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.person_add,
+                            color: Colors.blue,
+                            size: 32,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '$pendingRequestsCount Solicitação(ões) de Entrada',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  'Usuários aguardando aprovação para entrar na célula.',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              if (onNavigateToCells != null) {
+                                onNavigateToCells!();
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => CellDetailPage(
+                                      cell: cell,
+                                      currentUser: user,
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            child: const Text('Ver'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                // 2. Relatório(s) Pendente(s)
                 if (hasAnyPendingReport) ...[
                   Card(
                     color: Colors.amber.shade100,
@@ -123,6 +208,7 @@ class LeaderDashboardWidget extends StatelessWidget {
                   const SizedBox(height: 12),
                 ],
 
+                // 3. Atribuição de Funções Pendente
                 if (areRolesPending) ...[
                   Card(
                     color: Colors.orange.shade100,
