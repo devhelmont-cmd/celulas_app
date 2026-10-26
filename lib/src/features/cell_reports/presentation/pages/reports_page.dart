@@ -16,6 +16,8 @@ import 'package:celulas_app/src/features/home/presentation/widgets/pastor_dashbo
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../widgets/pastor_analytics_widget.dart';
+
 enum ReportViewMode { leader, pastoral }
 
 class ReportsPage extends StatefulWidget {
@@ -350,19 +352,21 @@ class _ReportsPageState extends State<ReportsPage>
   }
 
   Widget _buildDashboardsTab(UserEntity user) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (user.isPastorOrCoordinator) ...[
-          const PastorDashboardWidget(),
-        ] else if (user.isLeader) ...[
+    if (user.isPastorOrCoordinator) {
+      // Retorna diretamente o widget analítico (que já gerencia seu próprio ListView e RefreshIndicator)
+      return const PastorAnalyticsWidget();
+    } else if (user.isLeader) {
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
           LeaderDashboardWidget(
             user: user,
             onNavigateToReports: () => _tabController?.animateTo(1),
           ),
         ],
-      ],
-    );
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   Widget _buildReportsTab(UserEntity user) {
