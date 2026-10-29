@@ -4,8 +4,10 @@ import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell
 import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/cell_attendance_chart_widget.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/cells_performance_chart_widget.dart';
+import 'package:celulas_app/src/features/cell_reports/presentation/widgets/meeting_status_chart_widget.dart';
 import 'package:flutter/material.dart';
 
 class PastorAnalyticsWidget extends StatefulWidget {
@@ -22,6 +24,7 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
   bool _isLoading = true;
   List<CellReportEntity> _allReports = [];
   List<CellModel> _cells = [];
+  List<CellMeetingModel> _allMeetings = [];
 
   @override
   void initState() {
@@ -36,10 +39,20 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
     try {
       final reports = await _reportsRepository.getAllReports();
       final cells = await _cellDataSource.getCells();
+
+      List<CellMeetingModel> meetings = [];
+      for (var cell in cells) {
+        try {
+          final cellMeetings = await _cellDataSource.getAllMeetingsForCell(cell.id);
+          meetings.addAll(cellMeetings);
+        } catch (_) {}
+      }
+
       if (mounted) {
         setState(() {
           _allReports = reports;
           _cells = cells;
+          _allMeetings = meetings;
           _isLoading = false;
         });
       }
@@ -98,7 +111,11 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
           CellAttendanceChartWidget(reports: _allReports),
           const SizedBox(height: 24),
 
-          // 2º Gráfico: Comparativo de Relatórios por Célula
+          // 2º Gráfico: Status das Reuniões (Normais, Remarcadas, Canceladas, Eventos Ponte)
+          MeetingStatusChartWidget(meetings: _allMeetings),
+          const SizedBox(height: 24),
+
+          // 3º Gráfico: Comparativo de Relatórios por Célula
           CellsPerformanceChartWidget(reports: _allReports, cells: _cells),
         ],
       ),

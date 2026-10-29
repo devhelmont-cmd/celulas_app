@@ -59,7 +59,12 @@ class _ReportsPageState extends State<ReportsPage>
             !widget.currentUser.isLeader &&
             !widget.currentUser.isPastorOrCoordinator;
     if (!isPureMember) {
-      _tabController = TabController(length: 2, vsync: this, initialIndex: 1);
+      // Inicia na aba Dashboards (index 0) conforme solicitado
+      _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
+      // Adiciona listener para atualizar o estado ao trocar de aba (exibindo/ocultando o FAB corretamente)
+      _tabController?.addListener(() {
+        if (mounted) setState(() {});
+      });
     }
 
     _loadData();
@@ -639,6 +644,7 @@ class _ReportsPageState extends State<ReportsPage>
         controller: _tabController,
         children: [_buildDashboardsTab(user), _buildReportsTab(user)],
       ),
+      // O botão flutuante só aparece estritamente se estiver na aba de Relatórios (index 1) e houver célula ativa
       floatingActionButton:
       (_tabController?.index == 1 && activeTargetCell != null)
           ? FloatingActionButton.extended(
@@ -649,7 +655,7 @@ class _ReportsPageState extends State<ReportsPage>
           : null,
     );
   }
-
+  
   Widget _buildDashboardsTab(UserEntity user) {
     if (user.isPastorOrCoordinator) {
       return const PastorAnalyticsWidget();
