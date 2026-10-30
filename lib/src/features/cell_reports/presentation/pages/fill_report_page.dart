@@ -1,5 +1,6 @@
 // lib/src/features/cell_reports/presentation/pages/fill_report_page.dart
 import 'package:celulas_app/src/core/injections/injection_container.dart';
+import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/data/models/cell_report_model.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
@@ -8,6 +9,7 @@ import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.da
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../domain/entities/cell_report_entity.dart';
 
@@ -42,10 +44,15 @@ class _FillReportPageState extends State<FillReportPage> {
   late final TextEditingController _testimoniesNotesCtrl;
   late final TextEditingController _offeringValueCtrl;
 
+  // Variável para armazenar a chave do ciclo selecionado (ex: "2026-09-06")
+  late String _selectedCycleKey;
+
+  // Variável para armazenar a data representada escolhida no calendário (ex: o dia 07/09)
+  late DateTime _representedDate;
+
   List<CellMemberEntity> _members = [];
   Map<String, bool> _attendanceMap = {};
 
-  // Mapeamento centralizado de funções da reunião (Função -> ID do Membro)
   final Map<String, String?> _meetingRoles = {
     'Oração Inicial': null,
     'Quebra-gelo': null,
@@ -83,6 +90,20 @@ class _FillReportPageState extends State<FillReportPage> {
     _reportsRepository = getIt<ICellReportsRepository>();
     _cellDataSource = getIt<ICellRemoteDataSource>();
 
+    if (widget.meeting.cycleKey != null && widget.meeting.cycleKey!.isNotEmpty) {
+      _selectedCycleKey = widget.meeting.cycleKey!;
+      // Tenta derivar a data representada inicial a partir da chave do ciclo ou usa a data da reunião
+      final parts = _selectedCycleKey.split('-');
+      if (parts.length == 3) {
+        _representedDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      } else {
+        _representedDate = widget.meeting.meetingDate;
+      }
+    } else {
+      _selectedCycleKey = PastoralCycleHelper.getCycleKeyString(widget.meeting.meetingDate);
+      _representedDate = widget.meeting.meetingDate;
+    }
+
     if (widget.meeting.status == 'canceled') {
       _reportStatus = ReportStatus.cacelled;
       _eventType = 'normal';
@@ -101,7 +122,6 @@ class _FillReportPageState extends State<FillReportPage> {
     _testimoniesNotesCtrl = TextEditingController();
     _offeringValueCtrl = TextEditingController();
 
-    // Pré-preenche o tema com o nome do evento ponte se aplicável
     if (_reportStatus == ReportStatus.bridgeEvent &&
         widget.meeting.eventName != null &&
         widget.meeting.eventName!.trim().isNotEmpty) {
@@ -129,7 +149,6 @@ class _FillReportPageState extends State<FillReportPage> {
     try {
       final members = await _cellDataSource.getCellMembers(widget.cell.id);
 
-      // A frequência inicia zerada (todos desmarcados)
       for (var member in members) {
         _attendanceMap[member.id] = false;
       }
@@ -150,6 +169,9 @@ class _FillReportPageState extends State<FillReportPage> {
         _existingReportId = existingReport.id;
         _reportStatus = existingReport.status;
         _eventType = existingReport.eventType ?? 'normal';
+        if (existingReport.cycleKey != null && existingReport.cycleKey!.isNotEmpty) {
+          _selectedCycleKey = existingReport.cycleKey!;
+        }
         if (existingReport.cancellationReason != null) {
           _cancellationReasonCtrl.text = existingReport.cancellationReason!;
         }
@@ -195,7 +217,6 @@ class _FillReportPageState extends State<FillReportPage> {
             .map((v) => VisitorModel(name: v.name, phone: v.phone))
             .toList();
       } else {
-        // Pré-preenche as funções com base na configuração da reunião atual
         for (var member in members) {
           final mName = member.name.trim().toLowerCase();
 
@@ -418,7 +439,6 @@ class _FillReportPageState extends State<FillReportPage> {
     try {
       final Map<String, List<String>> memberRolesMap = {};
 
-      // Se a reunião for cancelada, nenhum membro fica com nenhuma função (abono geral)
       if (_reportStatus != ReportStatus.cacelled) {
         _meetingRoles.forEach((role, memberId) {
           if (memberId != null) {
@@ -429,7 +449,6 @@ class _FillReportPageState extends State<FillReportPage> {
 
       final List<AttendanceModel> attendances = _members.map((m) {
         if (_reportStatus == ReportStatus.cacelled) {
-          // Reunião cancelada: abono automático para todos (sem falta, sem presença, sem funções)
           return AttendanceModel(
             cellMemberId: m.id,
             isPresent: false,
@@ -475,6 +494,7 @@ class _FillReportPageState extends State<FillReportPage> {
         testimoniesAndNotes: _reportStatus == ReportStatus.cacelled ? null : notesBuffer.toString().trim(),
         filledByUserId: widget.currentUser.id,
         createdAt: DateTime.now(),
+        cycleKey: _selectedCycleKey,
       );
 
       await _reportsRepository.saveReport(report);
@@ -490,6 +510,7 @@ class _FillReportPageState extends State<FillReportPage> {
         eventName: widget.meeting.eventName,
         meetingTime: widget.meeting.meetingTime,
         meetingLocation: widget.meeting.meetingLocation,
+        cycleKey: _selectedCycleKey,
         initialPrayerName: widget.meeting.initialPrayerName,
         icebreakerName: widget.meeting.icebreakerName,
         worshipName: widget.meeting.worshipName,
@@ -530,6 +551,24 @@ class _FillReportPageState extends State<FillReportPage> {
     final formattedDate =
         '${widget.meeting.meetingDate.day.toString().padLeft(2, '0')}/${widget.meeting.meetingDate.month.toString().padLeft(2, '0')}/${widget.meeting.meetingDate.year}';
 
+    // Formata o ciclo atual selecionado utilizando a data representada escolhida para exibir no card
+    final parts = _selectedCycleKey.split('-');
+    String friendlyCycleLabel = _selectedCycleKey;
+    if (parts.length == 3) {
+      final sundayDate = DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+      int weekNumber = ((sundayDate.day - 1) ~/ 7) + 1;
+      final monthName = DateFormat('MMMM', 'pt_BR').format(sundayDate);
+      final capitalizedMonth = monthName.isNotEmpty
+          ? '${monthName[0].toUpperCase()}${monthName.substring(1)}'
+          : '';
+
+      friendlyCycleLabel = 'Semana $weekNumber de $capitalizedMonth';
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Relatório - $formattedDate'),
@@ -541,6 +580,88 @@ class _FillReportPageState extends State<FillReportPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // CICLO SEMANAL DE REFERÊNCIA
+            Card(
+              elevation: 2,
+              color: Colors.blue.shade50,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.blue.shade200),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.calendar_view_week, color: Colors.blueAccent),
+                        SizedBox(width: 8),
+                        Text(
+                          'Ciclo Semanal de Referência',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueAccent,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Este relatório será contabilizado consolidadamente no ciclo semanal abaixo:',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _representedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                          helpText: 'Selecione a qual dia/semana a reunião representa',
+                        );
+                        if (picked != null) {
+                          final sunday = PastoralCycleHelper.getCycleSunday(picked);
+                          setState(() {
+                            _representedDate = picked;
+                            _selectedCycleKey = PastoralCycleHelper.getCycleKeyString(sunday);
+                          });
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.shade300),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                friendlyCycleLabel,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            const Icon(Icons.edit_calendar, color: Colors.blue),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // STATUS DA REUNIÃO
             Card(
               elevation: 2,
@@ -644,7 +765,7 @@ class _FillReportPageState extends State<FillReportPage> {
             if (_reportStatus != ReportStatus.cacelled) ...[
               const SizedBox(height: 20),
 
-              // LISTA DE FREQUÊNCIA DOS MEMBROS (ZERADA NO INÍCIO)
+              // LISTA DE FREQUÊNCIA DOS MEMBROS
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(

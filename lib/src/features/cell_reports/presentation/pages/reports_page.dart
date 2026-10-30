@@ -1,6 +1,7 @@
 // lib/src/features/cell_reports/presentation/pages/reports_page.dart
 import 'dart:async';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
+import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart'; // <--- Importe o helper de ciclos
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/pages/fill_report_page.dart';
@@ -39,8 +40,7 @@ class _ReportsPageState extends State<ReportsPage>
   bool _isInitialLoad = true;
   List<CellModel> _cells = [];
   Map<String, List<CellMeetingModel>> _cellMeetingsMap = {};
-  Map<String, Map<String, String>> _cellReportTopicsMap =
-  {}; // cellId -> {dateKey -> studyTopic}
+  Map<String, Map<String, String>> _cellReportTopicsMap = {};
   CellModel? _leaderCell;
 
   ReportViewMode _currentViewMode = ReportViewMode.leader;
@@ -59,9 +59,7 @@ class _ReportsPageState extends State<ReportsPage>
             !widget.currentUser.isLeader &&
             !widget.currentUser.isPastorOrCoordinator;
     if (!isPureMember) {
-      // Inicia na aba Dashboards (index 0) conforme solicitado
       _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
-      // Adiciona listener para atualizar o estado ao trocar de aba (exibindo/ocultando o FAB corretamente)
       _tabController?.addListener(() {
         if (mounted) setState(() {});
       });
@@ -136,6 +134,7 @@ class _ReportsPageState extends State<ReportsPage>
               eventName: meeting.eventName,
               meetingTime: meeting.meetingTime,
               meetingLocation: meeting.meetingLocation,
+              cycleKey: meeting.cycleKey,
               initialPrayerName: meeting.initialPrayerName,
               icebreakerName: meeting.icebreakerName,
               worshipName: meeting.worshipName,
@@ -272,10 +271,9 @@ class _ReportsPageState extends State<ReportsPage>
     return null;
   }
 
-  // Função auxiliar para calcular o dia da semana padrão da célula (a última ocorrência anterior ou igual a hoje)
   DateTime _calculateDefaultManualDate(String? meetingDayStr) {
     final now = DateTime.now();
-    int targetWeekday = 2; // Terça por padrão
+    int targetWeekday = 2;
 
     if (meetingDayStr != null && meetingDayStr.trim().isNotEmpty) {
       final lower = meetingDayStr.toLowerCase().trim();
@@ -297,13 +295,10 @@ class _ReportsPageState extends State<ReportsPage>
     }
 
     DateTime candidate = DateTime(now.year, now.month, now.day);
-    // Retrocede até encontrar o dia da semana correspondente
     while (candidate.weekday != targetWeekday) {
       candidate = candidate.subtract(const Duration(days: 1));
     }
 
-    // Se por acaso cair no próprio dia de hoje, podemos optar por pegar a última semana (-7 dias) para relatórios passados,
-    // ou manter hoje se preferir. Geralmente relatórios manuais são retroativos, então se hoje for o dia, voltar 7 dias é ideal:
     if (candidate.year == now.year && candidate.month == now.month && candidate.day == now.day) {
       candidate = candidate.subtract(const Duration(days: 7));
     }
@@ -312,14 +307,12 @@ class _ReportsPageState extends State<ReportsPage>
   }
 
   void _showAddManualReportDialog(CellEntity cell) {
-    // 1. Inicializa com o dia padrão da célula calculado
     DateTime selectedDate = _calculateDefaultManualDate(cell.meetingDay);
 
     final dateController = TextEditingController(
       text: '${selectedDate.day.toString().padLeft(2, '0')}/${selectedDate.month.toString().padLeft(2, '0')}/${selectedDate.year}',
     );
 
-    // 2. Horário padrão da célula (ou '19:30' se estiver vazio) usando o reloginho
     String defaultTimeStr = (cell.meetingTime != null && cell.meetingTime!.trim().isNotEmpty)
         ? cell.meetingTime!
         : '19:30';
@@ -333,7 +326,6 @@ class _ReportsPageState extends State<ReportsPage>
       text: '${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}',
     );
 
-    // 3. Local padrão da célula (Endereço + Bairro)
     final defaultLocation = [cell.address, cell.neighborhood]
         .where((s) => s.trim().isNotEmpty)
         .join(', ');
@@ -384,7 +376,6 @@ class _ReportsPageState extends State<ReportsPage>
                   },
                 ),
                 const SizedBox(height: 12),
-                // Campo de horário com o reloginho igual ao de criar/editar célula
                 TextField(
                   controller: timeController,
                   readOnly: true,
@@ -454,7 +445,6 @@ class _ReportsPageState extends State<ReportsPage>
       final dateId =
           '${meetingDate.year}-${meetingDate.month.toString().padLeft(2, '0')}-${meetingDate.day.toString().padLeft(2, '0')}';
 
-      // Busca membros da célula para pré-preencher o preenchedor do relatório com o líder (ou co-líder)
       String? defaultReportFiller;
       try {
         final members = await _dataSource.getCellMembers(cell.id);
@@ -486,7 +476,6 @@ class _ReportsPageState extends State<ReportsPage>
         defaultReportFiller = widget.currentUser.name;
       }
 
-      // Verificação contra duplicidade na lista de reuniões e no banco
       final meetings = _cellMeetingsMap[cell.id] ?? [];
       CellMeetingModel? existingMeeting = meetings
           .cast<CellMeetingModel?>()
@@ -513,6 +502,9 @@ class _ReportsPageState extends State<ReportsPage>
           );
         }
       } else {
+        // Calcula a chave de ciclo pastoral baseada na data da reunião manual
+        final cycleKeyStr = PastoralCycleHelper.getCycleKeyString(meetingDate);
+
         meetingToUse = CellMeetingModel(
           id: dateId,
           cellId: cell.id,
@@ -520,7 +512,8 @@ class _ReportsPageState extends State<ReportsPage>
           status: 'normal',
           meetingTime: time.isEmpty ? null : time,
           meetingLocation: location.isEmpty ? null : location,
-          reportFillerName: defaultReportFiller, // Pré-preenchido com o líder da célula
+          cycleKey: cycleKeyStr,
+          reportFillerName: defaultReportFiller,
           isReportFilled: false,
         );
         await _dataSource.saveOrUpdateMeeting(meetingToUse);
@@ -571,6 +564,7 @@ class _ReportsPageState extends State<ReportsPage>
           meetingTime: meeting.meetingTime,
           meetingLocation: meeting.meetingLocation,
           isReportFilled: meeting.isReportFilled,
+          cycleKey: meeting.cycleKey,
           initialPrayerName: meeting.initialPrayerName,
           icebreakerName: meeting.icebreakerName,
           worshipName: meeting.worshipName,
@@ -644,7 +638,6 @@ class _ReportsPageState extends State<ReportsPage>
         controller: _tabController,
         children: [_buildDashboardsTab(user), _buildReportsTab(user)],
       ),
-      // O botão flutuante só aparece estritamente se estiver na aba de Relatórios (index 1) e houver célula ativa
       floatingActionButton:
       (_tabController?.index == 1 && activeTargetCell != null)
           ? FloatingActionButton.extended(
@@ -655,7 +648,7 @@ class _ReportsPageState extends State<ReportsPage>
           : null,
     );
   }
-  
+
   Widget _buildDashboardsTab(UserEntity user) {
     if (user.isPastorOrCoordinator) {
       return const PastorAnalyticsWidget();

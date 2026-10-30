@@ -14,6 +14,7 @@ class CellReportEntity {
   final String? testimoniesAndNotes;
   final String filledByUserId;
   final DateTime createdAt;
+  final String? cycleKey;
 
   const CellReportEntity({
     required this.id,
@@ -29,6 +30,7 @@ class CellReportEntity {
     this.testimoniesAndNotes,
     required this.filledByUserId,
     required this.createdAt,
+    this.cycleKey
   });
 }
 

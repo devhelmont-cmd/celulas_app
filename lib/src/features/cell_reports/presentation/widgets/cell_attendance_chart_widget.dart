@@ -2,15 +2,23 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
+import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
+import 'package:intl/intl.dart';
 
-class _ConsolidatedReport {
-  final DateTime date;
+class _ConsolidatedCycleReport {
+  final String cycleKey;
+  final DateTime anchorSunday;
+  final String shortLabel; // Ex: "S1 Out"
+  final String cleanLabel; // Ex: "Semana 1 de Outubro" (sem data)
   final double totalMembers;
   final double totalVisitors;
   final double totalConversions;
 
-  _ConsolidatedReport({
-    required this.date,
+  _ConsolidatedCycleReport({
+    required this.cycleKey,
+    required this.anchorSunday,
+    required this.shortLabel,
+    required this.cleanLabel,
     required this.totalMembers,
     required this.totalVisitors,
     required this.totalConversions,
@@ -38,52 +46,81 @@ class CellAttendanceChartWidget extends StatelessWidget {
       );
     }
 
-    // 1. Agrupa e soma os relatórios por data exata (ano, mês, dia)
-    Map<String, List<CellReportEntity>> reportsByDate = {};
+    // 1. Agrupa e soma os relatórios por Ciclo Pastoral
+    Map<String, List<CellReportEntity>> reportsByCycle = {};
     for (var r in reports) {
-      final dateKey = '${r.scheduledDate.year}-${r.scheduledDate.month.toString().padLeft(2, '0')}-${r.scheduledDate.day.toString().padLeft(2, '0')}';
-      reportsByDate.putIfAbsent(dateKey, () => []).add(r);
+      final String cycleKey = (r.cycleKey != null && r.cycleKey!.isNotEmpty)
+          ? r.cycleKey!
+          : PastoralCycleHelper.getCycleKeyString(r.scheduledDate);
+
+      reportsByCycle.putIfAbsent(cycleKey, () => []).add(r);
     }
 
-    // 2. Converte o agrupamento em pontos consolidados
-    List<_ConsolidatedReport> consolidatedList = [];
-    reportsByDate.forEach((dateKey, dateReports) {
-      final date = dateReports.first.scheduledDate;
+    // 2. Converte o agrupamento em pontos consolidados por ciclo
+    List<_ConsolidatedCycleReport> consolidatedList = [];
+    reportsByCycle.forEach((cycleKey, cycleReports) {
+      final parts = cycleKey.split('-');
+      DateTime anchorSunday = cycleReports.first.scheduledDate;
+      if (parts.length == 3) {
+        anchorSunday = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      }
+
+      // Calcula a semana do mês (1º, 2º, 3º...)
+      int weekNumber = ((anchorSunday.day - 1) ~/ 7) + 1;
+
+      // Nome do mês por extenso (ex: "Outubro")
+      final monthFullName = DateFormat('MMMM', 'pt_BR').format(anchorSunday);
+      final capitalizedFullName = monthFullName.isNotEmpty
+          ? '${monthFullName[0].toUpperCase()}${monthFullName.substring(1)}'
+          : '';
+
+      // Nome abreviado do mês para o eixo X (ex: "Out")
+      final monthShortName = DateFormat('MMM', 'pt_BR').format(anchorSunday);
+      final capitalizedShortName = monthShortName.isNotEmpty
+          ? '${monthShortName[0].toUpperCase()}${monthShortName.substring(1).replaceAll('.', '')}'
+          : '';
+
+      final shortLabel = 'S$weekNumber $capitalizedShortName'; // Ex: "S1 Out"
+      final cleanLabel = 'Semana $weekNumber de $capitalizedFullName'; // Ex: "Semana 1 de Outubro" (sem data)
+
       double membersSum = 0;
       double visitorsSum = 0;
       double conversionsSum = 0;
 
-      for (var r in dateReports) {
+      for (var r in cycleReports) {
         membersSum += r.attendances.where((a) => a.isPresent).length.toDouble();
         visitorsSum += r.visitors.length.toDouble();
         conversionsSum += r.conversions.length.toDouble();
       }
 
-      consolidatedList.add(_ConsolidatedReport(
-        date: date,
+      consolidatedList.add(_ConsolidatedCycleReport(
+        cycleKey: cycleKey,
+        anchorSunday: anchorSunday,
+        shortLabel: shortLabel,
+        cleanLabel: cleanLabel,
         totalMembers: membersSum,
         totalVisitors: visitorsSum,
         totalConversions: conversionsSum,
       ));
     });
 
-    // 3. Ordena cronologicamente do mais antigo para o mais recente
-    consolidatedList.sort((a, b) => a.date.compareTo(b.date));
+    // 3. Ordena cronologicamente
+    consolidatedList.sort((a, b) => a.anchorSunday.compareTo(b.anchorSunday));
 
-    // 4. Pega apenas as últimas 8 datas para manter o gráfico limpo
-    final recentReports = consolidatedList.length > 8
-        ? consolidatedList.sublist(consolidatedList.length - 8)
+    // 4. Pega apenas os últimos 7 ciclos para manter o gráfico limpo
+    final recentCycles = consolidatedList.length > 7
+        ? consolidatedList.sublist(consolidatedList.length - 7)
         : consolidatedList;
 
     List<FlSpot> memberSpots = [];
     List<FlSpot> visitorSpots = [];
     List<FlSpot> conversionSpots = [];
 
-    for (int i = 0; i < recentReports.length; i++) {
-      final r = recentReports[i];
-      memberSpots.add(FlSpot(i.toDouble(), r.totalMembers));
-      visitorSpots.add(FlSpot(i.toDouble(), r.totalVisitors));
-      conversionSpots.add(FlSpot(i.toDouble(), r.totalConversions));
+    for (int i = 0; i < recentCycles.length; i++) {
+      final c = recentCycles[i];
+      memberSpots.add(FlSpot(i.toDouble(), c.totalMembers));
+      visitorSpots.add(FlSpot(i.toDouble(), c.totalVisitors));
+      conversionSpots.add(FlSpot(i.toDouble(), c.totalConversions));
     }
 
     return Card(
@@ -95,8 +132,13 @@ class CellAttendanceChartWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Evolução Geral da Igreja (Últimas Datas)',
+              'Evolução por Ciclos Pastorais',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Consolidado geral da igreja por semanas pastorais.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 8),
 
@@ -113,9 +155,45 @@ class CellAttendanceChartWidget extends StatelessWidget {
             const SizedBox(height: 20),
 
             SizedBox(
-              height: 220,
+              height: 230,
               child: LineChart(
                 LineChartData(
+                  // Tooltip sem data do domingo, apenas o número/nome da semana e os dados abaixo
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipItems: (touchedSpots) {
+                        return List.generate(touchedSpots.length, (i) {
+                          final spot = touchedSpots[i];
+                          final cycle = recentCycles[spot.spotIndex];
+
+                          String metricText = '';
+                          if (spot.barIndex == 0) metricText = 'Membros: ${spot.y.toInt()}';
+                          if (spot.barIndex == 1) metricText = 'Visitantes: ${spot.y.toInt()}';
+                          if (spot.barIndex == 2) metricText = 'Conversões: ${spot.y.toInt()}';
+
+                          if (i == 0) {
+                            return LineTooltipItem(
+                              '${cycle.cleanLabel}\n$metricText',
+                              const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            );
+                          } else {
+                            return LineTooltipItem(
+                              metricText,
+                              const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            );
+                          }
+                        });
+                      },
+                    ),
+                  ),
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
@@ -130,17 +208,22 @@ class CellAttendanceChartWidget extends StatelessWidget {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
+                        reservedSize: 30,
                         getTitlesWidget: (value, meta) {
                           final index = value.toInt();
-                          if (index < 0 || index >= recentReports.length) {
+                          if (index < 0 || index >= recentCycles.length) {
                             return const SizedBox.shrink();
                           }
-                          final date = recentReports[index].date;
+
+                          if (index > 0 && recentCycles[index].shortLabel == recentCycles[index - 1].shortLabel) {
+                            return const SizedBox.shrink();
+                          }
+
                           return Padding(
-                            padding: const EdgeInsets.only(top: 6.0),
+                            padding: const EdgeInsets.only(top: 8.0),
                             child: Text(
-                              '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}',
-                              style: const TextStyle(fontSize: 10),
+                              recentCycles[index].shortLabel,
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                             ),
                           );
                         },
@@ -149,7 +232,6 @@ class CellAttendanceChartWidget extends StatelessWidget {
                   ),
                   borderData: FlBorderData(show: false),
                   lineBarsData: [
-                    // Linha de Membros
                     LineChartBarData(
                       spots: memberSpots,
                       isCurved: true,
@@ -157,7 +239,6 @@ class CellAttendanceChartWidget extends StatelessWidget {
                       barWidth: 3,
                       dotData: const FlDotData(show: true),
                     ),
-                    // Linha de Visitantes
                     LineChartBarData(
                       spots: visitorSpots,
                       isCurved: true,
@@ -165,7 +246,6 @@ class CellAttendanceChartWidget extends StatelessWidget {
                       barWidth: 3,
                       dotData: const FlDotData(show: true),
                     ),
-                    // Linha de Conversões
                     LineChartBarData(
                       spots: conversionSpots,
                       isCurved: true,

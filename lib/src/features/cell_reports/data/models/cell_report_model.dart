@@ -63,6 +63,7 @@ class CellReportModel extends CellReportEntity {
     super.testimoniesAndNotes,
     required super.filledByUserId,
     required super.createdAt,
+    super.cycleKey
   });
 
   factory CellReportModel.fromMap(Map<String, dynamic> map, String id) {
@@ -95,6 +96,7 @@ class CellReportModel extends CellReportEntity {
       testimoniesAndNotes: map['testimoniesAndNotes'],
       filledByUserId: map['filledByUserId'] ?? '',
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      cycleKey: map['cycleKey'],
     );
   }
 
@@ -115,6 +117,7 @@ class CellReportModel extends CellReportEntity {
         'testimoniesAndNotes': testimoniesAndNotes,
       'filledByUserId': filledByUserId,
       'createdAt': Timestamp.fromDate(createdAt),
+      if (cycleKey != null) 'cycleKey': cycleKey,
     };
   }
 }

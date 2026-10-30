@@ -11,6 +11,8 @@ class CellMeetingModel {
   final String? meetingLocation; // Local personalizado da reunião/evento
   final bool isReportFilled;
 
+  final String? cycleKey;
+
   // Funções da reunião
   final String? initialPrayerName;
   final String? icebreakerName;
@@ -35,6 +37,7 @@ class CellMeetingModel {
     this.meetingTime,
     this.meetingLocation,
     this.isReportFilled = false,
+    this.cycleKey,
     this.initialPrayerName,
     this.icebreakerName,
     this.worshipName,
@@ -71,6 +74,7 @@ class CellMeetingModel {
       meetingTime: map['meetingTime'],
       meetingLocation: map['meetingLocation'],
       isReportFilled: map['isReportFilled'] ?? false,
+      cycleKey: map['cycleKey'],
       initialPrayerName: map['initialPrayerName'],
       icebreakerName: map['icebreakerName'],
       worshipName: map['worshipName'],
@@ -95,6 +99,7 @@ class CellMeetingModel {
       'meetingTime': meetingTime,
       'meetingLocation': meetingLocation,
       'isReportFilled': isReportFilled,
+      if (cycleKey != null) 'cycleKey': cycleKey,
       'initialPrayerName': initialPrayerName,
       'icebreakerName': icebreakerName,
       'worshipName': worshipName,

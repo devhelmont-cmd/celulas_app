@@ -1,4 +1,5 @@
 // lib/src/features/cells/data/datasources/cell_remote_datasource.dart
+import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart'; // <--- Importe o helper de ciclos
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_join_request_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_member_model.dart';
@@ -1258,14 +1259,20 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
 
       if (meetings.isEmpty) {
         DateTime firstDate = _calculateNextMeetingDateStatic(meetingDay, now);
+
+        // Calcula o cycleKey automaticamente
+        final cycleKeyStr = PastoralCycleHelper.getCycleKeyString(firstDate);
+        final dateId = '${firstDate.year}-${firstDate.month.toString().padLeft(2, '0')}-${firstDate.day.toString().padLeft(2, '0')}';
+
         final newMeeting = CellMeetingModel(
-          id: '',
+          id: dateId,
           cellId: cellId,
           meetingDate: firstDate,
           status: 'normal',
           isReportFilled: false,
+          cycleKey: cycleKeyStr,
         );
-        await meetingsRef.add(newMeeting.toMap());
+        await meetingsRef.doc(dateId).set(newMeeting.toMap());
         return;
       }
 
@@ -1292,12 +1299,15 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         );
 
         if (!exists) {
+          final cycleKeyStr = PastoralCycleHelper.getCycleKeyString(nextDate);
+
           final newMeeting = CellMeetingModel(
             id: dateId,
             cellId: cellId,
             meetingDate: nextDate,
             status: 'normal',
             isReportFilled: false,
+            cycleKey: cycleKeyStr,
           );
 
           await meetingsRef
@@ -1457,13 +1467,12 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     await docRef.set(meeting.toMap(), SetOptions(merge: true));
   }
 
-// No arquivo cell_remote_datasource.dart
   @override
   Future<void> requestReportDeletion(
       String cellId,
       String meetingId,
       String reason,
-      String deletionType, // 'only_report' ou 'entire_meeting'
+      String deletionType,
       ) async {
     await _firestore
         .collection('cells')
@@ -1476,8 +1485,9 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       'deletionType': deletionType,
     });
   }
+
+  @override
   Future<void> deleteOnlyReport(String cellId, String meetingId, DateTime meetingDate) async {
-    // 1. Marca isReportFilled = false na subcoleção meetings da célula
     await _firestore
         .collection('cells')
         .doc(cellId)
@@ -1489,7 +1499,6 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       'deletionReason': FieldValue.delete(),
     });
 
-    // 2. Busca os relatórios da célula e filtra a data em memória (evita necessidade de índice composto)
     final snapshot = await _firestore
         .collection('reports')
         .where('cellId', isEqualTo: cellId)
@@ -1510,8 +1519,8 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     await batch.commit();
   }
 
+  @override
   Future<void> deleteMeetingAndReport(String cellId, String meetingId, DateTime meetingDate) async {
-    // 1. Exclui a reunião da subcoleção meetings
     await _firestore
         .collection('cells')
         .doc(cellId)
@@ -1519,7 +1528,6 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         .doc(meetingId)
         .delete();
 
-    // 2. Busca os relatórios da célula e filtra a data em memória (evita necessidade de índice composto)
     final snapshot = await _firestore
         .collection('reports')
         .where('cellId', isEqualTo: cellId)
@@ -1539,6 +1547,7 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     }
     await batch.commit();
   }
+
   // ================= PEDIDOS DE ORAÇÃO =================
   @override
   Future<List<PrayerRequestModel>> getPrayerRequests(String cellId) async {
