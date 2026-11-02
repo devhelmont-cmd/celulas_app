@@ -5,11 +5,13 @@ import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_repor
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
 import 'package:intl/intl.dart';
 
+enum ChartViewGrouping { cycles, dates }
+
 class _ConsolidatedCycleReport {
   final String cycleKey;
   final DateTime anchorSunday;
-  final String shortLabel; // Ex: "S1 Out"
-  final String cleanLabel; // Ex: "Semana 1 de Outubro" (sem data)
+  final String shortLabel;
+  final String cleanLabel;
   final double totalMembers;
   final double totalVisitors;
   final double totalConversions;
@@ -25,17 +27,26 @@ class _ConsolidatedCycleReport {
   });
 }
 
-class CellAttendanceChartWidget extends StatelessWidget {
+class CellAttendanceChartWidget extends StatefulWidget {
   final List<CellReportEntity> reports;
+  final String selectedMonthKey; // Ex: "all" ou "2026-09"
 
   const CellAttendanceChartWidget({
     super.key,
     required this.reports,
+    required this.selectedMonthKey,
   });
 
   @override
+  State<CellAttendanceChartWidget> createState() => _CellAttendanceChartWidgetState();
+}
+
+class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
+  ChartViewGrouping _groupingMode = ChartViewGrouping.cycles;
+
+  @override
   Widget build(BuildContext context) {
-    if (reports.isEmpty) {
+    if (widget.reports.isEmpty) {
       return const Card(
         child: Padding(
           padding: EdgeInsets.all(24.0),
@@ -46,81 +57,125 @@ class CellAttendanceChartWidget extends StatelessWidget {
       );
     }
 
-    // 1. Agrupa e soma os relatórios por Ciclo Pastoral
-    Map<String, List<CellReportEntity>> reportsByCycle = {};
-    for (var r in reports) {
-      final String cycleKey = (r.cycleKey != null && r.cycleKey!.isNotEmpty)
-          ? r.cycleKey!
-          : PastoralCycleHelper.getCycleKeyString(r.scheduledDate);
-
-      reportsByCycle.putIfAbsent(cycleKey, () => []).add(r);
+    // Filtra os relatórios baseando-se sempre no cycleKey correspondente ao mês selecionado
+    List<CellReportEntity> activeReports = widget.reports;
+    if (widget.selectedMonthKey != 'all') {
+      activeReports = widget.reports.where((r) {
+        final cycleKey = (r.cycleKey != null && r.cycleKey!.isNotEmpty)
+            ? r.cycleKey!
+            : PastoralCycleHelper.getCycleKeyString(r.scheduledDate);
+        return cycleKey.startsWith(widget.selectedMonthKey);
+      }).toList();
     }
-
-    // 2. Converte o agrupamento em pontos consolidados por ciclo
-    List<_ConsolidatedCycleReport> consolidatedList = [];
-    reportsByCycle.forEach((cycleKey, cycleReports) {
-      final parts = cycleKey.split('-');
-      DateTime anchorSunday = cycleReports.first.scheduledDate;
-      if (parts.length == 3) {
-        anchorSunday = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-      }
-
-      // Calcula a semana do mês (1º, 2º, 3º...)
-      int weekNumber = ((anchorSunday.day - 1) ~/ 7) + 1;
-
-      // Nome do mês por extenso (ex: "Outubro")
-      final monthFullName = DateFormat('MMMM', 'pt_BR').format(anchorSunday);
-      final capitalizedFullName = monthFullName.isNotEmpty
-          ? '${monthFullName[0].toUpperCase()}${monthFullName.substring(1)}'
-          : '';
-
-      // Nome abreviado do mês para o eixo X (ex: "Out")
-      final monthShortName = DateFormat('MMM', 'pt_BR').format(anchorSunday);
-      final capitalizedShortName = monthShortName.isNotEmpty
-          ? '${monthShortName[0].toUpperCase()}${monthShortName.substring(1).replaceAll('.', '')}'
-          : '';
-
-      final shortLabel = 'S$weekNumber $capitalizedShortName'; // Ex: "S1 Out"
-      final cleanLabel = 'Semana $weekNumber de $capitalizedFullName'; // Ex: "Semana 1 de Outubro" (sem data)
-
-      double membersSum = 0;
-      double visitorsSum = 0;
-      double conversionsSum = 0;
-
-      for (var r in cycleReports) {
-        membersSum += r.attendances.where((a) => a.isPresent).length.toDouble();
-        visitorsSum += r.visitors.length.toDouble();
-        conversionsSum += r.conversions.length.toDouble();
-      }
-
-      consolidatedList.add(_ConsolidatedCycleReport(
-        cycleKey: cycleKey,
-        anchorSunday: anchorSunday,
-        shortLabel: shortLabel,
-        cleanLabel: cleanLabel,
-        totalMembers: membersSum,
-        totalVisitors: visitorsSum,
-        totalConversions: conversionsSum,
-      ));
-    });
-
-    // 3. Ordena cronologicamente
-    consolidatedList.sort((a, b) => a.anchorSunday.compareTo(b.anchorSunday));
-
-    // 4. Pega apenas os últimos 7 ciclos para manter o gráfico limpo
-    final recentCycles = consolidatedList.length > 7
-        ? consolidatedList.sublist(consolidatedList.length - 7)
-        : consolidatedList;
 
     List<FlSpot> memberSpots = [];
     List<FlSpot> visitorSpots = [];
     List<FlSpot> conversionSpots = [];
 
-    for (int i = 0; i < recentCycles.length; i++) {
-      final c = recentCycles[i];
-      memberSpots.add(FlSpot(i.toDouble(), c.totalMembers));
-      visitorSpots.add(FlSpot(i.toDouble(), c.totalVisitors));
-      conversionSpots.add(FlSpot(i.toDouble(), c.totalConversions));
+    List<_ConsolidatedCycleReport> recentCycles = [];
+    List<String> dateLabels = [];
+
+    if (_groupingMode == ChartViewGrouping.cycles) {
+      Map<String, List<CellReportEntity>> reportsByCycle = {};
+      for (var r in activeReports) {
+        final String cycleKey = (r.cycleKey != null && r.cycleKey!.isNotEmpty)
+            ? r.cycleKey!
+            : PastoralCycleHelper.getCycleKeyString(r.scheduledDate);
+
+        reportsByCycle.putIfAbsent(cycleKey, () => []).add(r);
+      }
+
+      List<_ConsolidatedCycleReport> consolidatedList = [];
+      reportsByCycle.forEach((cycleKey, cycleReports) {
+        final parts = cycleKey.split('-');
+        DateTime anchorSunday = cycleReports.first.scheduledDate;
+        if (parts.length == 3) {
+          anchorSunday = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        }
+
+        int weekNumber = ((anchorSunday.day - 1) ~/ 7) + 1;
+
+        final monthFullName = DateFormat('MMMM', 'pt_BR').format(anchorSunday);
+        final capitalizedFullName = monthFullName.isNotEmpty
+            ? '${monthFullName[0].toUpperCase()}${monthFullName.substring(1)}'
+            : '';
+
+        final monthShortName = DateFormat('MMM', 'pt_BR').format(anchorSunday);
+        final capitalizedShortName = monthShortName.isNotEmpty
+            ? '${monthShortName[0].toUpperCase()}${monthShortName.substring(1).replaceAll('.', '')}'
+            : '';
+
+        final shortLabel = 'S$weekNumber $capitalizedShortName';
+        final cleanLabel = 'Semana $weekNumber de $capitalizedFullName';
+
+        double membersSum = 0;
+        double visitorsSum = 0;
+        double conversionsSum = 0;
+
+        for (var r in cycleReports) {
+          membersSum += r.attendances.where((a) => a.isPresent).length.toDouble();
+          visitorsSum += r.visitors.length.toDouble();
+          conversionsSum += r.conversions.length.toDouble();
+        }
+
+        consolidatedList.add(_ConsolidatedCycleReport(
+          cycleKey: cycleKey,
+          anchorSunday: anchorSunday,
+          shortLabel: shortLabel,
+          cleanLabel: cleanLabel,
+          totalMembers: membersSum,
+          totalVisitors: visitorsSum,
+          totalConversions: conversionsSum,
+        ));
+      });
+
+      consolidatedList.sort((a, b) => a.anchorSunday.compareTo(b.anchorSunday));
+
+      recentCycles = consolidatedList.length > 7
+          ? consolidatedList.sublist(consolidatedList.length - 7)
+          : consolidatedList;
+
+      for (int i = 0; i < recentCycles.length; i++) {
+        final c = recentCycles[i];
+        memberSpots.add(FlSpot(i.toDouble(), c.totalMembers));
+        visitorSpots.add(FlSpot(i.toDouble(), c.totalVisitors));
+        conversionSpots.add(FlSpot(i.toDouble(), c.totalConversions));
+      }
+    } else {
+      // Modo Datas Específicas: Exibe os relatórios filtrados pelo ciclo do mês
+      Map<String, List<CellReportEntity>> reportsByDate = {};
+      for (var r in activeReports) {
+        final String dateKey = '${r.scheduledDate.year}-${r.scheduledDate.month.toString().padLeft(2, '0')}-${r.scheduledDate.day.toString().padLeft(2, '0')}';
+        reportsByDate.putIfAbsent(dateKey, () => []).add(r);
+      }
+
+      var sortedDateKeys = reportsByDate.keys.toList()..sort();
+      if (sortedDateKeys.length > 7) {
+        sortedDateKeys = sortedDateKeys.sublist(sortedDateKeys.length - 7);
+      }
+
+      for (int i = 0; i < sortedDateKeys.length; i++) {
+        final dateKey = sortedDateKeys[i];
+        final dayReports = reportsByDate[dateKey]!;
+
+        double membersSum = 0;
+        double visitorsSum = 0;
+        double conversionsSum = 0;
+
+        for (var r in dayReports) {
+          membersSum += r.attendances.where((a) => a.isPresent).length.toDouble();
+          visitorsSum += r.visitors.length.toDouble();
+          conversionsSum += r.conversions.length.toDouble();
+        }
+
+        final parts = dateKey.split('-');
+        final formattedDate = '${parts[2]}/${parts[1]}';
+        dateLabels.add(formattedDate);
+
+        memberSpots.add(FlSpot(i.toDouble(), membersSum));
+        visitorSpots.add(FlSpot(i.toDouble(), visitorsSum));
+        conversionSpots.add(FlSpot(i.toDouble(), conversionsSum));
+      }
     }
 
     return Card(
@@ -131,18 +186,55 @@ class CellAttendanceChartWidget extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Evolução por Ciclos Pastorais',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _groupingMode == ChartViewGrouping.cycles
+                            ? 'Evolução por Ciclos Pastorais'
+                            : 'Evolução por Datas Específicas',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _groupingMode == ChartViewGrouping.cycles
+                            ? 'Consolidado geral da igreja por semanas pastorais.'
+                            : 'Consolidado geral da igreja por dias de reunião.',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+                SegmentedButton<ChartViewGrouping>(
+                  segments: const [
+                    ButtonSegment(
+                      value: ChartViewGrouping.cycles,
+                      label: Text('Semanas', style: TextStyle(fontSize: 11)),
+                    ),
+                    ButtonSegment(
+                      value: ChartViewGrouping.dates,
+                      label: Text('Datas', style: TextStyle(fontSize: 11)),
+                    ),
+                  ],
+                  selected: {_groupingMode},
+                  onSelectionChanged: (Set<ChartViewGrouping> newSelection) {
+                    setState(() {
+                      _groupingMode = newSelection.first;
+                    });
+                  },
+                  style: ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 8)),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Consolidado geral da igreja por semanas pastorais.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
-
-            // Legenda
+            const SizedBox(height: 12),
             Row(
               children: [
                 _buildLegendItem('Membros', Colors.blue),
@@ -153,18 +245,27 @@ class CellAttendanceChartWidget extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-
             SizedBox(
               height: 230,
               child: LineChart(
                 LineChartData(
-                  // Tooltip sem data do domingo, apenas o número/nome da semana e os dados abaixo
                   lineTouchData: LineTouchData(
                     touchTooltipData: LineTouchTooltipData(
                       getTooltipItems: (touchedSpots) {
                         return List.generate(touchedSpots.length, (i) {
                           final spot = touchedSpots[i];
-                          final cycle = recentCycles[spot.spotIndex];
+
+                          String headerTitle = '';
+                          if (_groupingMode == ChartViewGrouping.cycles) {
+                            if (spot.spotIndex >= 0 && spot.spotIndex < recentCycles.length) {
+                              final cycle = recentCycles[spot.spotIndex];
+                              headerTitle = cycle.cleanLabel;
+                            }
+                          } else {
+                            if (spot.spotIndex >= 0 && spot.spotIndex < dateLabels.length) {
+                              headerTitle = 'Data: ${dateLabels[spot.spotIndex]}';
+                            }
+                          }
 
                           String metricText = '';
                           if (spot.barIndex == 0) metricText = 'Membros: ${spot.y.toInt()}';
@@ -173,7 +274,7 @@ class CellAttendanceChartWidget extends StatelessWidget {
 
                           if (i == 0) {
                             return LineTooltipItem(
-                              '${cycle.cleanLabel}\n$metricText',
+                              '$headerTitle\n$metricText',
                               const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -210,22 +311,48 @@ class CellAttendanceChartWidget extends StatelessWidget {
                         showTitles: true,
                         reservedSize: 30,
                         getTitlesWidget: (value, meta) {
+                          // 1. Evita que índices fracionados repitam o mesmo número inteiro
+                          if (value % 1 != 0) {
+                            return const SizedBox.shrink();
+                          }
+
                           final index = value.toInt();
-                          if (index < 0 || index >= recentCycles.length) {
-                            return const SizedBox.shrink();
-                          }
 
-                          if (index > 0 && recentCycles[index].shortLabel == recentCycles[index - 1].shortLabel) {
-                            return const SizedBox.shrink();
-                          }
+                          if (_groupingMode == ChartViewGrouping.cycles) {
+                            if (index < 0 || index >= recentCycles.length) {
+                              return const SizedBox.shrink();
+                            }
 
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(
-                              recentCycles[index].shortLabel,
-                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          );
+                            // 2. Remove espaços extras antes de comparar as strings
+                            final currentLabel = recentCycles[index].shortLabel.trim();
+
+                            if (index > 0) {
+                              final previousLabel = recentCycles[index - 1].shortLabel.trim();
+                              if (currentLabel == previousLabel) {
+                                return const SizedBox.shrink();
+                              }
+                            }
+
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8.0),
+                              child: Text(
+                                recentCycles[index].shortLabel,
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            );
+                          } else {
+                            if (index < 0 || index >= dateLabels.length) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8.0),
+                              child: Text(
+                                dateLabels[index],
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            );
+                          }
                         },
                       ),
                     ),
