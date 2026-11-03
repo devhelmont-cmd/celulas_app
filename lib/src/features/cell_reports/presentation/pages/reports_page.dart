@@ -1,7 +1,7 @@
 // lib/src/features/cell_reports/presentation/pages/reports_page.dart
 import 'dart:async';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
-import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart'; // <--- Importe o helper de ciclos
+import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/pages/fill_report_page.dart';
@@ -16,6 +16,7 @@ import 'package:celulas_app/src/features/home/presentation/widgets/member_dashbo
 import 'package:celulas_app/src/features/home/presentation/widgets/pastor_dashboard_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../widgets/pastor_analytics_widget.dart';
 
@@ -262,6 +263,26 @@ class _ReportsPageState extends State<ReportsPage>
     return '$weekdayName, $day/$month/$year';
   }
 
+  String _formatCycleKeyFriendly(String? cycleKey) {
+    if (cycleKey == null || cycleKey.isEmpty) return 'Ciclo não definido';
+    final parts = cycleKey.split('-');
+    if (parts.length == 3) {
+      final sundayDate = DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+      int weekNumber = ((sundayDate.day - 1) ~/ 7) + 1;
+      final monthName = DateFormat('MMMM', 'pt_BR').format(sundayDate);
+      final capitalizedMonth =
+      monthName.isNotEmpty
+          ? '${monthName[0].toUpperCase()}${monthName.substring(1)}'
+          : '';
+      return 'Ciclo: Semana $weekNumber de $capitalizedMonth';
+    }
+    return 'Ciclo: $cycleKey';
+  }
+
   CellEntity? _getActiveTargetCell() {
     if (_currentViewMode == ReportViewMode.leader) {
       return _leaderCell;
@@ -502,7 +523,6 @@ class _ReportsPageState extends State<ReportsPage>
           );
         }
       } else {
-        // Calcula a chave de ciclo pastoral baseada na data da reunião manual
         final cycleKeyStr = PastoralCycleHelper.getCycleKeyString(meetingDate);
 
         meetingToUse = CellMeetingModel(
@@ -952,6 +972,7 @@ class _ReportsPageState extends State<ReportsPage>
       itemBuilder: (context, index) {
         final meeting = meetings[index];
         final dateFormatted = _formatDateWithWeekday(meeting.meetingDate);
+        final cycleFriendly = _formatCycleKeyFriendly(meeting.cycleKey);
         final isFilled = meeting.isReportFilled;
         final isPastMeeting = meeting.isExpired;
 
@@ -1004,7 +1025,7 @@ class _ReportsPageState extends State<ReportsPage>
           typeIcon = Icons.edit_calendar;
         } else if (studyTopic != null && studyTopic.isNotEmpty) {
           meetingTypeDesc = "Tema: $studyTopic";
-          statusBadgeText = "Normal / Tema";
+          statusBadgeText = "Normal"; // <--- Padronizado como 'Normal' conforme solicitado
           cardBgColor = Colors.teal.shade50;
           cardBorderColor = Colors.teal.shade200;
           typeTextColor = Colors.teal.shade900;
@@ -1091,6 +1112,22 @@ class _ReportsPageState extends State<ReportsPage>
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    // Indicação do Ciclo Semanal
+                    Row(
+                      children: [
+                        const Icon(Icons.calendar_view_week, size: 13, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(
+                          cycleFriendly,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade700,
                           ),
                         ),
                       ],

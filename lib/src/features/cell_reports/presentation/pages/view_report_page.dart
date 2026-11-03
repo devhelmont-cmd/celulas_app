@@ -10,6 +10,7 @@ import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.da
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class ViewReportPage extends StatefulWidget {
   final CellEntity cell;
@@ -118,9 +119,31 @@ class _ViewReportPageState extends State<ViewReportPage> {
     return '$weekdayName, $day/$month/$year';
   }
 
+  String _formatCycleKeyFriendly(String? cycleKey) {
+    if (cycleKey == null || cycleKey.isEmpty) return 'Ciclo não definido';
+    final parts = cycleKey.split('-');
+    if (parts.length == 3) {
+      final sundayDate = DateTime(
+        int.parse(parts[0]),
+        int.parse(parts[1]),
+        int.parse(parts[2]),
+      );
+      int weekNumber = ((sundayDate.day - 1) ~/ 7) + 1;
+      final monthName = DateFormat('MMMM', 'pt_BR').format(sundayDate);
+      final capitalizedMonth =
+      monthName.isNotEmpty
+          ? '${monthName[0].toUpperCase()}${monthName.substring(1)}'
+          : '';
+      return 'Ciclo Semanal: Semana $weekNumber de $capitalizedMonth';
+    }
+    return 'Ciclo Semanal: $cycleKey';
+  }
+
   @override
   Widget build(BuildContext context) {
     final formattedDate = _formatDateWithWeekday(widget.meeting.meetingDate);
+    final cycleKeyStr = _report?.cycleKey ?? widget.meeting.cycleKey;
+    final formattedCycle = _formatCycleKeyFriendly(cycleKeyStr);
 
     final canEdit = widget.currentUser.isPastorOrCoordinator ||
         widget.currentUser.isLeader;
@@ -162,7 +185,7 @@ class _ViewReportPageState extends State<ViewReportPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // CABEÇALHO DA REUNIÃO
-            _buildHeaderCard(formattedDate),
+            _buildHeaderCard(formattedDate, formattedCycle),
 
             const SizedBox(height: 16),
 
@@ -207,7 +230,7 @@ class _ViewReportPageState extends State<ViewReportPage> {
     );
   }
 
-  Widget _buildHeaderCard(String formattedDate) {
+  Widget _buildHeaderCard(String formattedDate, String formattedCycle) {
     String statusTitle = "Reunião Realizada";
     Color headerBg = Colors.teal.shade50;
     Color headerText = Colors.teal.shade900;
@@ -264,6 +287,21 @@ class _ViewReportPageState extends State<ViewReportPage> {
           Text(
             'Data: $formattedDate',
             style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.calendar_view_week, size: 14, color: Colors.blueGrey),
+              const SizedBox(width: 4),
+              Text(
+                formattedCycle,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.blueGrey.shade800,
+                ),
+              ),
+            ],
           ),
         ],
       ),
