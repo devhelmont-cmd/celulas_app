@@ -285,8 +285,28 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
           ),
           const SizedBox(height: 24),
 
-          // 2º Gráfico: Status das Reuniões
-          MeetingStatusChartWidget(meetings: filteredMeetings),
+          // 2º Gráfico: Status das Reuniões (Usa relatórios reais com mapeamento rigoroso de status)
+          MeetingStatusChartWidget(
+            meetings: _selectedMonthKey == 'all'
+                ? _allReports.map((r) {
+              // Mapeia estritamente de acordo com o enum ReportStatus do relatório
+              String mappedStatus = 'normal';
+              if (r.status == ReportStatus.cacelled) {
+                mappedStatus = 'canceled';
+              } else if (r.status == ReportStatus.bridgeEvent) {
+                mappedStatus = 'bridge_event';
+              }
+
+              return CellMeetingModel(
+                id: r.id,
+                cellId: r.cellId,
+                meetingDate: r.scheduledDate,
+                status: mappedStatus,
+                isReportFilled: true,
+              );
+            }).toList()
+                : filteredMeetings,
+          ),
           const SizedBox(height: 24),
 
           // 3º Gráfico: Comparativo de Relatórios por Célula

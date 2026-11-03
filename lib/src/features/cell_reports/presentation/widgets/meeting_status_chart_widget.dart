@@ -13,28 +13,60 @@ class MeetingStatusChartWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Filtra apenas reuniões que já aconteceram e que possuem registro real,
+    // ou que foram explicitamente canceladas/pontes no histórico passado.
+    final pastMeetings = meetings.where((m) {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final mDate = DateTime(m.meetingDate.year, m.meetingDate.month, m.meetingDate.day);
+
+      // A data precisa ser passada (anterior ou igual a hoje)
+      final bool isPastDate = mDate.isBefore(today) || mDate.isAtSameMomentAs(today);
+
+      // Se for cancelada ou evento ponte, o histórico de reunião em si já define o status.
+      // Se for normal, garantimos que ela realmente aconteceu (ou foi preenchida/passada).
+      if (!isPastDate) return false;
+
+      if (m.status == 'canceled' || m.status == 'bridge_event') {
+        return true;
+      }
+
+      // Para reuniões normais do passado, consideramos apenas as que foram preenchidas
+      // ou que já passaram do dia de tolerância, evitando contar agendamentos vazios futuros.
+      return m.isReportFilled || m.isExpired;
+    }).toList();
+
     int normalCount = 0;
-    int rescheduledCount = 0;
     int canceledCount = 0;
     int bridgeCount = 0;
 
-    for (var m in meetings) {
+    for (var m in pastMeetings) {
+      // Ignora status 'rescheduled' conforme alinhado
+      if (m.status == 'rescheduled') continue;
+
       if (m.status == 'bridge_event') {
         bridgeCount++;
       } else if (m.status == 'canceled') {
         canceledCount++;
-      } else if (m.status == 'rescheduled') {
-        rescheduledCount++;
       } else {
+        // Considera como reunião normal (inclui status normal ou outros padrões ocorridos)
         normalCount++;
       }
     }
 
-    if (meetings.isEmpty) {
-      return const SizedBox.shrink();
+    if (pastMeetings.isEmpty) {
+      return const Card(
+        elevation: 2,
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Center(
+            child: Text('Nenhum histórico de reuniões passadas no período.'),
+          ),
+        ),
+      );
     }
 
-    double maxY = [normalCount, rescheduledCount, canceledCount, bridgeCount]
+    double maxY = [normalCount, canceledCount, bridgeCount]
         .reduce((curr, next) => curr > next ? curr : next)
         .toDouble();
     if (maxY < 5) maxY = 5;
@@ -48,23 +80,22 @@ class MeetingStatusChartWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Status das Reuniões e Eventos',
+              'Status das Reuniões Realizadas',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             const Text(
-              'Distribuição geral entre reuniões normais, remarcadas, canceladas e eventos ponte.',
+              'Distribuição histórica entre reuniões normais, canceladas e eventos ponte.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 16),
 
-            // Legenda / Resumo em Chips
+            // Legenda / Resumo em Chips (Sem As Remarcadas)
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 _buildStatusChip('Normais', normalCount, Colors.blue),
-                _buildStatusChip('Remarcadas', rescheduledCount, Colors.purple),
                 _buildStatusChip('Canceladas', canceledCount, Colors.red),
                 _buildStatusChip('Eventos Ponte', bridgeCount, Colors.teal),
               ],
@@ -111,12 +142,9 @@ class MeetingStatusChartWidget extends StatelessWidget {
                               text = const Text('Normais', style: TextStyle(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.bold));
                               break;
                             case 1:
-                              text = const Text('Remarc.', style: TextStyle(color: Colors.purple, fontSize: 11, fontWeight: FontWeight.bold));
-                              break;
-                            case 2:
                               text = const Text('Cancel.', style: TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold));
                               break;
-                            case 3:
+                            case 2:
                               text = const Text('Ponte', style: TextStyle(color: Colors.teal, fontSize: 11, fontWeight: FontWeight.bold));
                               break;
                             default:
@@ -139,7 +167,7 @@ class MeetingStatusChartWidget extends StatelessWidget {
                         BarChartRodData(
                           toY: normalCount.toDouble(),
                           color: Colors.blue,
-                          width: 22,
+                          width: 26,
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
                         ),
                       ],
@@ -148,9 +176,9 @@ class MeetingStatusChartWidget extends StatelessWidget {
                       x: 1,
                       barRods: [
                         BarChartRodData(
-                          toY: rescheduledCount.toDouble(),
-                          color: Colors.purple,
-                          width: 22,
+                          toY: canceledCount.toDouble(),
+                          color: Colors.red,
+                          width: 26,
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
                         ),
                       ],
@@ -159,20 +187,9 @@ class MeetingStatusChartWidget extends StatelessWidget {
                       x: 2,
                       barRods: [
                         BarChartRodData(
-                          toY: canceledCount.toDouble(),
-                          color: Colors.red,
-                          width: 22,
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-                        ),
-                      ],
-                    ),
-                    BarChartGroupData(
-                      x: 3,
-                      barRods: [
-                        BarChartRodData(
                           toY: bridgeCount.toDouble(),
                           color: Colors.teal,
-                          width: 22,
+                          width: 26,
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
                         ),
                       ],
