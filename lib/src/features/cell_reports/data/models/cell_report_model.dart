@@ -15,14 +15,21 @@ class VisitorModel extends VisitorEntity {
 }
 
 class AttendanceModel extends AttendanceEntity {
-  AttendanceModel({
-    required super.cellMemberId,
-    required super.isPresent,
-    super.isJustified,
-    super.justificationReason,
-    super.rolesPerformed,
-    super.isExcused,
-  });
+  const AttendanceModel({
+    required String cellMemberId,
+    required bool isPresent,
+    bool isJustified = false,
+    String? justificationReason,
+    List<String> rolesPerformed = const [], // Tipagem explícita aqui
+    bool isExcused = false,
+  }) : super(
+    cellMemberId: cellMemberId,
+    isPresent: isPresent,
+    isJustified: isJustified,
+    justificationReason: justificationReason,
+    rolesPerformed: rolesPerformed,
+    isExcused: isExcused,
+  );
 
   factory AttendanceModel.fromMap(Map<String, dynamic> map) {
     return AttendanceModel(
