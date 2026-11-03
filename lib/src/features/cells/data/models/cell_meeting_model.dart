@@ -1,3 +1,4 @@
+// lib/src/features/cells/data/models/cell_meeting_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CellMeetingModel {
@@ -12,6 +13,9 @@ class CellMeetingModel {
   final bool isReportFilled;
 
   final String? cycleKey;
+
+  // Define se o evento ponte (ou reunião) requer definição de funções
+  final bool hasRoles;
 
   // Funções da reunião
   final String? initialPrayerName;
@@ -38,6 +42,7 @@ class CellMeetingModel {
     this.meetingLocation,
     this.isReportFilled = false,
     this.cycleKey,
+    this.hasRoles = true,
     this.initialPrayerName,
     this.icebreakerName,
     this.worshipName,
@@ -67,7 +72,7 @@ class CellMeetingModel {
       id: id,
       cellId: map['cellId'] ?? '',
       meetingDate:
-          (map['meetingDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      (map['meetingDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
       status: map['status'] ?? 'normal',
       statusNote: map['statusNote'],
       eventName: map['eventName'],
@@ -75,6 +80,7 @@ class CellMeetingModel {
       meetingLocation: map['meetingLocation'],
       isReportFilled: map['isReportFilled'] ?? false,
       cycleKey: map['cycleKey'],
+      hasRoles: map['hasRoles'] ?? true,
       initialPrayerName: map['initialPrayerName'],
       icebreakerName: map['icebreakerName'],
       worshipName: map['worshipName'],
@@ -100,6 +106,7 @@ class CellMeetingModel {
       'meetingLocation': meetingLocation,
       'isReportFilled': isReportFilled,
       if (cycleKey != null) 'cycleKey': cycleKey,
+      'hasRoles': hasRoles,
       'initialPrayerName': initialPrayerName,
       'icebreakerName': icebreakerName,
       'worshipName': worshipName,

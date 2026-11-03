@@ -1401,12 +1401,12 @@ class _CellDetailPageState extends State<CellDetailPage>
   }
 
   Future<void> _showEditMeetingConfigDialog() async {
-    // Se a reunião atual expirou (já passou do dia), consideramos uma reunião nova (resetada)
     final bool isExpiredOrNull = _isMeetingExpired(_currentMeeting);
 
     String status = isExpiredOrNull ? 'normal' : (_currentMeeting?.status ?? 'normal');
     String eventName = isExpiredOrNull ? '' : (_currentMeeting?.eventName ?? '');
     String statusNote = isExpiredOrNull ? '' : (_currentMeeting?.statusNote ?? '');
+    bool hasRoles = isExpiredOrNull ? true : (_currentMeeting?.hasRoles ?? true);
 
     DateTime meetingDate = (!isExpiredOrNull && _currentMeeting != null)
         ? _currentMeeting!.meetingDate
@@ -1460,7 +1460,14 @@ class _CellDetailPageState extends State<CellDetailPage>
                         ),
                       ],
                       onChanged: (val) {
-                        if (val != null) setDialogState(() => status = val);
+                        if (val != null) {
+                          setDialogState(() {
+                            status = val;
+                            if (status == 'normal' || status == 'rescheduled') {
+                              hasRoles = true;
+                            }
+                          });
+                        }
                       },
                     ),
                     const SizedBox(height: 12),
@@ -1474,6 +1481,20 @@ class _CellDetailPageState extends State<CellDetailPage>
                         ),
                       ),
                       const SizedBox(height: 12),
+                      SwitchListTile(
+                        title: const Text('Definir Funções?'),
+                        subtitle: Text(
+                          hasRoles
+                              ? 'Terá louvor, palavra, quebra-gelo, etc.'
+                              : 'Sem funções (ex: cinema, show, passeio).',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        value: hasRoles,
+                        onChanged: (val) {
+                          setDialogState(() => hasRoles = val);
+                        },
+                      ),
+                      const SizedBox(height: 12),
                     ],
 
                     if (status == 'canceled') ...[
@@ -1485,7 +1506,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                           border: OutlineInputBorder(),
                         ),
                       ),
-                    ] else if (status != 'normal') ...[
+                    ] else ...[
                       ListTile(
                         title: Text(
                           'Data: ${meetingDate.day.toString().padLeft(2, '0')}/${meetingDate.month.toString().padLeft(2, '0')}/${meetingDate.year}',
@@ -1547,8 +1568,6 @@ class _CellDetailPageState extends State<CellDetailPage>
 
     if (result == true) {
       final formattedTime = '${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}';
-
-      // Se expirou, passamos id vazio para criar uma nova reunião no Firestore
       final meetingId = isExpiredOrNull ? '' : _currentMeeting!.id;
 
       final DateTime finalMeetingDate = (status == 'normal' || status == 'canceled')
@@ -1560,6 +1579,7 @@ class _CellDetailPageState extends State<CellDetailPage>
         cellId: _currentCell.id,
         meetingDate: finalMeetingDate,
         status: status,
+        hasRoles: status == 'bridge_event' ? hasRoles : true,
         eventName: status == 'bridge_event' ? eventNameController.text.trim() : null,
         statusNote: status == 'canceled' ? noteController.text.trim() : (status == 'bridge_event' || status == 'rescheduled' ? locationController.text.trim() : null),
         meetingTime: status != 'normal' && status != 'canceled' ? formattedTime : null,
@@ -2738,7 +2758,8 @@ class _CellDetailPageState extends State<CellDetailPage>
 
           const SizedBox(height: 24),
 
-          if (!isCanceled) ...[
+          // Se não estiver cancelada e TIVER funções ativas (hasRoles == true)
+          if (!isCanceled && (meeting?.hasRoles ?? true)) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -2773,6 +2794,27 @@ class _CellDetailPageState extends State<CellDetailPage>
             _buildRoleCard('Lanche', meeting?.snackName, Icons.restaurant),
             _buildRoleCard('Foto Oficial', meeting?.officialPhotoName, Icons.camera_alt),
             _buildRoleCard('Preenchimento do Relatório (Líder)', meeting?.reportFillerName, Icons.description),
+          ] else if (!isCanceled && !(meeting?.hasRoles ?? true)) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Este evento ponte não exige definição prévia de funções.',
+                      style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ] else ...[
             Container(
               padding: const EdgeInsets.all(16),

@@ -90,17 +90,24 @@ class _FillReportPageState extends State<FillReportPage> {
     _reportsRepository = getIt<ICellReportsRepository>();
     _cellDataSource = getIt<ICellRemoteDataSource>();
 
-    if (widget.meeting.cycleKey != null && widget.meeting.cycleKey!.isNotEmpty) {
+    if (widget.meeting.cycleKey != null &&
+        widget.meeting.cycleKey!.isNotEmpty) {
       _selectedCycleKey = widget.meeting.cycleKey!;
       // Tenta derivar a data representada inicial a partir da chave do ciclo ou usa a data da reunião
       final parts = _selectedCycleKey.split('-');
       if (parts.length == 3) {
-        _representedDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        _representedDate = DateTime(
+          int.parse(parts[0]),
+          int.parse(parts[1]),
+          int.parse(parts[2]),
+        );
       } else {
         _representedDate = widget.meeting.meetingDate;
       }
     } else {
-      _selectedCycleKey = PastoralCycleHelper.getCycleKeyString(widget.meeting.meetingDate);
+      _selectedCycleKey = PastoralCycleHelper.getCycleKeyString(
+        widget.meeting.meetingDate,
+      );
       _representedDate = widget.meeting.meetingDate;
     }
 
@@ -153,23 +160,27 @@ class _FillReportPageState extends State<FillReportPage> {
         _attendanceMap[member.id] = false;
       }
 
-      final existingReports =
-      await _reportsRepository.getReportsByCell(widget.cell.id);
-
-      final existingReport = existingReports.cast<CellReportModel?>().firstWhere(
-            (r) =>
-        r != null &&
-            r.scheduledDate.year == widget.meeting.meetingDate.year &&
-            r.scheduledDate.month == widget.meeting.meetingDate.month &&
-            r.scheduledDate.day == widget.meeting.meetingDate.day,
-        orElse: () => null,
+      final existingReports = await _reportsRepository.getReportsByCell(
+        widget.cell.id,
       );
+
+      final existingReport = existingReports
+          .cast<CellReportModel?>()
+          .firstWhere(
+            (r) =>
+                r != null &&
+                r.scheduledDate.year == widget.meeting.meetingDate.year &&
+                r.scheduledDate.month == widget.meeting.meetingDate.month &&
+                r.scheduledDate.day == widget.meeting.meetingDate.day,
+            orElse: () => null,
+          );
 
       if (existingReport != null) {
         _existingReportId = existingReport.id;
         _reportStatus = existingReport.status;
         _eventType = existingReport.eventType ?? 'normal';
-        if (existingReport.cycleKey != null && existingReport.cycleKey!.isNotEmpty) {
+        if (existingReport.cycleKey != null &&
+            existingReport.cycleKey!.isNotEmpty) {
           _selectedCycleKey = existingReport.cycleKey!;
         }
         if (existingReport.cancellationReason != null) {
@@ -187,12 +198,14 @@ class _FillReportPageState extends State<FillReportPage> {
                   trimmed.replaceFirst('Estudo/Tema:', '').trim();
             } else if (trimmed.startsWith('Oferta: R\$') ||
                 trimmed.startsWith('Oferta:')) {
-              _offeringValueCtrl.text = trimmed
-                  .replaceAll(RegExp(r'Oferta:\s*R\$\s*|Oferta:\s*'), '')
-                  .trim();
+              _offeringValueCtrl.text =
+                  trimmed
+                      .replaceAll(RegExp(r'Oferta:\s*R\$\s*|Oferta:\s*'), '')
+                      .trim();
             } else if (trimmed.startsWith('Testemunhos e Obs:')) {
-              testimonyLines
-                  .add(trimmed.replaceFirst('Testemunhos e Obs:', '').trim());
+              testimonyLines.add(
+                trimmed.replaceFirst('Testemunhos e Obs:', '').trim(),
+              );
             } else if (trimmed.isNotEmpty) {
               testimonyLines.add(trimmed);
             }
@@ -209,13 +222,15 @@ class _FillReportPageState extends State<FillReportPage> {
           }
         }
 
-        _visitors = existingReport.visitors
-            .map((v) => VisitorModel(name: v.name, phone: v.phone))
-            .toList();
+        _visitors =
+            existingReport.visitors
+                .map((v) => VisitorModel(name: v.name, phone: v.phone))
+                .toList();
 
-        _conversions = existingReport.conversions
-            .map((v) => VisitorModel(name: v.name, phone: v.phone))
-            .toList();
+        _conversions =
+            existingReport.conversions
+                .map((v) => VisitorModel(name: v.name, phone: v.phone))
+                .toList();
       } else {
         for (var member in members) {
           final mName = member.name.trim().toLowerCase();
@@ -279,8 +294,9 @@ class _FillReportPageState extends State<FillReportPage> {
     }
 
     setState(() {
-      _visitors
-          .add(VisitorModel(name: name, phone: phone.isEmpty ? null : phone));
+      _visitors.add(
+        VisitorModel(name: name, phone: phone.isEmpty ? null : phone),
+      );
       _visitorNameCtrl.clear();
       _visitorPhoneCtrl.clear();
     });
@@ -293,55 +309,61 @@ class _FillReportPageState extends State<FillReportPage> {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Editar Visitante'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Nome do Visitante',
-                border: OutlineInputBorder(),
-              ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Editar Visitante'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome do Visitante',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Telefone (Opcional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Telefone (Opcional)',
-                border: OutlineInputBorder(),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar'),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
+              ElevatedButton(
+                onPressed: () {
+                  final newName = nameCtrl.text.trim();
+                  if (newName.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Informe o nome do visitante.'),
+                      ),
+                    );
+                    return;
+                  }
+                  setState(() {
+                    _visitors[index] = VisitorModel(
+                      name: newName,
+                      phone:
+                          phoneCtrl.text.trim().isEmpty
+                              ? null
+                              : phoneCtrl.text.trim(),
+                    );
+                  });
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Salvar'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () {
-              final newName = nameCtrl.text.trim();
-              if (newName.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Informe o nome do visitante.')),
-                );
-                return;
-              }
-              setState(() {
-                _visitors[index] = VisitorModel(
-                  name: newName,
-                  phone: phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
-                );
-              });
-              Navigator.pop(ctx);
-            },
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -351,14 +373,17 @@ class _FillReportPageState extends State<FillReportPage> {
 
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Informe o nome da pessoa que se decidiu.')),
+        const SnackBar(
+          content: Text('Informe o nome da pessoa que se decidiu.'),
+        ),
       );
       return;
     }
 
     setState(() {
-      _conversions
-          .add(VisitorModel(name: name, phone: phone.isEmpty ? null : phone));
+      _conversions.add(
+        VisitorModel(name: name, phone: phone.isEmpty ? null : phone),
+      );
       _conversionNameCtrl.clear();
       _conversionPhoneCtrl.clear();
     });
@@ -371,55 +396,61 @@ class _FillReportPageState extends State<FillReportPage> {
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Editar Conversão / Decisão'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Nome da Pessoa',
-                border: OutlineInputBorder(),
-              ),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Editar Conversão / Decisão'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Nome da Pessoa',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Telefone (Opcional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Telefone (Opcional)',
-                border: OutlineInputBorder(),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar'),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
+              ElevatedButton(
+                onPressed: () {
+                  final newName = nameCtrl.text.trim();
+                  if (newName.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Informe o nome da pessoa.'),
+                      ),
+                    );
+                    return;
+                  }
+                  setState(() {
+                    _conversions[index] = VisitorModel(
+                      name: newName,
+                      phone:
+                          phoneCtrl.text.trim().isEmpty
+                              ? null
+                              : phoneCtrl.text.trim(),
+                    );
+                  });
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Salvar'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () {
-              final newName = nameCtrl.text.trim();
-              if (newName.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Informe o nome da pessoa.')),
-                );
-                return;
-              }
-              setState(() {
-                _conversions[index] = VisitorModel(
-                  name: newName,
-                  phone: phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
-                );
-              });
-              Navigator.pop(ctx);
-            },
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -447,24 +478,25 @@ class _FillReportPageState extends State<FillReportPage> {
         });
       }
 
-      final List<AttendanceModel> attendances = _members.map((m) {
-        if (_reportStatus == ReportStatus.cacelled) {
-          return AttendanceModel(
-            cellMemberId: m.id,
-            isPresent: false,
-            isExcused: true,
-            rolesPerformed: [],
-          );
-        }
-        final isPresent = _attendanceMap[m.id] ?? false;
-        final roles = memberRolesMap[m.id] ?? [];
-        return AttendanceModel(
-          cellMemberId: m.id,
-          isPresent: isPresent,
-          rolesPerformed: roles,
-          isExcused: false,
-        );
-      }).toList();
+      final List<AttendanceModel> attendances =
+          _members.map((m) {
+            if (_reportStatus == ReportStatus.cacelled) {
+              return AttendanceModel(
+                cellMemberId: m.id,
+                isPresent: false,
+                isExcused: true,
+                rolesPerformed: [],
+              );
+            }
+            final isPresent = _attendanceMap[m.id] ?? false;
+            final roles = memberRolesMap[m.id] ?? [];
+            return AttendanceModel(
+              cellMemberId: m.id,
+              isPresent: isPresent,
+              rolesPerformed: roles,
+              isExcused: false,
+            );
+          }).toList();
 
       StringBuffer notesBuffer = StringBuffer();
       if (_studyTopicCtrl.text.trim().isNotEmpty) {
@@ -474,8 +506,9 @@ class _FillReportPageState extends State<FillReportPage> {
         notesBuffer.writeln('Oferta: R\$ ${_offeringValueCtrl.text.trim()}');
       }
       if (_testimoniesNotesCtrl.text.trim().isNotEmpty) {
-        notesBuffer
-            .writeln('Testemunhos e Obs: ${_testimoniesNotesCtrl.text.trim()}');
+        notesBuffer.writeln(
+          'Testemunhos e Obs: ${_testimoniesNotesCtrl.text.trim()}',
+        );
       }
 
       final report = CellReportModel(
@@ -485,13 +518,17 @@ class _FillReportPageState extends State<FillReportPage> {
         actualDate: DateTime.now(),
         status: _reportStatus,
         eventType: _eventType,
-        cancellationReason: _reportStatus == ReportStatus.cacelled
-            ? _cancellationReasonCtrl.text.trim()
-            : null,
+        cancellationReason:
+            _reportStatus == ReportStatus.cacelled
+                ? _cancellationReasonCtrl.text.trim()
+                : null,
         attendances: attendances,
         visitors: _reportStatus == ReportStatus.cacelled ? [] : _visitors,
         conversions: _reportStatus == ReportStatus.cacelled ? [] : _conversions,
-        testimoniesAndNotes: _reportStatus == ReportStatus.cacelled ? null : notesBuffer.toString().trim(),
+        testimoniesAndNotes:
+            _reportStatus == ReportStatus.cacelled
+                ? null
+                : notesBuffer.toString().trim(),
         filledByUserId: widget.currentUser.id,
         createdAt: DateTime.now(),
         cycleKey: _selectedCycleKey,
@@ -503,9 +540,10 @@ class _FillReportPageState extends State<FillReportPage> {
         id: widget.meeting.id,
         cellId: widget.cell.id,
         meetingDate: widget.meeting.meetingDate,
-        status: _reportStatus == ReportStatus.cacelled
-            ? 'canceled'
-            : (_eventType == 'bridge_event' ? 'bridge_event' : 'normal'),
+        status:
+            _reportStatus == ReportStatus.cacelled
+                ? 'canceled'
+                : (_eventType == 'bridge_event' ? 'bridge_event' : 'normal'),
         statusNote: _cancellationReasonCtrl.text.trim(),
         eventName: widget.meeting.eventName,
         meetingTime: widget.meeting.meetingTime,
@@ -562,661 +600,746 @@ class _FillReportPageState extends State<FillReportPage> {
       );
       int weekNumber = ((sundayDate.day - 1) ~/ 7) + 1;
       final monthName = DateFormat('MMMM', 'pt_BR').format(sundayDate);
-      final capitalizedMonth = monthName.isNotEmpty
-          ? '${monthName[0].toUpperCase()}${monthName.substring(1)}'
-          : '';
+      final capitalizedMonth =
+          monthName.isNotEmpty
+              ? '${monthName[0].toUpperCase()}${monthName.substring(1)}'
+              : '';
 
       friendlyCycleLabel = 'Semana $weekNumber de $capitalizedMonth';
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Relatório - $formattedDate'),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // CICLO SEMANAL DE REFERÊNCIA
-            Card(
-              elevation: 2,
-              color: Colors.blue.shade50,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.blue.shade200),
-              ),
-              child: Padding(
+      appBar: AppBar(title: Text('Relatório - $formattedDate')),
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.calendar_view_week, color: Colors.blueAccent),
-                        SizedBox(width: 8),
-                        Text(
-                          'Ciclo Semanal de Referência',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blueAccent,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Este relatório será contabilizado consolidadamente no ciclo semanal abaixo:',
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
-                    ),
-                    const SizedBox(height: 12),
-                    InkWell(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _representedDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                          helpText: 'Selecione a qual dia/semana a reunião representa',
-                        );
-                        if (picked != null) {
-                          final sunday = PastoralCycleHelper.getCycleSunday(picked);
-                          setState(() {
-                            _representedDate = picked;
-                            _selectedCycleKey = PastoralCycleHelper.getCycleKeyString(sunday);
-                          });
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue.shade300),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    // CICLO SEMANAL DE REFERÊNCIA
+                    Card(
+                      elevation: 2,
+                      color: Colors.blue.shade50,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.blue.shade200),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Text(
-                                friendlyCycleLabel,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
-                            const Icon(Icons.edit_calendar, color: Colors.blue),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // STATUS DA REUNIÃO
-            Card(
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Status da Reunião',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    RadioListTile<ReportStatus>(
-                      title: const Text('Houve a Célula / Reunião Normal'),
-                      value: ReportStatus.occurred,
-                      groupValue: _reportStatus,
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _reportStatus = val;
-                            _eventType = 'normal';
-                          });
-                        }
-                      },
-                    ),
-                    RadioListTile<ReportStatus>(
-                      title:
-                      const Text('Evento Ponte / Atividade Especial'),
-                      value: ReportStatus.bridgeEvent,
-                      groupValue: _reportStatus,
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _reportStatus = val;
-                            _eventType = 'bridge_event';
-                            if (widget.meeting.eventName != null &&
-                                widget.meeting.eventName!.trim().isNotEmpty &&
-                                _studyTopicCtrl.text.trim().isEmpty) {
-                              _studyTopicCtrl.text = widget.meeting.eventName!.trim();
-                            }
-                          });
-                        }
-                      },
-                    ),
-                    RadioListTile<ReportStatus>(
-                      title: const Text('Não Houve Célula / Cancelada'),
-                      value: ReportStatus.cacelled,
-                      groupValue: _reportStatus,
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() {
-                            _reportStatus = val;
-                          });
-                        }
-                      },
-                    ),
-                    if (_reportStatus == ReportStatus.cacelled) ...[
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _cancellationReasonCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Motivo do Cancelamento',
-                          border: OutlineInputBorder(),
-                        ),
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.amber.shade200),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.info_outline, color: Colors.amberAccent),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Como a reunião foi cancelada, nenhum membro receberá falta nem presença (abonado automaticamente), e nenhuma função será contabilizada.',
-                                style: TextStyle(fontSize: 12, color: Colors.amberAccent),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-
-            if (_reportStatus != ReportStatus.cacelled) ...[
-              const SizedBox(height: 20),
-
-              // LISTA DE FREQUÊNCIA DOS MEMBROS
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Frequência dos Membros',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'Presentes: ${_attendanceMap.values.where((v) => v).length}/${_members.length}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const Text(
-                        'Marque quem compareceu à reunião:',
-                        style:
-                        TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      const Divider(height: 20),
-                      _members.isEmpty
-                          ? const Text(
-                          'Nenhum membro vinculado a esta célula.')
-                          : ListView.separated(
-                        shrinkWrap: true,
-                        physics:
-                        const NeverScrollableScrollPhysics(),
-                        itemCount: _members.length,
-                        separatorBuilder: (_, __) =>
-                        const Divider(height: 8),
-                        itemBuilder: (context, index) {
-                          final member = _members[index];
-                          final isPresent =
-                              _attendanceMap[member.id] ?? false;
-
-                          final memberRoles = _meetingRoles.entries
-                              .where((entry) =>
-                          entry.value == member.id)
-                              .map((entry) => entry.key)
-                              .toList();
-
-                          return CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                              member.name,
-                              style: TextStyle(
-                                fontWeight: isPresent
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                            const Row(
                               children: [
+                                Icon(
+                                  Icons.calendar_view_week,
+                                  color: Colors.blueAccent,
+                                ),
+                                SizedBox(width: 8),
                                 Text(
-                                    'Função na Célula: ${member.role}'),
-                                if (memberRoles.isNotEmpty) ...[
-                                  const SizedBox(height: 2),
-                                  Wrap(
-                                    spacing: 4,
-                                    children: memberRoles
-                                        .map((r) => Chip(
-                                      label: Text(r,
-                                          style:
-                                          const TextStyle(
-                                              fontSize:
-                                              10)),
-                                      backgroundColor:
-                                      Colors
-                                          .blue.shade50,
-                                      padding:
-                                      EdgeInsets.zero,
-                                      materialTapTargetSize:
-                                      MaterialTapTargetSize
-                                          .shrinkWrap,
-                                    ))
-                                        .toList(),
+                                  'Ciclo Semanal de Referência',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blueAccent,
                                   ),
-                                ],
+                                ),
                               ],
                             ),
-                            value: isPresent,
-                            onChanged: (val) {
-                              setState(() {
-                                _attendanceMap[member.id] =
-                                    val ?? false;
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ATRIBUIÇÃO DE FUNÇÕES DA REUNIÃO
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Funções Realizadas na Reunião',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Text(
-                        'Defina quem liderou cada parte nesta reunião:',
-                        style:
-                        TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                      const Divider(height: 20),
-                      ..._allRolesList.map((role) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12.0),
-                          child: DropdownButtonFormField<String?>(
-                            value: _meetingRoles[role],
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              labelText: role,
-                              isDense: true,
-                              border: const OutlineInputBorder(),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Este relatório será contabilizado consolidadamente no ciclo semanal abaixo:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.black54,
+                              ),
                             ),
-                            items: [
-                              const DropdownMenuItem<String?>(
-                                value: null,
-                                child: Text(
-                                  'Nenhum / Não atribuído',
-                                  style: TextStyle(color: Colors.grey),
+                            const SizedBox(height: 12),
+                            InkWell(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _representedDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2030),
+                                  helpText:
+                                      'Selecione a qual dia/semana a reunião representa',
+                                );
+                                if (picked != null) {
+                                  final sunday =
+                                      PastoralCycleHelper.getCycleSunday(
+                                        picked,
+                                      );
+                                  setState(() {
+                                    _representedDate = picked;
+                                    _selectedCycleKey =
+                                        PastoralCycleHelper.getCycleKeyString(
+                                          sunday,
+                                        );
+                                  });
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.blue.shade300,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        friendlyCycleLabel,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.edit_calendar,
+                                      color: Colors.blue,
+                                    ),
+                                  ],
                                 ),
                               ),
-                              ..._members.map((m) => DropdownMenuItem<String?>(
-                                value: m.id,
-                                child: Text(m.name),
-                              )),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // STATUS DA REUNIÃO
+                    Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Status da Reunião',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            RadioListTile<ReportStatus>(
+                              title: const Text(
+                                'Houve a Célula / Reunião Normal',
+                              ),
+                              value: ReportStatus.occurred,
+                              groupValue: _reportStatus,
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    _reportStatus = val;
+                                    _eventType = 'normal';
+                                  });
+                                }
+                              },
+                            ),
+                            RadioListTile<ReportStatus>(
+                              title: const Text(
+                                'Evento Ponte / Atividade Especial',
+                              ),
+                              value: ReportStatus.bridgeEvent,
+                              groupValue: _reportStatus,
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    _reportStatus = val;
+                                    _eventType = 'bridge_event';
+                                    if (widget.meeting.eventName != null &&
+                                        widget.meeting.eventName!
+                                            .trim()
+                                            .isNotEmpty &&
+                                        _studyTopicCtrl.text.trim().isEmpty) {
+                                      _studyTopicCtrl.text =
+                                          widget.meeting.eventName!.trim();
+                                    }
+                                  });
+                                }
+                              },
+                            ),
+                            RadioListTile<ReportStatus>(
+                              title: const Text('Não Houve Célula / Cancelada'),
+                              value: ReportStatus.cacelled,
+                              groupValue: _reportStatus,
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    _reportStatus = val;
+                                  });
+                                }
+                              },
+                            ),
+                            if (_reportStatus == ReportStatus.cacelled) ...[
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _cancellationReasonCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'Motivo do Cancelamento',
+                                  border: OutlineInputBorder(),
+                                ),
+                                maxLines: 2,
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.amber.shade200,
+                                  ),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline,
+                                      color: Colors.amberAccent,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Como a reunião foi cancelada, nenhum membro receberá falta nem presença (abonado automaticamente), e nenhuma função será contabilizada.',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.amberAccent,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
-                            onChanged: (selectedId) {
-                              setState(() {
-                                _meetingRoles[role] = selectedId;
-                              });
-                            },
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // VISITANTES
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Visitantes',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _visitorNameCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Nome do Visitante',
-                                isDense: true,
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: _visitorPhoneCtrl,
-                              keyboardType: TextInputType.phone,
-                              decoration: const InputDecoration(
-                                labelText: 'Telefone (Opcional)',
-                                isDense: true,
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton.filled(
-                            onPressed: _addVisitor,
-                            icon: const Icon(Icons.add),
-                          ),
-                        ],
-                      ),
-                      if (_visitors.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _visitors.length,
-                          itemBuilder: (context, index) {
-                            final v = _visitors[index];
-                            return ListTile(
-                              dense: true,
-                              leading: const Icon(Icons.person,
-                                  color: Colors.blue),
-                              title: Text(v.name),
-                              subtitle:
-                              Text(v.phone ?? 'Sem telefone'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
+                    ),
+
+                    if (_reportStatus != ReportStatus.cacelled) ...[
+                      const SizedBox(height: 20),
+
+                      // LISTA DE FREQUÊNCIA DOS MEMBROS
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit,
-                                        color: Colors.blue, size: 20),
-                                    onPressed: () => _editVisitor(index),
+                                  const Text(
+                                    'Frequência dos Membros',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete,
-                                        color: Colors.red, size: 20),
-                                    onPressed: () {
-                                      setState(() {
-                                        _visitors.removeAt(index);
-                                      });
-                                    },
+                                  Text(
+                                    'Presentes: ${_attendanceMap.values.where((v) => v).length}/${_members.length}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue,
+                                    ),
                                   ),
                                 ],
                               ),
-                            );
-                          },
+                              const Text(
+                                'Marque quem compareceu à reunião:',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              const Divider(height: 20),
+                              _members.isEmpty
+                                  ? const Text(
+                                    'Nenhum membro vinculado a esta célula.',
+                                  )
+                                  : ListView.separated(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: _members.length,
+                                    separatorBuilder:
+                                        (_, __) => const Divider(height: 8),
+                                    itemBuilder: (context, index) {
+                                      final member = _members[index];
+                                      final isPresent =
+                                          _attendanceMap[member.id] ?? false;
+
+                                      final memberRoles =
+                                          _meetingRoles.entries
+                                              .where(
+                                                (entry) =>
+                                                    entry.value == member.id,
+                                              )
+                                              .map((entry) => entry.key)
+                                              .toList();
+
+                                      return CheckboxListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        title: Text(
+                                          member.name,
+                                          style: TextStyle(
+                                            fontWeight:
+                                                isPresent
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                          ),
+                                        ),
+                                        subtitle: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Função na Célula: ${member.role}',
+                                            ),
+                                            if (memberRoles.isNotEmpty) ...[
+                                              const SizedBox(height: 2),
+                                              Wrap(
+                                                spacing: 4,
+                                                children:
+                                                    memberRoles
+                                                        .map(
+                                                          (r) => Chip(
+                                                            label: Text(
+                                                              r,
+                                                              style:
+                                                                  const TextStyle(
+                                                                    fontSize:
+                                                                        10,
+                                                                  ),
+                                                            ),
+                                                            backgroundColor:
+                                                                Colors
+                                                                    .blue
+                                                                    .shade50,
+                                                            padding:
+                                                                EdgeInsets.zero,
+                                                            materialTapTargetSize:
+                                                                MaterialTapTargetSize
+                                                                    .shrinkWrap,
+                                                          ),
+                                                        )
+                                                        .toList(),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        value: isPresent,
+                                        onChanged: (val) {
+                                          setState(() {
+                                            _attendanceMap[member.id] =
+                                                val ?? false;
+                                          });
+                                        },
+                                      );
+                                    },
+                                  ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      if (widget.meeting.hasRoles) ...[
+                        const SizedBox(height: 20),
+
+                        // ATRIBUIÇÃO DE FUNÇÕES DA REUNIÃO
+                        Card(
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Funções Realizadas na Reunião',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const Text(
+                                  'Defina quem liderou cada parte nesta reunião:',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                                const Divider(height: 20),
+                                ..._allRolesList.map((role) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(
+                                      bottom: 12.0,
+                                    ),
+                                    child: DropdownButtonFormField<String?>(
+                                      value: _meetingRoles[role],
+                                      isExpanded: true,
+                                      decoration: InputDecoration(
+                                        labelText: role,
+                                        isDense: true,
+                                        border: const OutlineInputBorder(),
+                                      ),
+                                      items: [
+                                        const DropdownMenuItem<String?>(
+                                          value: null,
+                                          child: Text(
+                                            'Nenhum / Não atribuído',
+                                            style: TextStyle(
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ),
+                                        ..._members.map(
+                                          (m) => DropdownMenuItem<String?>(
+                                            value: m.id,
+                                            child: Text(m.name),
+                                          ),
+                                        ),
+                                      ],
+                                      onChanged: (selectedId) {
+                                        setState(() {
+                                          _meetingRoles[role] = selectedId;
+                                        });
+                                      },
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
-                    ],
-                  ),
-                ),
-              ),
 
-              const SizedBox(height: 20),
+                      const SizedBox(height: 20),
 
-              // DECISÕES / CONVERSÕES
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Decisões / Conversões',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
+                      // VISITANTES
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _conversionNameCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Nome da Pessoa',
-                                isDense: true,
-                                border: OutlineInputBorder(),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Visitantes',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: _conversionPhoneCtrl,
-                              keyboardType: TextInputType.phone,
-                              decoration: const InputDecoration(
-                                labelText: 'Telefone',
-                                isDense: true,
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton.filled(
-                            style: IconButton.styleFrom(
-                                backgroundColor: Colors.green),
-                            onPressed: _addConversion,
-                            icon: const Icon(Icons.add),
-                          ),
-                        ],
-                      ),
-                      if (_conversions.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _conversions.length,
-                          itemBuilder: (context, index) {
-                            final c = _conversions[index];
-                            return ListTile(
-                              dense: true,
-                              leading: const Icon(Icons.favorite,
-                                  color: Colors.green),
-                              title: Text(c.name),
-                              subtitle:
-                              Text(c.phone ?? 'Sem telefone'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
+                              const SizedBox(height: 12),
+                              Row(
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit,
-                                        color: Colors.blue, size: 20),
-                                    onPressed: () => _editConversion(index),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _visitorNameCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Nome do Visitante',
+                                        isDense: true,
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete,
-                                        color: Colors.red, size: 20),
-                                    onPressed: () {
-                                      setState(() {
-                                        _conversions.removeAt(index);
-                                      });
-                                    },
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _visitorPhoneCtrl,
+                                      keyboardType: TextInputType.phone,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Telefone (Opcional)',
+                                        isDense: true,
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton.filled(
+                                    onPressed: _addVisitor,
+                                    icon: const Icon(Icons.add),
                                   ),
                                 ],
                               ),
-                            );
-                          },
+                              if (_visitors.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: _visitors.length,
+                                  itemBuilder: (context, index) {
+                                    final v = _visitors[index];
+                                    return ListTile(
+                                      dense: true,
+                                      leading: const Icon(
+                                        Icons.person,
+                                        color: Colors.blue,
+                                      ),
+                                      title: Text(v.name),
+                                      subtitle: Text(v.phone ?? 'Sem telefone'),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.edit,
+                                              color: Colors.blue,
+                                              size: 20,
+                                            ),
+                                            onPressed:
+                                                () => _editVisitor(index),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.delete,
+                                              color: Colors.red,
+                                              size: 20,
+                                            ),
+                                            onPressed: () {
+                                              setState(() {
+                                                _visitors.removeAt(index);
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
-                      ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // DECISÕES / CONVERSÕES
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Decisões / Conversões',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _conversionNameCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Nome da Pessoa',
+                                        isDense: true,
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _conversionPhoneCtrl,
+                                      keyboardType: TextInputType.phone,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Telefone',
+                                        isDense: true,
+                                        border: OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton.filled(
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                    ),
+                                    onPressed: _addConversion,
+                                    icon: const Icon(Icons.add),
+                                  ),
+                                ],
+                              ),
+                              if (_conversions.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: _conversions.length,
+                                  itemBuilder: (context, index) {
+                                    final c = _conversions[index];
+                                    return ListTile(
+                                      dense: true,
+                                      leading: const Icon(
+                                        Icons.favorite,
+                                        color: Colors.green,
+                                      ),
+                                      title: Text(c.name),
+                                      subtitle: Text(c.phone ?? 'Sem telefone'),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.edit,
+                                              color: Colors.blue,
+                                              size: 20,
+                                            ),
+                                            onPressed:
+                                                () => _editConversion(index),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.delete,
+                                              color: Colors.red,
+                                              size: 20,
+                                            ),
+                                            onPressed: () {
+                                              setState(() {
+                                                _conversions.removeAt(index);
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // ESTUDO, OFERTA E TESTEMUNHOS
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Detalhes da Reunião',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _studyTopicCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'Tema ou Estudo Ministrado',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _offeringValueCtrl,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                decoration: const InputDecoration(
+                                  labelText: 'Valor da Oferta (R\$)',
+                                  border: OutlineInputBorder(),
+                                  prefixText: 'R\$ ',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _testimoniesNotesCtrl,
+                                maxLines: 3,
+                                decoration: const InputDecoration(
+                                  labelText: 'Testemunhos e Observações Gerais',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
-                  ),
+
+                    const SizedBox(height: 24),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Theme.of(context).primaryColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: _isSaving ? null : _submitReport,
+                        child:
+                            _isSaving
+                                ? const CircularProgressIndicator(
+                                  color: Colors.white,
+                                )
+                                : const Text(
+                                  'Salvar Relatório',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              // ESTUDO, OFERTA E TESTEMUNHOS
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Detalhes da Reunião',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _studyTopicCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Tema ou Estudo Ministrado',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _offeringValueCtrl,
-                        keyboardType:
-                        const TextInputType.numberWithOptions(
-                            decimal: true),
-                        decoration: const InputDecoration(
-                          labelText: 'Valor da Oferta (R\$)',
-                          border: OutlineInputBorder(),
-                          prefixText: 'R\$ ',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: _testimoniesNotesCtrl,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'Testemunhos e Observações Gerais',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 24),
-
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onPressed: _isSaving ? null : _submitReport,
-                child: _isSaving
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text(
-                  'Salvar Relatório',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

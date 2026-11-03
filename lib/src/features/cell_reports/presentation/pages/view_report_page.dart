@@ -472,9 +472,11 @@ class _ViewReportPageState extends State<ViewReportPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Frequência & Funções Realizadas',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+            Text(
+              widget.meeting.hasRoles
+                  ? 'Frequência & Funções Realizadas'
+                  : 'Frequência dos Membros',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
             ),
             const Divider(height: 16),
             ListView.separated(
