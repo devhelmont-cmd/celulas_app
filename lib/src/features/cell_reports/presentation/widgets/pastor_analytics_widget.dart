@@ -63,7 +63,7 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
           _isLoading = false;
 
           // Seleciona o mês atual por padrão se houver dados
-          if (_selectedMonthKey == 'all' && reports.isNotEmpty) {
+          /*if (_selectedMonthKey == 'all' && reports.isNotEmpty) {
             final nowKey = DateFormat('yyyy-MM').format(DateTime.now());
             final hasCurrentMonth = reports.any((r) {
               final cycleKey =
@@ -75,7 +75,7 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
             if (hasCurrentMonth) {
               _selectedMonthKey = nowKey;
             }
-          }
+          }*/
         });
       }
     } catch (e) {

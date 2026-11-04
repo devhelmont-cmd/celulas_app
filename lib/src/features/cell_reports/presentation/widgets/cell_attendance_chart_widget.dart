@@ -5,7 +5,7 @@ import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_repor
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
 import 'package:intl/intl.dart';
 
-enum ChartViewGrouping { cycles, dates }
+enum ChartViewGrouping { cycles, dates, months }
 
 class _ConsolidatedCycleReport {
   final String cycleKey;
@@ -19,6 +19,26 @@ class _ConsolidatedCycleReport {
   _ConsolidatedCycleReport({
     required this.cycleKey,
     required this.anchorSunday,
+    required this.shortLabel,
+    required this.cleanLabel,
+    required this.totalMembers,
+    required this.totalVisitors,
+    required this.totalConversions,
+  });
+}
+
+class _ConsolidatedMonthReport {
+  final String monthKey;
+  final DateTime anchorDate;
+  final String shortLabel;
+  final String cleanLabel;
+  final double totalMembers;
+  final double totalVisitors;
+  final double totalConversions;
+
+  _ConsolidatedMonthReport({
+    required this.monthKey,
+    required this.anchorDate,
     required this.shortLabel,
     required this.cleanLabel,
     required this.totalMembers,
@@ -57,6 +77,11 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
       );
     }
 
+    // Se um mês específico foi filtrado e o modo atual for 'months', volta para 'cycles'
+    if (widget.selectedMonthKey != 'all' && _groupingMode == ChartViewGrouping.months) {
+      _groupingMode = ChartViewGrouping.cycles;
+    }
+
     // Filtra os relatórios baseando-se sempre no cycleKey correspondente ao mês selecionado
     List<CellReportEntity> activeReports = widget.reports;
     if (widget.selectedMonthKey != 'all') {
@@ -73,6 +98,7 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
     List<FlSpot> conversionSpots = [];
 
     List<_ConsolidatedCycleReport> recentCycles = [];
+    List<_ConsolidatedMonthReport> recentMonths = [];
     List<String> dateLabels = [];
 
     if (_groupingMode == ChartViewGrouping.cycles) {
@@ -141,8 +167,75 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
         visitorSpots.add(FlSpot(i.toDouble(), c.totalVisitors));
         conversionSpots.add(FlSpot(i.toDouble(), c.totalConversions));
       }
+    } else if (_groupingMode == ChartViewGrouping.months) {
+      Map<String, List<CellReportEntity>> reportsByMonth = {};
+      for (var r in activeReports) {
+        final cycleKey = (r.cycleKey != null && r.cycleKey!.isNotEmpty)
+            ? r.cycleKey!
+            : PastoralCycleHelper.getCycleKeyString(r.scheduledDate);
+
+        String monthKey = cycleKey.length >= 7
+            ? cycleKey.substring(0, 7)
+            : '${r.scheduledDate.year}-${r.scheduledDate.month.toString().padLeft(2, '0')}';
+
+        reportsByMonth.putIfAbsent(monthKey, () => []).add(r);
+      }
+
+      List<_ConsolidatedMonthReport> consolidatedList = [];
+      reportsByMonth.forEach((monthKey, monthReports) {
+        final parts = monthKey.split('-');
+        int year = int.parse(parts[0]);
+        int month = int.parse(parts[1]);
+        DateTime anchorDate = DateTime(year, month, 1);
+
+        final monthFullName = DateFormat('MMMM \'de\' yyyy', 'pt_BR').format(anchorDate);
+        final capitalizedFullName = monthFullName.isNotEmpty
+            ? '${monthFullName[0].toUpperCase()}${monthFullName.substring(1)}'
+            : '';
+
+        final monthShortName = DateFormat('MMM/yy', 'pt_BR').format(anchorDate);
+        final capitalizedShortName = monthShortName.isNotEmpty
+            ? '${monthShortName[0].toUpperCase()}${monthShortName.substring(1).replaceAll('.', '')}'
+            : '';
+
+        final shortLabel = capitalizedShortName;
+        final cleanLabel = 'Mês de $capitalizedFullName';
+
+        double membersSum = 0;
+        double visitorsSum = 0;
+        double conversionsSum = 0;
+
+        for (var r in monthReports) {
+          membersSum += r.attendances.where((a) => a.isPresent).length.toDouble();
+          visitorsSum += r.visitors.length.toDouble();
+          conversionsSum += r.conversions.length.toDouble();
+        }
+
+        consolidatedList.add(_ConsolidatedMonthReport(
+          monthKey: monthKey,
+          anchorDate: anchorDate,
+          shortLabel: shortLabel,
+          cleanLabel: cleanLabel,
+          totalMembers: membersSum,
+          totalVisitors: visitorsSum,
+          totalConversions: conversionsSum,
+        ));
+      });
+
+      consolidatedList.sort((a, b) => a.anchorDate.compareTo(b.anchorDate));
+
+      recentMonths = consolidatedList.length > 7
+          ? consolidatedList.sublist(consolidatedList.length - 7)
+          : consolidatedList;
+
+      for (int i = 0; i < recentMonths.length; i++) {
+        final c = recentMonths[i];
+        memberSpots.add(FlSpot(i.toDouble(), c.totalMembers));
+        visitorSpots.add(FlSpot(i.toDouble(), c.totalVisitors));
+        conversionSpots.add(FlSpot(i.toDouble(), c.totalConversions));
+      }
     } else {
-      // Modo Datas Específicas: Exibe os relatórios filtrados pelo ciclo do mês
+      // Modo Datas Específicas
       Map<String, List<CellReportEntity>> reportsByDate = {};
       for (var r in activeReports) {
         final String dateKey = '${r.scheduledDate.year}-${r.scheduledDate.month.toString().padLeft(2, '0')}-${r.scheduledDate.day.toString().padLeft(2, '0')}';
@@ -196,29 +289,38 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
                       Text(
                         _groupingMode == ChartViewGrouping.cycles
                             ? 'Evolução por Ciclos Pastorais'
-                            : 'Evolução por Datas Específicas',
+                            : (_groupingMode == ChartViewGrouping.months
+                            ? 'Evolução por Meses'
+                            : 'Evolução por Datas Específicas'),
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         _groupingMode == ChartViewGrouping.cycles
                             ? 'Consolidado geral da igreja por semanas pastorais.'
-                            : 'Consolidado geral da igreja por dias de reunião.',
+                            : (_groupingMode == ChartViewGrouping.months
+                            ? 'Consolidado geral da igreja por meses.'
+                            : 'Consolidado geral da igreja por dias de reunião.'),
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                     ],
                   ),
                 ),
                 SegmentedButton<ChartViewGrouping>(
-                  segments: const [
-                    ButtonSegment(
+                  segments: [
+                    const ButtonSegment(
                       value: ChartViewGrouping.cycles,
                       label: Text('Semanas', style: TextStyle(fontSize: 11)),
                     ),
-                    ButtonSegment(
+                    const ButtonSegment(
                       value: ChartViewGrouping.dates,
                       label: Text('Datas', style: TextStyle(fontSize: 11)),
                     ),
+                    if (widget.selectedMonthKey == 'all')
+                      const ButtonSegment(
+                        value: ChartViewGrouping.months,
+                        label: Text('Meses', style: TextStyle(fontSize: 11)),
+                      ),
                   ],
                   selected: {_groupingMode},
                   onSelectionChanged: (Set<ChartViewGrouping> newSelection) {
@@ -229,7 +331,7 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
                   style: ButtonStyle(
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 8)),
+                    padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 6)),
                   ),
                 ),
               ],
@@ -249,6 +351,7 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
               height: 230,
               child: LineChart(
                 LineChartData(
+                  minY: 0, // Trava a base inferior em zero
                   lineTouchData: LineTouchData(
                     touchTooltipData: LineTouchTooltipData(
                       getTooltipItems: (touchedSpots) {
@@ -260,6 +363,11 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
                             if (spot.spotIndex >= 0 && spot.spotIndex < recentCycles.length) {
                               final cycle = recentCycles[spot.spotIndex];
                               headerTitle = cycle.cleanLabel;
+                            }
+                          } else if (_groupingMode == ChartViewGrouping.months) {
+                            if (spot.spotIndex >= 0 && spot.spotIndex < recentMonths.length) {
+                              final m = recentMonths[spot.spotIndex];
+                              headerTitle = m.cleanLabel;
                             }
                           } else {
                             if (spot.spotIndex >= 0 && spot.spotIndex < dateLabels.length) {
@@ -311,7 +419,6 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
                         showTitles: true,
                         reservedSize: 30,
                         getTitlesWidget: (value, meta) {
-                          // 1. Evita que índices fracionados repitam o mesmo número inteiro
                           if (value % 1 != 0) {
                             return const SizedBox.shrink();
                           }
@@ -323,7 +430,6 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
                               return const SizedBox.shrink();
                             }
 
-                            // 2. Remove espaços extras antes de comparar as strings
                             final currentLabel = recentCycles[index].shortLabel.trim();
 
                             if (index > 0) {
@@ -337,6 +443,18 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
                               padding: const EdgeInsets.only(top: 8.0),
                               child: Text(
                                 recentCycles[index].shortLabel,
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            );
+                          } else if (_groupingMode == ChartViewGrouping.months) {
+                            if (index < 0 || index >= recentMonths.length) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8.0),
+                              child: Text(
+                                recentMonths[index].shortLabel,
                                 style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
                               ),
                             );
@@ -362,6 +480,7 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
                     LineChartBarData(
                       spots: memberSpots,
                       isCurved: true,
+                      curveSmoothness: 0.15, // Mantém a curva suave sem afundar abaixo do zero
                       color: Colors.blue,
                       barWidth: 3,
                       dotData: const FlDotData(show: true),
@@ -369,6 +488,7 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
                     LineChartBarData(
                       spots: visitorSpots,
                       isCurved: true,
+                      curveSmoothness: 0.15,
                       color: Colors.orange,
                       barWidth: 3,
                       dotData: const FlDotData(show: true),
@@ -376,6 +496,7 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
                     LineChartBarData(
                       spots: conversionSpots,
                       isCurved: true,
+                      curveSmoothness: 0.15,
                       color: Colors.green,
                       barWidth: 3,
                       dotData: const FlDotData(show: true),

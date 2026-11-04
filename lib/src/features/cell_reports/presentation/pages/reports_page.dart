@@ -11,13 +11,12 @@ import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.da
 import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:celulas_app/src/features/cells/presentation/pages/cell_detail_page.dart';
-import 'package:celulas_app/src/features/home/presentation/widgets/leader_dashboard_widget.dart';
-import 'package:celulas_app/src/features/home/presentation/widgets/member_dashboard_widget.dart';
-import 'package:celulas_app/src/features/home/presentation/widgets/pastor_dashboard_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../widgets/leader_analytics_widget.dart';
+import '../widgets/member_analytics_widget.dart';
 import '../widgets/pastor_analytics_widget.dart';
 
 enum ReportViewMode { leader, pastoral }
@@ -636,7 +635,7 @@ class _ReportsPageState extends State<ReportsPage>
         appBar: AppBar(title: const Text('Dashboard da Célula')),
         body: ListView(
           padding: const EdgeInsets.all(16),
-          children: [MemberDashboardWidget(user: user)],
+          children: [MemberAnalyticsWidget(currentUser: user)],
         ),
       );
     }
@@ -673,17 +672,9 @@ class _ReportsPageState extends State<ReportsPage>
     if (user.isPastorOrCoordinator) {
       return const PastorAnalyticsWidget();
     } else if (user.isLeader) {
-      return ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          LeaderDashboardWidget(
-            user: user,
-            onNavigateToReports: () => _tabController?.animateTo(1),
-          ),
-        ],
-      );
+      return LeaderAnalyticsWidget(currentUser: user);
     }
-    return const SizedBox.shrink();
+    return MemberAnalyticsWidget(currentUser: user);
   }
 
   Widget _buildReportsTab(UserEntity user) {
