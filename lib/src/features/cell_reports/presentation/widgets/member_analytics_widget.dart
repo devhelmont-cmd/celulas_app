@@ -24,6 +24,7 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
   bool _isLoading = true;
   CellMemberEntity? _currentMember;
   List<CellReportEntity> _cellReports = [];
+  String? _cellId;
 
   String _selectedMonthKey = 'all';
 
@@ -39,24 +40,41 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
     setState(() => _isLoading = true);
     try {
       final user = widget.currentUser;
-      final cellId = user.primaryCellId;
+      String? targetCellId = user.primaryCellId;
 
-      if (cellId != null && cellId.trim().isNotEmpty) {
-        final members = await _cellDataSource.getCellMembers(cellId);
+      final allCells = await _cellDataSource.getCells(currentUser: user);
 
-        // Encontra o registro de membro correspondente ao usuário logado
+      // Se o usuário não tem primaryCellId, procura em qual célula ele está cadastrado como membro
+      if (targetCellId == null || targetCellId.trim().isEmpty) {
+        for (var cell in allCells) {
+          final members = await _cellDataSource.getCellMembers(cell.id);
+          final found = members.any(
+                (m) => m.userId == user.id ||
+                (user.name != null && m.name.trim().toLowerCase() == user.name!.trim().toLowerCase()),
+          );
+          if (found) {
+            targetCellId = cell.id;
+            break;
+          }
+        }
+      }
+
+      if (targetCellId != null && targetCellId.trim().isNotEmpty) {
+        final members = await _cellDataSource.getCellMembers(targetCellId);
+
         CellMemberEntity? foundMember;
         try {
           foundMember = members.firstWhere(
                 (m) => m.userId == user.id ||
-                (m.name.trim().toLowerCase() == user.name!.trim().toLowerCase()),
+                (user.name != null && m.name.trim().toLowerCase() == user.name!.trim().toLowerCase()),
           );
         } catch (_) {}
 
-        final reports = await _reportsRepository.getReportsByCell(cellId);
+        final reports = await _reportsRepository.getReportsByCell(targetCellId);
 
         if (mounted) {
           setState(() {
+            _cellId = targetCellId;
             _currentMember = foundMember;
             _cellReports = reports;
             _isLoading = false;
@@ -118,19 +136,18 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
     }
 
     if (_currentMember == null) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24.0),
           child: Text(
-            'Não foi possível vincular seu perfil de membro na célula atual.',
+            'Não foi possível vincular seu perfil de membro na célula atual.\n\nVerifique com o líder se seu nome está cadastrado na lista de membros da célula.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 15, color: Colors.grey),
+            style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
           ),
         ),
       );
     }
 
-    // Filtragem de relatórios pelo ciclo pastoral selecionado
     List<CellReportEntity> filteredReports = _cellReports;
     if (_selectedMonthKey != 'all') {
       filteredReports = _cellReports.where((r) {
@@ -141,7 +158,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       }).toList();
     }
 
-    // Processamento de métricas pessoais do membro
     int totalMeetingsHeld = filteredReports.length;
     int presences = 0;
     int justifiedAbsences = 0;
@@ -187,9 +203,9 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Sua Jornada na Célula',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -238,7 +254,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
           ),
           const SizedBox(height: 16),
 
-          // Cards de Resumo da Presença do Membro
           Row(
             children: [
               _buildMetricCard(
@@ -265,7 +280,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
           ),
           const SizedBox(height: 20),
 
-          // Card de Serviços / Funções Realizadas
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

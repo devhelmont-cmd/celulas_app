@@ -633,10 +633,7 @@ class _ReportsPageState extends State<ReportsPage>
     if (isPureMember) {
       return Scaffold(
         appBar: AppBar(title: const Text('Dashboard da Célula')),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [MemberAnalyticsWidget(currentUser: user)],
-        ),
+        body: MemberAnalyticsWidget(currentUser: user),
       );
     }
 
