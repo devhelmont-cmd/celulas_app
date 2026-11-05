@@ -16,8 +16,13 @@ import 'package:intl/intl.dart';
 
 class LeaderAnalyticsWidget extends StatefulWidget {
   final UserEntity currentUser;
+  final bool isEmbedded;
 
-  const LeaderAnalyticsWidget({super.key, required this.currentUser});
+  const LeaderAnalyticsWidget({
+    super.key,
+    required this.currentUser,
+    this.isEmbedded = false,
+  });
 
   @override
   State<LeaderAnalyticsWidget> createState() => _LeaderAnalyticsWidgetState();
@@ -34,7 +39,6 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
 
   String _selectedMonthKey = 'all';
 
-  // Configuração padrão dos gráficos do líder
   List<Map<String, dynamic>> _chartConfigs = [
   {'id': 'attendance', 'title': 'Evolução Temporal da Célula', 'visible': true},
   {'id': 'status', 'title': 'Status das Reuniões da Célula', 'visible': true},
@@ -263,93 +267,98 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
     int totalConversions = filteredReports.fold(0, (sum, r) => sum + r.conversions.length);
     final availableMonths = _getAvailableMonths();
 
-    return RefreshIndicator(
-      onRefresh: _loadDataAndPreferences,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Desempenho: ${_leaderCell!.name}',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Acompanhe o crescimento e histórico da sua célula.',
-                      style: TextStyle(color: Colors.grey, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-              Row(
+    final listViewContent = ListView(
+      shrinkWrap: widget.isEmbedded,
+      physics: widget.isEmbedded ? const NeverScrollableScrollPhysics() : null,
+      padding: widget.isEmbedded ? EdgeInsets.zero : const EdgeInsets.all(16),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.tune, color: Colors.blueAccent),
-                    tooltip: 'Personalizar Gráficos',
-                    onPressed: _showCustomizeDialog,
+                  Text(
+                    'Desempenho: ${_leaderCell!.name}',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.blue.shade200),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: availableMonths.any((m) => m['key'] == _selectedMonthKey)
-                            ? _selectedMonthKey
-                            : 'all',
-                        icon: const Icon(Icons.arrow_drop_down, color: Colors.blueAccent),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blueAccent,
-                        ),
-                        items: availableMonths.map((item) {
-                          return DropdownMenuItem<String>(
-                            value: item['key'],
-                            child: Text(item['label']!),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) setState(() => _selectedMonthKey = val);
-                        },
-                      ),
-                    ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Acompanhe o crescimento e histórico da célula.',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
                   ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
+            ),
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.tune, color: Colors.blueAccent),
+                  tooltip: 'Personalizar Gráficos',
+                  onPressed: _showCustomizeDialog,
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: availableMonths.any((m) => m['key'] == _selectedMonthKey)
+                          ? _selectedMonthKey
+                          : 'all',
+                      icon: const Icon(Icons.arrow_drop_down, color: Colors.blueAccent),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueAccent,
+                      ),
+                      items: availableMonths.map((item) {
+                        return DropdownMenuItem<String>(
+                          value: item['key'],
+                          child: Text(item['label']!),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _selectedMonthKey = val);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _buildSummaryCard('Relatórios', '$totalReports', Icons.description, Colors.purple),
+            const SizedBox(width: 12),
+            _buildSummaryCard('Visitantes', '$totalVisitors', Icons.person_add, Colors.orange),
+            const SizedBox(width: 12),
+            _buildSummaryCard('Conversões', '$totalConversions', Icons.volunteer_activism, Colors.green),
+          ],
+        ),
+        const SizedBox(height: 24),
+        for (var config in _chartConfigs)
+          if (config['visible'] == true) ...[
+            _buildChartById(config['id'], filteredMeetings),
+            const SizedBox(height: 24),
+          ],
+      ],
+    );
 
-          Row(
-            children: [
-              _buildSummaryCard('Relatórios', '$totalReports', Icons.description, Colors.purple),
-              const SizedBox(width: 12),
-              _buildSummaryCard('Visitantes', '$totalVisitors', Icons.person_add, Colors.orange),
-              const SizedBox(width: 12),
-              _buildSummaryCard('Conversões', '$totalConversions', Icons.volunteer_activism, Colors.green),
-            ],
-          ),
-          const SizedBox(height: 24),
+    if (widget.isEmbedded) {
+      return listViewContent;
+    }
 
-          // Renderização dinâmica dos gráficos do líder conforme ordem e visibilidade salvas
-          for (var config in _chartConfigs)
-            if (config['visible'] == true) ...[
-              _buildChartById(config['id'], filteredMeetings),
-              const SizedBox(height: 24),
-            ],
-        ],
-      ),
+    return RefreshIndicator(
+      onRefresh: _loadDataAndPreferences,
+      child: listViewContent,
     );
   }
 

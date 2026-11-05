@@ -288,7 +288,7 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
                     children: [
                       Text(
                         _groupingMode == ChartViewGrouping.cycles
-                            ? 'Evolução por Ciclos Pastorais'
+                            ? 'Evolução por Ciclos Semanais'
                             : (_groupingMode == ChartViewGrouping.months
                             ? 'Evolução por Meses'
                             : 'Evolução por Datas Específicas'),
@@ -297,10 +297,10 @@ class _CellAttendanceChartWidgetState extends State<CellAttendanceChartWidget> {
                       const SizedBox(height: 4),
                       Text(
                         _groupingMode == ChartViewGrouping.cycles
-                            ? 'Consolidado geral da igreja por semanas pastorais.'
+                            ? 'Consolidado geral por semanas pastorais.'
                             : (_groupingMode == ChartViewGrouping.months
-                            ? 'Consolidado geral da igreja por meses.'
-                            : 'Consolidado geral da igreja por dias de reunião.'),
+                            ? 'Consolidado geral por meses.'
+                            : 'Consolidado geral por dias de reunião.'),
                         style: const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                     ],

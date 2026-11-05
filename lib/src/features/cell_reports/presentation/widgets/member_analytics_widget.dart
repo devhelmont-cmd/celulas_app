@@ -1,3 +1,4 @@
+// lib/src/features/cell_reports/presentation/widgets/member_analytics_widget.dart
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
@@ -10,8 +11,13 @@ import 'package:intl/intl.dart';
 
 class MemberAnalyticsWidget extends StatefulWidget {
   final UserEntity currentUser;
+  final bool isEmbedded;
 
-  const MemberAnalyticsWidget({super.key, required this.currentUser});
+  const MemberAnalyticsWidget({
+    super.key,
+    required this.currentUser,
+    this.isEmbedded = false,
+  });
 
   @override
   State<MemberAnalyticsWidget> createState() => _MemberAnalyticsWidgetState();
@@ -44,7 +50,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
 
       final allCells = await _cellDataSource.getCells(currentUser: user);
 
-      // Se o usuário não tem primaryCellId, procura em qual célula ele está cadastrado como membro
       if (targetCellId == null || targetCellId.trim().isEmpty) {
         for (var cell in allCells) {
           final members = await _cellDataSource.getCellMembers(cell.id);
@@ -190,152 +195,158 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
 
     final availableMonths = _getAvailableMonths();
 
-    return RefreshIndicator(
-      onRefresh: _loadMemberAnalyticsData,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Sua Jornada na Célula',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Acompanhe sua frequência e participações.',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: availableMonths.any((m) => m['key'] == _selectedMonthKey)
-                        ? _selectedMonthKey
-                        : 'all',
-                    icon: const Icon(Icons.arrow_drop_down, color: Colors.blueAccent),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blueAccent,
-                    ),
-                    items: availableMonths.map((item) {
-                      return DropdownMenuItem<String>(
-                        value: item['key'],
-                        child: Text(item['label']!),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _selectedMonthKey = val);
-                      }
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          Row(
-            children: [
-              _buildMetricCard(
-                'Frequência',
-                '${attendanceRate.toStringAsFixed(0)}%',
-                Icons.pie_chart_outline,
-                Colors.blue,
-              ),
-              const SizedBox(width: 12),
-              _buildMetricCard(
-                'Presenças',
-                '$presences/$totalMeetingsHeld',
-                Icons.check_circle_outline,
-                Colors.green,
-              ),
-              const SizedBox(width: 12),
-              _buildMetricCard(
-                'Justificadas',
-                '$justifiedAbsences',
-                Icons.info_outline,
-                Colors.orange,
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
+    final listViewContent = ListView(
+      shrinkWrap: widget.isEmbedded,
+      physics: widget.isEmbedded ? const NeverScrollableScrollPhysics() : null,
+      padding: widget.isEmbedded ? EdgeInsets.zero : const EdgeInsets.all(16),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.volunteer_activism, color: Colors.purple, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Minha Cooperação em Servir',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (rolesCountMap.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12.0),
-                      child: Text(
-                        'Nenhuma função registrada no período selecionado.',
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                      ),
-                    )
-                  else
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: rolesCountMap.entries.map((entry) {
-                        return Chip(
-                          avatar: CircleAvatar(
-                            backgroundColor: Colors.purple.shade100,
-                            child: Text(
-                              '${entry.value}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.purple.shade900,
-                              ),
-                            ),
-                          ),
-                          label: Text(entry.key),
-                          backgroundColor: Colors.purple.shade50,
-                          side: BorderSide(color: Colors.purple.shade200),
-                        );
-                      }).toList(),
+                  const Text(
+                    'Sua Jornada na Célula',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Acompanhe sua frequência e participações.',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  ),
                 ],
               ),
             ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: availableMonths.any((m) => m['key'] == _selectedMonthKey)
+                      ? _selectedMonthKey
+                      : 'all',
+                  icon: const Icon(Icons.arrow_drop_down, color: Colors.blueAccent),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueAccent,
+                  ),
+                  items: availableMonths.map((item) {
+                    return DropdownMenuItem<String>(
+                      value: item['key'],
+                      child: Text(item['label']!),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() => _selectedMonthKey = val);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _buildMetricCard(
+              'Frequência',
+              '${attendanceRate.toStringAsFixed(0)}%',
+              Icons.pie_chart_outline,
+              Colors.blue,
+            ),
+            const SizedBox(width: 12),
+            _buildMetricCard(
+              'Presenças',
+              '$presences/$totalMeetingsHeld',
+              Icons.check_circle_outline,
+              Colors.green,
+            ),
+            const SizedBox(width: 12),
+            _buildMetricCard(
+              'Justificadas',
+              '$justifiedAbsences',
+              Icons.info_outline,
+              Colors.orange,
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.volunteer_activism, color: Colors.purple, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Minha Cooperação em Servir',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (rolesCountMap.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12.0),
+                    child: Text(
+                      'Nenhuma função registrada no período selecionado.',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                    ),
+                  )
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: rolesCountMap.entries.map((entry) {
+                      return Chip(
+                        avatar: CircleAvatar(
+                          backgroundColor: Colors.purple.shade100,
+                          child: Text(
+                            '${entry.value}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.purple.shade900,
+                            ),
+                          ),
+                        ),
+                        label: Text(entry.key),
+                        backgroundColor: Colors.purple.shade50,
+                        side: BorderSide(color: Colors.purple.shade200),
+                      );
+                    }).toList(),
+                  ),
+              ],
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
+    );
+
+    if (widget.isEmbedded) {
+      return listViewContent;
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadMemberAnalyticsData,
+      child: listViewContent,
     );
   }
 
