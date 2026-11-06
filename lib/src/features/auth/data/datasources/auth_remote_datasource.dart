@@ -18,6 +18,8 @@ abstract class AuthRemoteDataSource {
 
   Future<void> sendPasswordResetEmail({required String email});
 
+  Future<void> sendEmailVerification();
+
   Future<UserModel?> getCurrentUser();
 }
 
@@ -30,31 +32,47 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     FirebaseAuth? firebaseAuth,
     GoogleSignIn? googleSignIn,
     FirebaseFirestore? firestore,
-  }) : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
-       _googleSignIn = googleSignIn ?? GoogleSignIn(),
-       _firestore = firestore ?? FirebaseFirestore.instance;
+  })  : _firebaseAuth = firebaseAuth ?? FirebaseAuth.instance,
+        _googleSignIn = googleSignIn ?? GoogleSignIn(),
+        _firestore = firestore ?? FirebaseFirestore.instance;
 
+  @override
   Future<UserModel> loginWithEmail(String email, String password) async {
     try {
       final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
-        email: email,
+        email: email.trim(),
         password: password,
       );
       final user = userCredential.user;
       if (user == null) {
-        throw Exception('Usuário não encontrado');
+        throw Exception('Usuário não encontrado.');
       }
 
-      // Busca os dados completos e papéis no Firestore
-      final doc = await _firestore.collection('users').doc(user.uid).get();
+      // Recarrega o usuário para garantir o status de verificação atualizado
+      await user.reload();
+      final updatedUser = _firebaseAuth.currentUser ?? user;
+
+      // EXIGÊNCIA DE E-MAIL REAL: Verifica se o e-mail foi confirmado
+      if (!updatedUser.emailVerified) {
+        // Desloga o usuário não verificado para não manter a sessão ativa
+        await _firebaseAuth.signOut();
+        throw Exception(
+          'Seu e-mail ainda não foi verificado. Por favor, acesse sua caixa de entrada e confirme seu e-mail antes de entrar.',
+        );
+      }
+
+      // Busca os dados e papéis no Firestore
+      final doc = await _firestore.collection('users').doc(updatedUser.uid).get();
       if (doc.exists && doc.data() != null) {
-        return UserModel.fromMap(doc.data()!, user.uid);
+        return UserModel.fromMap(doc.data()!, updatedUser.uid);
       }
 
-      return UserModel.fromFirebaseUser(user);
+      return UserModel.fromFirebaseUser(updatedUser);
     } on FirebaseAuthException catch (e) {
       throw Exception(_handleAuthException(e));
     } catch (e) {
+      // Repassa a exceção de e-mail não verificado ou erros customizados
+      if (e is Exception) rethrow;
       throw Exception('Erro ao realizar login: ${e.toString()}');
     }
   }
@@ -76,6 +94,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       }
 
       await user.updateDisplayName(name.trim());
+
+      // Envia o e-mail de verificação imediatamente no cadastro
+      await user.sendEmailVerification();
       await user.reload();
 
       await _firestore.collection('users').doc(user.uid).set({
@@ -90,6 +111,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
       final updateUser = _firebaseAuth.currentUser ?? user;
 
+      // Desloga o novo usuário para forçá-lo a verificar o e-mail antes do primeiro login
+      await _firebaseAuth.signOut();
+
       return UserModel.fromFirebaseUser(updateUser);
     } on FirebaseAuthException catch (e) {
       throw Exception(_handleAuthException(e));
@@ -103,7 +127,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     try {
       final googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
-        throw Exception('Login com google cancelado pelo usuário');
+        throw Exception('Login com Google cancelado pelo usuário.');
       }
       final googleAuth = await googleUser.authentication;
 
@@ -117,9 +141,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       );
 
       if (userCredential.user == null) {
-        throw Exception('Falha ao registrar usuário com o Google');
+        throw Exception('Falha ao registrar usuário com o Google.');
       }
 
+      // Contas do Google já vêm verificadas por padrão
       return UserModel.fromFirebaseUser(userCredential.user!);
     } on FirebaseAuthException catch (e) {
       throw Exception(_handleAuthException(e));
@@ -136,7 +161,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<void> sendPasswordResetEmail({required String email}) async {
     try {
-      await _firebaseAuth.sendPasswordResetEmail(email: email);
+      await _firebaseAuth.sendPasswordResetEmail(email: email.trim());
     } on FirebaseAuthException catch (e) {
       throw Exception(_handleAuthException(e));
     } catch (e) {
@@ -145,18 +170,40 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
+  Future<void> sendEmailVerification() async {
+    try {
+      final user = _firebaseAuth.currentUser;
+      if (user != null && !user.emailVerified) {
+        await user.sendEmailVerification();
+      }
+    } on FirebaseAuthException catch (e) {
+      throw Exception(_handleAuthException(e));
+    } catch (e) {
+      throw Exception('Erro ao reenviar e-mail de verificação: ${e.toString()}');
+    }
+  }
+
+  @override
   Future<UserModel?> getCurrentUser() async {
     final user = _firebaseAuth.currentUser;
     if (user != null) {
-      // 1. Busca o documento com os papéis (roles) e dados do usuário no Firestore
-      final doc = await _firestore.collection('users').doc(user.uid).get();
+      await user.reload();
+      final updatedUser = _firebaseAuth.currentUser ?? user;
 
-      if (doc.exists && doc.data() != null) {
-        // Ajuste este construtor de acordo com o que você possui em UserModel (ex: fromMap ou fromFirestore)
-        return UserModel.fromMap(doc.data()!, user.uid);
+      // Se for login via e-mail/senha e o e-mail ainda não for verificado
+      final isGoogleUser = updatedUser.providerData.any((p) => p.providerId == 'google.com');
+      if (!isGoogleUser && !updatedUser.emailVerified) {
+        await _firebaseAuth.signOut();
+        return null;
       }
 
-      return UserModel.fromFirebaseUser(user);
+      final doc = await _firestore.collection('users').doc(updatedUser.uid).get();
+
+      if (doc.exists && doc.data() != null) {
+        return UserModel.fromMap(doc.data()!, updatedUser.uid);
+      }
+
+      return UserModel.fromFirebaseUser(updatedUser);
     }
     return null;
   }

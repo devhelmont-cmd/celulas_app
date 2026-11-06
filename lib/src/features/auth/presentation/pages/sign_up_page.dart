@@ -42,18 +42,16 @@ class _SignUpPageState extends State<SignUpPage> {
       );
     } else if (state is AuthSuccessState) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            'Conta criada com sucesso! Bem-vindo ${state.user.name}',
+            'Conta criada com sucesso! Enviamos um e-mail de confirmação. Por favor, verifique sua caixa de entrada antes de fazer login.',
           ),
           backgroundColor: Colors.green,
+          duration: Duration(seconds: 5),
         ),
       );
-      // Redireciona para a RootPage para validar o status da célula do novo usuário
-      Navigator.of(context).pushAndRemoveUntil(
-        FadePageRoute(page: RootPage(user: state.user)),
-            (route) => false,
-      );
+      // Retorna para a tela de login para que ele acesse após confirmar o e-mail
+      Navigator.of(context).pop();
     }
   }
 
