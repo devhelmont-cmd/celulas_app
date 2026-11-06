@@ -1,37 +1,50 @@
 // lib/src/features/home/presentation/widgets/pastor_dashboard_widget.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:celulas_app/src/core/injections/injection_container.dart';
+import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
+import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
+import 'package:celulas_app/src/features/members/presentation/pages/members_management_page.dart';
 
 class PastorNotifications {
   final int pendingJoinRequestsCount;
   final int pendingDeletionRequestsCount;
   final int pendingReportsCount;
   final int pendingRolesCount;
+  final int unlinkedMembersCount;
 
   PastorNotifications({
     required this.pendingJoinRequestsCount,
     required this.pendingDeletionRequestsCount,
     required this.pendingReportsCount,
     required this.pendingRolesCount,
+    required this.unlinkedMembersCount,
   });
 }
 
 class PastorDashboardWidget extends StatelessWidget {
+  final UserEntity currentUser; // <--- Adicionado para resolver o erro do widget.currentUser
   final Function(int tabIndex, {bool selectPastoralView})? onNavigateTab;
 
   const PastorDashboardWidget({
     super.key,
+    required this.currentUser,
     this.onNavigateTab,
   });
 
   Future<Map<String, dynamic>> _fetchPastorData() async {
     final firestore = FirebaseFirestore.instance;
+    final cellDataSource = getIt<ICellRemoteDataSource>(); // <--- Instanciado corretamente
 
-    // 1. Busca Células e Membros[cite: 77]
+    // 1. Busca Células e Membros
     final cellsSnapshot = await firestore.collection('cells').get();
     final membersSnapshot = await firestore.collection('members').get();
 
-    // 2. Usuários requisitando entrar em células[cite: 77]
+    // Busca a contagem de pessoas sem célula
+    final unlinkedList = await cellDataSource.getUsersAndMembersWithoutCell();
+    final unlinkedMembersCount = unlinkedList.length;
+
+    // 2. Usuários requisitando entrar em células
     final requestsSnapshot = await firestore
         .collection('cell_requests')
         .where('status', isEqualTo: 'pending')
@@ -60,7 +73,6 @@ class PastorDashboardWidget extends StatelessWidget {
       for (var meetingDoc in meetingsSnapshot.docs) {
         final data = meetingDoc.data();
 
-        // 3. Solicitação de exclusão de relatório / reunião[cite: 77]
         if (data['deletionRequested'] == true) {
           pendingDeletionRequestsCount++;
         }
@@ -69,16 +81,13 @@ class PastorDashboardWidget extends StatelessWidget {
             (data['meetingDate'] as Timestamp?)?.toDate() ?? now;
         final bool isReportFilled = data['isReportFilled'] ?? false;
 
-        // Expirou se passou do dia da ocorrência[cite: 77]
         final expiry = DateTime(meetingDate.year, meetingDate.month, meetingDate.day + 1);
         final bool isExpired = now.isAfter(expiry);
 
-        // 4. Célula pendente de relatório (qualquer reunião passada não preenchida)[cite: 77]
         if (isExpired && !isReportFilled) {
           cellHasPendingReport = true;
         }
 
-        // Coleta apenas reuniões futuras ou de hoje que NÃO estão canceladas[cite: 77]
         final status = data['status'] ?? 'normal';
         if (!isExpired && status != 'canceled') {
           validMeetings.add(meetingDoc);
@@ -87,16 +96,13 @@ class PastorDashboardWidget extends StatelessWidget {
 
       if (cellHasPendingReport) pendingReportsCount++;
 
-      // 5. Célula pendente de funções: analisa APENAS a próxima reunião (mais próxima no futuro)
       if (validMeetings.isNotEmpty) {
-        // Ordena da data mais próxima para a mais distante
         validMeetings.sort((a, b) {
           final dateA = (a.data()['meetingDate'] as Timestamp?)?.toDate() ?? now;
           final dateB = (b.data()['meetingDate'] as Timestamp?)?.toDate() ?? now;
           return dateA.compareTo(dateB);
         });
 
-        // Pega exclusivamente a próxima reunião
         final nextMeetingData = validMeetings.first.data();
         final status = nextMeetingData['status'] ?? 'normal';
 
@@ -127,6 +133,7 @@ class PastorDashboardWidget extends StatelessWidget {
         pendingDeletionRequestsCount: pendingDeletionRequestsCount,
         pendingReportsCount: pendingReportsCount,
         pendingRolesCount: pendingRolesCount,
+        unlinkedMembersCount: unlinkedMembersCount,
       ),
     };
   }
@@ -134,225 +141,256 @@ class PastorDashboardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Map<String, dynamic>>(
-      future: _fetchPastorData(),
-      builder: (context, snapshot) {
-        int cellsCount = 0;
-        int membersCount = 0;
-        PastorNotifications? notifications;
+    future: _fetchPastorData(),
+    builder: (context, snapshot) {
+      int cellsCount = 0;
+      int membersCount = 0;
+      PastorNotifications? notifications;
 
-        if (snapshot.hasData) {
-          cellsCount = snapshot.data!['cells'] ?? 0;
-          membersCount = snapshot.data!['members'] ?? 0;
-          notifications = snapshot.data!['notifications'] as PastorNotifications?;
-        }
+      if (snapshot.hasData) {
+        cellsCount = snapshot.data!['cells'] ?? 0;
+        membersCount = snapshot.data!['members'] ?? 0;
+        notifications = snapshot.data!['notifications'] as PastorNotifications?;
+      }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Visão Geral das Células',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Visão Geral das Células',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.groups, size: 28, color: Colors.purple),
+                      const SizedBox(height: 8),
+                      snapshot.connectionState == ConnectionState.waiting
+                          ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                          : Text(
+                        '$cellsCount',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Células',
+                        style: TextStyle(color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.purple.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.groups, size: 28, color: Colors.purple),
-                        const SizedBox(height: 8),
-                        snapshot.connectionState == ConnectionState.waiting
-                            ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                            : Text(
-                          '$cellsCount',
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Células',
-                          style: TextStyle(color: Colors.black54),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.person, size: 28, color: Colors.blue),
-                        const SizedBox(height: 8),
-                        snapshot.connectionState == ConnectionState.waiting
-                            ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                            : Text(
-                          '$membersCount',
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Membros',
-                          style: TextStyle(color: Colors.black54),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // ================= NOTIFICAÇÕES DO PASTOR =================
-            if (notifications != null) ...[
-              if (notifications.pendingJoinRequestsCount > 0) ...[
-                Card(
-                  color: Colors.blue.shade50,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade100,
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.blue.shade200),
                   ),
-                  child: ListTile(
-                    leading: const Icon(Icons.person_add, color: Colors.blue),
-                    title: Text(
-                      '${notifications.pendingJoinRequestsCount} Solicitação(ões) de Entrada',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: const Text('Usuários aguardando aprovação para entrar na célula.'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      onNavigateTab?.call(1);
-                    },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.person, size: 28, color: Colors.blue),
+                      const SizedBox(height: 8),
+                      snapshot.connectionState == ConnectionState.waiting
+                          ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                          : Text(
+                        '$membersCount',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Membros',
+                        style: TextStyle(color: Colors.black54),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
-              if (notifications.pendingDeletionRequestsCount > 0) ...[
-                Card(
-                  color: Colors.red.shade50,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.red.shade200),
-                  ),
-                  child: ListTile(
-                    leading: const Icon(Icons.delete_sweep, color: Colors.red),
-                    title: Text(
-                      '${notifications.pendingDeletionRequestsCount} Solicitação(ões) de Exclusão',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: const Text('Líderes solicitaram a exclusão de relatórios ou reuniões.'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      onNavigateTab?.call(2, selectPastoralView: true);
-                    },
-                  ),
+          // ================= NOTIFICAÇÕES DO PASTOR =================
+          if (notifications != null) ...[
+            if (notifications.unlinkedMembersCount > 0) ...[
+              Card(
+                color: Colors.purple.shade50,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.purple.shade200),
                 ),
-                const SizedBox(height: 8),
-              ],
-
-              if (notifications.pendingReportsCount > 0) ...[
-                Card(
-                  color: Colors.amber.shade50,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.amber.shade300),
+                child: ListTile(
+                  leading: const Icon(Icons.person_off, color: Colors.purple),
+                  title: Text(
+                    '${notifications.unlinkedMembersCount} Pessoa(s) sem Célula',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  child: ListTile(
-                    leading: const Icon(Icons.warning_amber_rounded, color: Colors.amber),
-                    title: Text(
-                      '${notifications.pendingReportsCount} Célula(s) com Relatórios Pendentes',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: const Text('Reuniões que já aconteceram e ainda não foram preenchidas.'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      onNavigateTab?.call(2, selectPastoralView: true);
-                    },
-                  ),
+                  subtitle: const Text('Membros ou usuários cadastrados aguardando vínculo.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => MembersManagementPage(
+                          currentUser: currentUser, // <--- Passando o currentUser corretamente
+                          initialFilterWithoutCell: true,
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                const SizedBox(height: 8),
-              ],
-
-              if (notifications.pendingRolesCount > 0) ...[
-                Card(
-                  color: Colors.orange.shade50,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.orange.shade200),
-                  ),
-                  child: ListTile(
-                    leading: const Icon(Icons.assignment_ind_outlined, color: Colors.deepOrange),
-                    title: Text(
-                      '${notifications.pendingRolesCount} Célula(s) sem Atribuição de Funções',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: const Text('Responsáveis pelas próximas reuniões pendentes.'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () {
-                      onNavigateTab?.call(1);
-                    },
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
+              ),
+              const SizedBox(height: 8),
             ],
 
-            Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.grey.shade300),
-              ),
-              child: ListTile(
-                leading: const Icon(Icons.bar_chart, color: Colors.deepPurple),
-                title: const Text(
-                  'Relatório de Crescimento Geral',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+            if (notifications.pendingJoinRequestsCount > 0) ...[
+              Card(
+                color: Colors.blue.shade50,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.blue.shade200),
                 ),
-                subtitle: const Text(
-                  'Acompanhar frequência e multiplicadores',
+                child: ListTile(
+                  leading: const Icon(Icons.person_add, color: Colors.blue),
+                  title: Text(
+                    '${notifications.pendingJoinRequestsCount} Solicitação(ões) de Entrada',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text('Usuários aguardando aprovação para entrar na célula.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    onNavigateTab?.call(1);
+                  },
                 ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {},
               ),
-            ),
+              const SizedBox(height: 8),
+            ],
+
+            if (notifications.pendingDeletionRequestsCount > 0) ...[
+              Card(
+                color: Colors.red.shade50,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.red.shade200),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.delete_sweep, color: Colors.red),
+                  title: Text(
+                    '${notifications.pendingDeletionRequestsCount} Solicitação(ões) de Exclusão',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text('Líderes solicitaram a exclusão de relatórios ou reuniões.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    onNavigateTab?.call(2, selectPastoralView: true);
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            if (notifications.pendingReportsCount > 0) ...[
+              Card(
+                color: Colors.amber.shade50,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.amber.shade300),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                  title: Text(
+                    '${notifications.pendingReportsCount} Célula(s) com Relatórios Pendentes',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text('Reuniões que já aconteceram e ainda não foram preenchidas.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    onNavigateTab?.call(2, selectPastoralView: true);
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            if (notifications.pendingRolesCount > 0) ...[
+              Card(
+                color: Colors.orange.shade50,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.orange.shade200),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.assignment_ind_outlined, color: Colors.deepOrange),
+                  title: Text(
+                    '${notifications.pendingRolesCount} Célula(s) sem Atribuição de Funções',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text('Responsáveis pelas próximas reuniões pendentes.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    onNavigateTab?.call(1);
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
           ],
-        );
-      },
+
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.shade300),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.bar_chart, color: Colors.deepPurple),
+              title: const Text(
+                'Relatório de Crescimento Geral',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: const Text(
+                'Acompanhar frequência e multiplicadores',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {},
+            ),
+          ),
+        ],
+      );
+    },
     );
   }
 }
