@@ -1,4 +1,5 @@
 // lib/src/features/cell_reports/presentation/widgets/member_analytics_widget.dart
+
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
@@ -31,6 +32,7 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
   CellMemberEntity? _currentMember;
   List<CellReportEntity> _cellReports = [];
   String? _cellId;
+  String? _cellName; // <--- Variável para armazenar o nome da célula
 
   String _selectedMonthKey = 'all';
 
@@ -54,8 +56,11 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
         for (var cell in allCells) {
           final members = await _cellDataSource.getCellMembers(cell.id);
           final found = members.any(
-                (m) => m.userId == user.id ||
-                (user.name != null && m.name.trim().toLowerCase() == user.name!.trim().toLowerCase()),
+                (m) =>
+            m.userId == user.id ||
+                (user.name != null &&
+                    m.name.trim().toLowerCase() ==
+                        user.name!.trim().toLowerCase()),
           );
           if (found) {
             targetCellId = cell.id;
@@ -70,16 +75,28 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
         CellMemberEntity? foundMember;
         try {
           foundMember = members.firstWhere(
-                (m) => m.userId == user.id ||
-                (user.name != null && m.name.trim().toLowerCase() == user.name!.trim().toLowerCase()),
+                (m) =>
+            m.userId == user.id ||
+                (user.name != null &&
+                    m.name.trim().toLowerCase() ==
+                        user.name!.trim().toLowerCase()),
           );
         } catch (_) {}
 
-        final reports = await _reportsRepository.getReportsByCell(targetCellId);
+        final reports =
+        await _reportsRepository.getReportsByCell(targetCellId);
+
+        // Busca o nome da célula para exibição
+        String? fetchedCellName;
+        try {
+          final cellEntity = await _cellDataSource.getCellById(targetCellId);
+          fetchedCellName = cellEntity.name;
+        } catch (_) {}
 
         if (mounted) {
           setState(() {
             _cellId = targetCellId;
+            _cellName = fetchedCellName;
             _currentMember = foundMember;
             _cellReports = reports;
             _isLoading = false;
@@ -163,15 +180,43 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       }).toList();
     }
 
-    int totalMeetingsHeld = filteredReports.length;
+    // --- REGRAS DE CÁLCULO DE FREQUÊNCIA ---
+    int totalValidMeetingsHeld = 0;
     int presences = 0;
     int justifiedAbsences = 0;
     int unjustifiedAbsences = 0;
     final Map<String, int> rolesCountMap = {};
 
+    final memberJoinedDateOnly = DateTime(
+      _currentMember!.joinedAt.year,
+      _currentMember!.joinedAt.month,
+      _currentMember!.joinedAt.day,
+    );
+
     for (var report in filteredReports) {
-      final attendance = report.attendances.cast<AttendanceEntity?>().firstWhere(
-            (a) => a != null && (a.cellMemberId == _currentMember!.id || a.cellMemberId == _currentMember!.userId),
+      if (report.status == ReportStatus.cacelled) {
+        continue;
+      }
+
+      final meetingDateOnly = DateTime(
+        report.scheduledDate.year,
+        report.scheduledDate.month,
+        report.scheduledDate.day,
+      );
+
+      if (meetingDateOnly.isBefore(memberJoinedDateOnly)) {
+        continue;
+      }
+
+      totalValidMeetingsHeld++;
+
+      final attendance = report.attendances
+          .cast<AttendanceEntity?>()
+          .firstWhere(
+            (a) =>
+        a != null &&
+            (a.cellMemberId == _currentMember!.id ||
+                a.cellMemberId == _currentMember!.userId),
         orElse: () => null,
       );
 
@@ -189,8 +234,8 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       }
     }
 
-    double attendanceRate = totalMeetingsHeld > 0
-        ? (presences / totalMeetingsHeld) * 100
+    double attendanceRate = totalValidMeetingsHeld > 0
+        ? (presences / totalValidMeetingsHeld) * 100
         : 0.0;
 
     final availableMonths = _getAvailableMonths();
@@ -215,7 +260,17 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
+                  if (_cellName != null && _cellName!.isNotEmpty)
+                    Text(
+                      'Célula: $_cellName',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue.shade700,
+                      ),
+                    ),
+                  const SizedBox(height: 2),
                   Text(
                     'Acompanhe sua frequência e participações.',
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
@@ -232,10 +287,14 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: availableMonths.any((m) => m['key'] == _selectedMonthKey)
+                  value:
+                  availableMonths.any((m) => m['key'] == _selectedMonthKey)
                       ? _selectedMonthKey
                       : 'all',
-                  icon: const Icon(Icons.arrow_drop_down, color: Colors.blueAccent),
+                  icon: const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.blueAccent,
+                  ),
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -269,7 +328,7 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
             const SizedBox(width: 12),
             _buildMetricCard(
               'Presenças',
-              '$presences/$totalMeetingsHeld',
+              '$presences/$totalValidMeetingsHeld',
               Icons.check_circle_outline,
               Colors.green,
             ),
@@ -285,7 +344,9 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
         const SizedBox(height: 20),
         Card(
           elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -293,11 +354,18 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.volunteer_activism, color: Colors.purple, size: 20),
+                    Icon(
+                      Icons.volunteer_activism,
+                      color: Colors.purple,
+                      size: 20,
+                    ),
                     SizedBox(width: 8),
                     Text(
                       'Minha Cooperação em Servir',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -307,7 +375,10 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
                     padding: const EdgeInsets.symmetric(vertical: 12.0),
                     child: Text(
                       'Nenhuma função registrada no período selecionado.',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                      ),
                     ),
                   )
                 else
@@ -350,7 +421,12 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
     );
   }
 
-  Widget _buildMetricCard(String title, String value, IconData icon, Color color) {
+  Widget _buildMetricCard(
+      String title,
+      String value,
+      IconData icon,
+      Color color,
+      ) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),
