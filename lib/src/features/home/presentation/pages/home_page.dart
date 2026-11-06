@@ -1,5 +1,7 @@
 // lib/src/features/home/presentation/pages/home_page.dart
+
 import 'package:celulas_app/src/core/injections/injection_container.dart';
+import 'package:celulas_app/src/features/auth/data/models/user_model.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:celulas_app/src/features/auth/presentation/pages/login_page.dart';
@@ -10,10 +12,9 @@ import 'package:celulas_app/src/features/cells/presentation/pages/cells_list_pag
 import 'package:celulas_app/src/features/home/presentation/widgets/leader_dashboard_widget.dart';
 import 'package:celulas_app/src/features/home/presentation/widgets/member_dashboard_widget.dart';
 import 'package:celulas_app/src/features/home/presentation/widgets/pastor_dashboard_widget.dart';
+import 'package:celulas_app/src/features/profile/presentation/pages/profile_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
-import '../../../auth/data/models/user_model.dart';
 
 class HomePage extends StatefulWidget {
   final UserEntity user;
@@ -37,10 +38,10 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _currentUser = widget.user;
     _cellDataSource = getIt<ICellRemoteDataSource>();
-    _loadCells();
+    _loadUserData();
   }
 
-  Future<void> _loadCells() async {
+  Future<void> _loadUserData() async {
     try {
       final cells = await _cellDataSource.getCells();
 
@@ -50,7 +51,7 @@ class _HomePageState extends State<HomePage> {
           .get();
 
       UserEntity updatedUser = _currentUser;
-      if (userDoc.exists) {
+      if (userDoc.exists && userDoc.data() != null) {
         updatedUser = UserModel.fromMap(userDoc.data()!, userDoc.id);
       }
 
@@ -62,12 +63,8 @@ class _HomePageState extends State<HomePage> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingCells = false;
-        });
-      }
-      debugPrint('Erro ao carregar células: $e');
+      if (mounted) setState(() => _isLoadingCells = false);
+      debugPrint('Erro ao carregar dados da home: $e');
     }
   }
 
@@ -98,11 +95,14 @@ class _HomePageState extends State<HomePage> {
               ? const Center(child: CircularProgressIndicator())
               : CellsListPage(
             cells: _cells,
-            onRefresh: _loadCells,
+            onRefresh: _loadUserData,
             currentUser: _currentUser,
           ),
           ReportsPage(currentUser: _currentUser),
-          const Center(child: Text('Perfil')),
+          ProfilePage(
+            user: _currentUser,
+            onProfileUpdated: _loadUserData,
+          ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -132,13 +132,11 @@ class _HomePageState extends State<HomePage> {
           children: [
             CircleAvatar(
               radius: 28,
-              backgroundImage:
-              _currentUser.photoUrl != null &&
+              backgroundImage: _currentUser.photoUrl != null &&
                   _currentUser.photoUrl!.isNotEmpty
                   ? NetworkImage(_currentUser.photoUrl!)
                   : null,
-              child:
-              (_currentUser.photoUrl == null ||
+              child: (_currentUser.photoUrl == null ||
                   _currentUser.photoUrl!.isEmpty)
                   ? (_currentUser.name != null &&
                   _currentUser.name!.trim().isNotEmpty)
@@ -170,9 +168,58 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
 
-        // 1. Visão do Pastor / Coordenador (com suporte a navegação)
+        // CARD DE ALERTA SE O PERFIL ESTIVER INCOMPLETO
+        if (!_currentUser.isProfileComplete) ...[
+          Card(
+            color: Colors.amber.shade50,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.amber.shade300),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      color: Colors.amber, size: 36),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Complete seu Perfil',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: Colors.brown,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Preencha seu telefone, data de nascimento e sexo para ajudar no acompanhamento pastoral.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.brown.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() => _currentIndex = 3),
+                    child: const Text('Preencher'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
+        // 1. Visão do Pastor / Coordenador
         if (_currentUser.isPastorOrCoordinator) ...[
           PastorDashboardWidget(
             currentUser: _currentUser,

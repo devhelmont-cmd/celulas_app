@@ -21,6 +21,8 @@ abstract class AuthRemoteDataSource {
   Future<void> sendEmailVerification();
 
   Future<UserModel?> getCurrentUser();
+
+  Future<void> updateUserProfile(UserModel user);
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -206,6 +208,25 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       return UserModel.fromFirebaseUser(updatedUser);
     }
     return null;
+  }
+
+  Future<void> updateUserProfile(UserModel user) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(user.id)
+          .set(user.toMap(), SetOptions(merge: true));
+
+      // Se o nome foi alterado, atualiza o displayName no Firebase Auth
+      final currentUser = _firebaseAuth.currentUser;
+      if (currentUser != null && user.name != null) {
+        await currentUser.updateDisplayName(user.name);
+      }
+    } on FirebaseAuthException catch (e) {
+      throw Exception(_handleAuthException(e));
+    } catch (e) {
+      throw Exception('Erro ao atualizar dados do perfil: ${e.toString()}');
+    }
   }
 
   String _handleAuthException(FirebaseAuthException e) {
