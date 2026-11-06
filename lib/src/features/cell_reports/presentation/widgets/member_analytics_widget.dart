@@ -32,7 +32,7 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
   CellMemberEntity? _currentMember;
   List<CellReportEntity> _cellReports = [];
   String? _cellId;
-  String? _cellName; // <--- Variável para armazenar o nome da célula
+  String? _cellName;
 
   String _selectedMonthKey = 'all';
 
@@ -86,7 +86,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
         final reports =
         await _reportsRepository.getReportsByCell(targetCellId);
 
-        // Busca o nome da célula para exibição
         String? fetchedCellName;
         try {
           final cellEntity = await _cellDataSource.getCellById(targetCellId);
@@ -170,6 +169,48 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       );
     }
 
+    // --- LÓGICA DE DEFINIÇÃO DA PRIMEIRA DATA DE INGRESSO (EFETIVA) ---
+    // 1. Procura a data da reunião com a PRESENÇA mais antiga registrada para este membro
+    DateTime? firstPresenceDate;
+
+    // Ordenamos todas as reuniões por data (mais antigas primeiro) para achar a primeira presença
+    final sortedReportsForHistory = List<CellReportEntity>.from(_cellReports)
+      ..sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
+
+    for (var report in sortedReportsForHistory) {
+      if (report.status == ReportStatus.cacelled) continue;
+
+      final attendance = report.attendances.cast<AttendanceEntity?>().firstWhere(
+            (a) =>
+        a != null &&
+            (a.cellMemberId == _currentMember!.id ||
+                a.cellMemberId == _currentMember!.userId),
+        orElse: () => null,
+      );
+
+      if (attendance != null && attendance.isPresent) {
+        firstPresenceDate = DateTime(
+          report.scheduledDate.year,
+          report.scheduledDate.month,
+          report.scheduledDate.day,
+        );
+        break; // Achou a primeira presença da história dele nessa célula
+      }
+    }
+
+    final systemJoinedDateOnly = DateTime(
+      _currentMember!.joinedAt.year,
+      _currentMember!.joinedAt.month,
+      _currentMember!.joinedAt.day,
+    );
+
+    // 2. A data efetiva de início será a primeira presença OU a data que ele entrou no sistema (a que for mais antiga)
+    DateTime effectiveStartDate = systemJoinedDateOnly;
+    if (firstPresenceDate != null && firstPresenceDate.isBefore(systemJoinedDateOnly)) {
+      effectiveStartDate = firstPresenceDate;
+    }
+
+    // --- FILTRAGEM POR MÊS/PERÍODO ---
     List<CellReportEntity> filteredReports = _cellReports;
     if (_selectedMonthKey != 'all') {
       filteredReports = _cellReports.where((r) {
@@ -180,20 +221,15 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       }).toList();
     }
 
-    // --- REGRAS DE CÁLCULO DE FREQUÊNCIA ---
+    // --- CÁLCULO DAS MÉTRICAS ---
     int totalValidMeetingsHeld = 0;
     int presences = 0;
     int justifiedAbsences = 0;
     int unjustifiedAbsences = 0;
     final Map<String, int> rolesCountMap = {};
 
-    final memberJoinedDateOnly = DateTime(
-      _currentMember!.joinedAt.year,
-      _currentMember!.joinedAt.month,
-      _currentMember!.joinedAt.day,
-    );
-
     for (var report in filteredReports) {
+      // Ignora reuniões canceladas
       if (report.status == ReportStatus.cacelled) {
         continue;
       }
@@ -204,7 +240,8 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
         report.scheduledDate.day,
       );
 
-      if (meetingDateOnly.isBefore(memberJoinedDateOnly)) {
+      // Desconsidera reuniões anteriores à data de início efetivo do membro
+      if (meetingDateOnly.isBefore(effectiveStartDate)) {
         continue;
       }
 
