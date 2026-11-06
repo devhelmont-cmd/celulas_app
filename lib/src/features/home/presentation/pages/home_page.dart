@@ -175,6 +175,7 @@ class _HomePageState extends State<HomePage> {
         // 1. Visão do Pastor / Coordenador (com suporte a navegação)
         if (_currentUser.isPastorOrCoordinator) ...[
           PastorDashboardWidget(
+            currentUser: _currentUser,
             onNavigateTab: (index, {bool selectPastoralView = false}) {
               setState(() {
                 _currentIndex = index;

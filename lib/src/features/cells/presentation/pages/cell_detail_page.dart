@@ -590,16 +590,86 @@ class _CellDetailPageState extends State<CellDetailPage>
     );
 
     if (selected != null) {
+      CellMemberModel? matchedMember;
+
+      // 1. Pergunta de vinculação para usuário com conta
+      if (selected.isRegisteredUser) {
+        final option = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text('Adicionar ${selected.name}'),
+            content: Text(
+              'Deseja adicionar ${selected.name} como novo membro ou vinculá-lo(a) a um histórico de membro existente (sem conta)?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'novo'),
+                child: const Text('Adicionar Direto'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, 'vincular'),
+                child: const Text('Vincular a Membro Existente'),
+              ),
+            ],
+          ),
+        );
+
+        // CORREÇÃO CRÍTICA: Se clicou fora do diálogo (option == null), cancela toda a ação
+        if (option == null) return;
+
+        if (option == 'vincular') {
+          matchedMember = await _showLinkMemberDialog(targetName: selected.name);
+          // Se cancelou a seleção do membro sem conta para vincular, cancela a adição
+          if (matchedMember == null) return;
+        }
+      }
+
+      // 2. Pergunta sobre liderança (se a célula estiver sem líder)
+      bool setAsLeader = false;
+      final isLeaderEmpty =
+          _currentCell.leaderId == null || _currentCell.leaderId!.trim().isEmpty;
+
+      if (isLeaderEmpty) {
+        final shouldBeLeader = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Definir como Líder?'),
+            content: Text(
+              'Esta célula ainda não possui um líder definido. Deseja adicionar ${selected.name} já definindo-o(a) como Líder desta célula?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Apenas como Membro'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Sim, Definir como Líder'),
+              ),
+            ],
+          ),
+        );
+
+        // CORREÇÃO CRÍTICA: Se clicou fora do diálogo, cancela toda a ação
+        if (shouldBeLeader == null) return;
+
+        setAsLeader = shouldBeLeader;
+      }
+
+      // Executa a adição apenas se passou por todas as confirmações
       await dataSource.addExistingUserOrMemberToCell(
         cellId: _currentCell.id,
         item: selected,
-        role: 'membro',
+        role: setAsLeader ? 'lider' : 'membro',
+        matchedMemberId: matchedMember?.id,
+        setAsLeader: setAsLeader,
       );
+
       await _refreshCell();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${selected.name} adicionado(a) à célula!'),
+            content: Text('${selected.name} adicionado(a) à célula com sucesso!'),
             backgroundColor: Colors.green,
           ),
         );
