@@ -1,3 +1,4 @@
+// lib/src/features/cells/presentation/pages/create_cell_page.dart
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:celulas_app/src/features/cells/presentation/controllers/cell_controller.dart';
@@ -64,9 +65,9 @@ class _CreateCellPageState extends State<CreateCellPage> {
       final newCell = CellEntity(
         id: '',
         name: _nameController.text.trim(),
-        leaderId: null, // Será atribuído posteriormente
-        coLeaderId: null, // Será atribuído posteriormente
-        hostId: null, // Será atribuído posteriormente
+        leaderId: null,
+        coLeaderId: null,
+        hostId: null,
         address: _addressController.text.trim(),
         neighborhood: _neighborhoodController.text.trim(),
         meetingDay: _selectedDay,
@@ -147,13 +148,17 @@ class _CreateCellPageState extends State<CreateCellPage> {
 
                   DropdownButtonFormField<String>(
                     value: _selectedCategory,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Categoria',
                       prefixIcon: Icon(Icons.category_outlined),
                       border: OutlineInputBorder(),
                     ),
                     items: _categories.map((category) {
-                      return DropdownMenuItem(value: category, child: Text(category));
+                      return DropdownMenuItem(
+                        value: category,
+                        child: Text(category, overflow: TextOverflow.ellipsis),
+                      );
                     }).toList(),
                     onChanged: isLoading ? null : (val) {
                       if (val != null) setState(() => _selectedCategory = val);
@@ -174,10 +179,14 @@ class _CreateCellPageState extends State<CreateCellPage> {
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _selectedDay,
+                          isExpanded: true,
+                          isDense: true,
+                          style: const TextStyle(fontSize: 14, color: Colors.black87),
                           decoration: const InputDecoration(
                             labelText: 'Dia da Semana',
-                            prefixIcon: Icon(Icons.calendar_today_outlined),
+                            prefixIcon: Icon(Icons.calendar_today_outlined, size: 20),
                             border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 16),
                           ),
                           items: _daysOfWeek.map((day) {
                             return DropdownMenuItem(
@@ -197,12 +206,13 @@ class _CreateCellPageState extends State<CreateCellPage> {
                           child: InputDecorator(
                             decoration: const InputDecoration(
                               labelText: 'Horário',
-                              prefixIcon: Icon(Icons.access_time_outlined),
+                              prefixIcon: Icon(Icons.access_time_outlined, size: 20),
                               border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 16),
                             ),
                             child: Text(
                               _formatTimeOfDay(_selectedTime),
-                              style: const TextStyle(fontSize: 16),
+                              style: const TextStyle(fontSize: 14),
                             ),
                           ),
                         ),

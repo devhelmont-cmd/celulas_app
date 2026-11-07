@@ -1,3 +1,4 @@
+// lib/src/features/cells/presentation/pages/no_cell_page.dart
 import 'package:flutter/material.dart';
 
 import '../../../../core/injections/injection_container.dart';
@@ -67,14 +68,15 @@ class _NoCellPageState extends State<NoCellPage> {
 
   Future<String> _resolveName(
       ICellRemoteDataSource dataSource,
-      String? idOrName,
-      ) async {
+      String? idOrName, {
+        String? cellId,
+      }) async {
     if (idOrName == null || idOrName.trim().isEmpty) return '';
     if (_resolvedNamesCache.containsKey(idOrName)) {
       return _resolvedNamesCache[idOrName]!;
     }
 
-    final name = await dataSource.getUserNameById(idOrName);
+    final name = await dataSource.getUserNameById(idOrName, cellId: cellId);
     final resolved = name ?? idOrName;
     _resolvedNamesCache[idOrName] = resolved;
     return resolved;
@@ -227,10 +229,12 @@ class _NoCellPageState extends State<NoCellPage> {
                           final leaderName = await _resolveName(
                             dataSource,
                             cell.leaderId,
+                            cellId: cell.id,
                           );
                           final hostName = await _resolveName(
                             dataSource,
                             cell.hostId,
+                            cellId: cell.id,
                           );
 
                           final name = (cell.name ?? '').toLowerCase();
@@ -348,6 +352,7 @@ class _NoCellPageState extends State<NoCellPage> {
                                         future: _resolveName(
                                           dataSource,
                                           cell.leaderId,
+                                          cellId: cell.id,
                                         ),
                                         builder: (context, snapshot) {
                                           final leaderName =
@@ -382,6 +387,7 @@ class _NoCellPageState extends State<NoCellPage> {
                                         future: _resolveName(
                                           dataSource,
                                           cell.hostId,
+                                          cellId: cell.id,
                                         ),
                                         builder: (context, snapshot) {
                                           final hostName =

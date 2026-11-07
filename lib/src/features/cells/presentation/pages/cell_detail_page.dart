@@ -75,6 +75,24 @@ class _CellDetailPageState extends State<CellDetailPage>
     super.dispose();
   }
 
+  bool get _canUserRequestPrayer {
+    final user = widget.currentUser;
+    if (user == null) return false;
+    if (user.isPastorOrCoordinator) return true;
+    if (user.primaryCellId == _currentCell.id) return true;
+    if (_membersController.value is CellMemberLoadedState) {
+      final members = (_membersController.value as CellMemberLoadedState).members;
+      return members.any(
+            (m) =>
+        m.userId == user.id ||
+            (user.name != null &&
+                m.name.trim().toLowerCase() ==
+                    user.name!.trim().toLowerCase()),
+      );
+    }
+    return false;
+  }
+
   DateTime _calculateNextMeetingDate(String? meetingDayStr) {
     final now = DateTime.now();
     if (meetingDayStr == null || meetingDayStr.trim().isEmpty) {
@@ -592,7 +610,6 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (selected != null) {
       CellMemberModel? matchedMember;
 
-      // 1. Pergunta de vinculação para usuário com conta
       if (selected.isRegisteredUser) {
         final option = await showDialog<String>(
           context: context,
@@ -614,17 +631,14 @@ class _CellDetailPageState extends State<CellDetailPage>
           ),
         );
 
-        // CORREÇÃO CRÍTICA: Se clicou fora do diálogo (option == null), cancela toda a ação
         if (option == null) return;
 
         if (option == 'vincular') {
           matchedMember = await _showLinkMemberDialog(targetName: selected.name);
-          // Se cancelou a seleção do membro sem conta para vincular, cancela a adição
           if (matchedMember == null) return;
         }
       }
 
-      // 2. Pergunta sobre liderança (se a célula estiver sem líder)
       bool setAsLeader = false;
       final isLeaderEmpty =
           _currentCell.leaderId == null || _currentCell.leaderId!.trim().isEmpty;
@@ -650,13 +664,10 @@ class _CellDetailPageState extends State<CellDetailPage>
           ),
         );
 
-        // CORREÇÃO CRÍTICA: Se clicou fora do diálogo, cancela toda a ação
         if (shouldBeLeader == null) return;
-
         setAsLeader = shouldBeLeader;
       }
 
-      // Executa a adição apenas se passou por todas as confirmações
       await dataSource.addExistingUserOrMemberToCell(
         cellId: _currentCell.id,
         item: selected,
@@ -1698,7 +1709,6 @@ class _CellDetailPageState extends State<CellDetailPage>
 
     final bool isExpiredOrNull = _isMeetingExpired(_currentMeeting);
 
-    // Se a reunião expirou, todas as funções voltam para "Não definido"
     String initialPrayer = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.initialPrayerName ?? 'Não definido');
     String icebreaker = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.icebreakerName ?? 'Não definido');
     String worship = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.worshipName ?? 'Não definido');
@@ -1707,7 +1717,6 @@ class _CellDetailPageState extends State<CellDetailPage>
     String snack = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.snackName ?? 'Não definido');
     String officialPhoto = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.officialPhotoName ?? 'Não definido');
 
-    // Pré-preenche o preenchedor de relatório com o Líder por padrão se estiver vazio/expirado
     String reportFiller = isExpiredOrNull ? '' : (_currentMeeting?.reportFillerName ?? '');
     if (reportFiller.isEmpty || reportFiller == 'Não definido') {
       final leader = members.cast<CellMemberEntity>().firstWhere(
@@ -2238,6 +2247,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                           ),
                           future: dataSource.getUserNameById(
                             cell.leaderId!,
+                            cellId: cell.id,
                           ),
                           builder: (context, snapshot) {
                             if (snapshot.connectionState ==
@@ -2251,7 +2261,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                               );
                             }
                             final leaderName =
-                                snapshot.data ?? cell.leaderId!;
+                                snapshot.data ?? 'Sem líder definido';
                             return Text(
                               'Líder: $leaderName',
                               style: const TextStyle(
@@ -2354,7 +2364,7 @@ class _CellDetailPageState extends State<CellDetailPage>
             ),
             const SizedBox(height: 8),
             SizedBox(
-              height: 110,
+              height: 130,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 itemCount: _pendingRequests.length,
@@ -2439,39 +2449,45 @@ class _CellDetailPageState extends State<CellDetailPage>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Membros da Célula',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                        const Expanded(
+                          child: Text(
+                            'Membros da Célula',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             if (canBindSelf)
                               ElevatedButton.icon(
                                 onPressed: _bindSelfToCell,
-                                icon: const Icon(Icons.link, size: 18),
+                                icon: const Icon(Icons.link, size: 16),
                                 label: const Text('Vincular-me'),
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
+                                    horizontal: 8,
                                     vertical: 8,
                                   ),
+                                  textStyle: const TextStyle(fontSize: 12),
                                 ),
                               ),
                             if (canBindSelf && canAddMember)
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 4),
                             if (canAddMember)
                               ElevatedButton.icon(
                                 onPressed: _onTapAddButton,
-                                icon: const Icon(Icons.person_add, size: 18),
+                                icon: const Icon(Icons.person_add, size: 16),
                                 label: const Text('Adicionar'),
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
+                                    horizontal: 8,
                                     vertical: 8,
                                   ),
+                                  textStyle: const TextStyle(fontSize: 12),
                                 ),
                               ),
                           ],
@@ -2687,7 +2703,6 @@ class _CellDetailPageState extends State<CellDetailPage>
                     _currentCell.leaderId?.trim().toLowerCase() ==
                         user.name!.trim().toLowerCase()));
 
-    // O aviso de relatórios pendentes só aparece para líderes ou pastores/coordenadores, nunca para membros comuns
     final bool canManageCell = isPastorOrCoord || isUserLeaderOfThisCell;
 
     return SingleChildScrollView(
@@ -2739,15 +2754,22 @@ class _CellDetailPageState extends State<CellDetailPage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Configuração da Reunião',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              const Expanded(
+                child: Text(
+                  'Configuração da Reunião',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               if (canEdit)
                 ElevatedButton.icon(
                   onPressed: _showEditMeetingConfigDialog,
                   icon: const Icon(Icons.settings, size: 16),
                   label: const Text('Configurar'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
                 ),
             ],
           ),
@@ -2828,20 +2850,26 @@ class _CellDetailPageState extends State<CellDetailPage>
 
           const SizedBox(height: 24),
 
-          // Se não estiver cancelada e TIVER funções ativas (hasRoles == true)
           if (!isCanceled && (meeting?.hasRoles ?? true)) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Funções da Próxima Reunião',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                const Expanded(
+                  child: Text(
+                    'Funções da Próxima Reunião',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 if (canEdit)
                   ElevatedButton.icon(
                     onPressed: _showEditMeetingRolesDialog,
                     icon: const Icon(Icons.edit, size: 16),
-                    label: const Text('Definir Funções'),
+                    label: const Text('Definir'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
                   ),
               ],
             ),
@@ -3011,15 +3039,23 @@ class _CellDetailPageState extends State<CellDetailPage>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Pedidos de Oração',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              const Expanded(
+                child: Text(
+                  'Pedidos de Oração',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              ElevatedButton.icon(
-                onPressed: _showAddPrayerRequestDialog,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Pedir Oração'),
-              ),
+              if (_canUserRequestPrayer)
+                ElevatedButton.icon(
+                  onPressed: _showAddPrayerRequestDialog,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Pedir Oração'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),

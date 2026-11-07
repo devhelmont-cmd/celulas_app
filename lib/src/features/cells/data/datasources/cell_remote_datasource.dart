@@ -40,7 +40,7 @@ abstract class ICellRemoteDataSource {
 
   Stream<List<CellMemberEntity>> watchCellMembers(String cellId);
 
-  Future<String?> getUserNameById(String userId);
+  Future<String?> getUserNameById(String userId, {String? cellId});
 
   Future<void> addCellMember(CellMemberModel member);
 
@@ -222,9 +222,17 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
   }
 
   @override
-  Future<String?> getUserNameById(String userId) async {
-    if (userId.trim().isEmpty) return null;
+  Future<String?> getUserNameById(String userId, {String? cellId}) async {
+    if (userId.trim().isEmpty) {
+      return await _findLeaderNameByCellId(cellId);
+    }
     try {
+      // Se a string contém espaços, já é um nome legível
+      if (userId.contains(' ')) {
+        return userId;
+      }
+
+      // 1. Tenta buscar no documento de usuários pelo ID
       final userDoc = await _firestore.collection('users').doc(userId).get();
       if (userDoc.exists) {
         final data = userDoc.data() as Map<String, dynamic>;
@@ -234,47 +242,98 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         }
       }
 
-      final membersSnapshot = await _firestore.collection('members').get();
+      // 2. Tenta buscar no documento de membros pelo ID exato do documento
+      final memberDoc = await _firestore.collection('members').doc(userId).get();
+      if (memberDoc.exists) {
+        final data = memberDoc.data() as Map<String, dynamic>;
+        final memberUserId = data['userId'] as String?;
 
-      for (var doc in membersSnapshot.docs) {
-        if (doc.id == userId) {
-          final data = doc.data();
-          final memberUserId = data['userId'] as String?;
-
-          if (memberUserId != null && memberUserId.trim().isNotEmpty) {
-            final linkedUserDoc =
-                await _firestore.collection('users').doc(memberUserId).get();
-            if (linkedUserDoc.exists) {
-              final linkedUserData =
-                  linkedUserDoc.data() as Map<String, dynamic>;
-              final linkedName = linkedUserData['name'] as String?;
-              if (linkedName != null && linkedName.trim().isNotEmpty) {
-                return linkedName;
-              }
+        if (memberUserId != null && memberUserId.trim().isNotEmpty) {
+          final linkedUserDoc =
+          await _firestore.collection('users').doc(memberUserId).get();
+          if (linkedUserDoc.exists) {
+            final linkedData = linkedUserDoc.data() as Map<String, dynamic>;
+            final linkedName = linkedData['name'] as String?;
+            if (linkedName != null && linkedName.trim().isNotEmpty) {
+              return linkedName;
             }
           }
+        }
 
-          final memberName = data['name'] as String?;
-          if (memberName != null && memberName.trim().isNotEmpty) {
-            return memberName;
-          }
+        final memberName = data['name'] as String?;
+        if (memberName != null && memberName.trim().isNotEmpty) {
+          return memberName;
         }
       }
 
-      for (var doc in membersSnapshot.docs) {
-        final data = doc.data();
-        if (data['userId'] == userId) {
-          final memberName = data['name'] as String?;
-          if (memberName != null && memberName.trim().isNotEmpty) {
-            return memberName;
-          }
+      // 3. Tenta buscar membros onde o campo userId seja igual ao ID fornecido
+      final membersByUserId = await _firestore
+          .collection('members')
+          .where('userId', isEqualTo: userId)
+          .get();
+      for (var doc in membersByUserId.docs) {
+        final memberName = doc.data()['name'] as String?;
+        if (memberName != null && memberName.trim().isNotEmpty) {
+          return memberName;
         }
+      }
+
+      // 4. Se tivermos o cellId, tenta buscar o líder direto na coleção members daquela célula
+      if (cellId != null && cellId.trim().isNotEmpty) {
+        final cellLeaderName = await _findLeaderNameByCellId(cellId);
+        if (cellLeaderName != null) {
+          return cellLeaderName;
+        }
+      }
+
+      // 5. Se o ID for curto (não for um hash/UID padrão do Firestore), retorna ele mesmo
+      if (userId.length < 15) {
+        return userId;
       }
 
       return null;
     } catch (_) {
+      if (cellId != null) {
+        final cellLeaderName = await _findLeaderNameByCellId(cellId);
+        if (cellLeaderName != null) return cellLeaderName;
+      }
+      if (userId.contains(' ') || userId.length < 15) {
+        return userId;
+      }
       return null;
     }
+  }
+
+  Future<String?> _findLeaderNameByCellId(String? cellId) async {
+    if (cellId == null || cellId.trim().isEmpty) return null;
+    try {
+      final membersSnap = await _firestore
+          .collection('members')
+          .where('cellId', isEqualTo: cellId)
+          .get();
+
+      for (var doc in membersSnap.docs) {
+        final data = doc.data();
+        final role = (data['role'] ?? '').toString().toLowerCase().trim();
+        if (role == 'lider' || role == 'leader' || role == 'líder') {
+          final name = data['name'] as String?;
+          if (name != null && name.trim().isNotEmpty) {
+            return name;
+          }
+          final memberUserId = data['userId'] as String?;
+          if (memberUserId != null && memberUserId.trim().isNotEmpty) {
+            final userDoc = await _firestore.collection('users').doc(memberUserId).get();
+            if (userDoc.exists) {
+              final userName = (userDoc.data() as Map<String, dynamic>)['name'] as String?;
+              if (userName != null && userName.trim().isNotEmpty) {
+                return userName;
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   @override

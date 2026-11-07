@@ -246,7 +246,7 @@ class _CellsListPageState extends State<CellsListPage>
                               'leader_list_${cell.id}_${cell.leaderId}',
                             ),
                             future: dataSource
-                                .getUserNameById(cell.leaderId!),
+                                .getUserNameById(cell.leaderId!, cellId: cell.id),
                             builder: (context, snapshot) {
                               if (snapshot.connectionState ==
                                   ConnectionState.waiting) {
@@ -259,7 +259,7 @@ class _CellsListPageState extends State<CellsListPage>
                                 );
                               }
                               final leaderName =
-                                  snapshot.data ?? cell.leaderId!;
+                                  snapshot.data ?? 'Sem líder definido';
                               return Text(
                                 'Líder: $leaderName',
                                 style: const TextStyle(

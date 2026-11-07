@@ -212,12 +212,27 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   Future<void> updateUserProfile(UserModel user) async {
     try {
-      await _firestore
-          .collection('users')
-          .doc(user.id)
-          .set(user.toMap(), SetOptions(merge: true));
+      final batch = _firestore.batch();
 
-      // Se o nome foi alterado, atualiza o displayName no Firebase Auth
+      // 1. Atualiza a coleção 'users'
+      final userRef = _firestore.collection('users').doc(user.id);
+      batch.set(userRef, user.toMap(), SetOptions(merge: true));
+
+      // 2. Sincroniza o nome atualizado na coleção 'members' (se o nome foi preenchido)
+      if (user.name != null && user.name!.trim().isNotEmpty) {
+        final membersSnap = await _firestore
+            .collection('members')
+            .where('userId', isEqualTo: user.id)
+            .get();
+
+        for (var doc in membersSnap.docs) {
+          batch.update(doc.reference, {'name': user.name!.trim()});
+        }
+      }
+
+      await batch.commit();
+
+      // 3. Se o nome foi alterado, atualiza o displayName no Firebase Auth
       final currentUser = _firebaseAuth.currentUser;
       if (currentUser != null && user.name != null) {
         await currentUser.updateDisplayName(user.name);
