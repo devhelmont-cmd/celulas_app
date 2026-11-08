@@ -17,6 +17,8 @@ import 'package:celulas_app/src/features/profile/presentation/pages/profile_page
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/utils/gender_helper.dart';
+
 class HomePage extends StatefulWidget {
   final UserEntity user;
 
@@ -249,15 +251,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _getUserRoleLabel(UserEntity user) {
-    final bool isPastor = user.roles.contains(UserRole.pastor);
-    final bool isCoordinator = user.roles.contains(UserRole.coordinator);
-    final bool isLeader = user.roles.contains(UserRole.leader);
-
-    if (isPastor && isLeader) return 'Pastor / Líder de Célula';
-    if (isCoordinator && isLeader) return 'Coordenador / Líder de Célula';
-    if (isPastor) return 'Pastor';
-    if (isCoordinator) return 'Coordenador';
-    if (isLeader) return 'Líder de Célula';
-    return 'Membro';
+    return GenderHelper.formatCompositeRoles(
+      isPastor: user.roles.contains(UserRole.pastor),
+      isCoordinator: user.roles.contains(UserRole.coordinator),
+      isLeader: user.roles.contains(UserRole.leader),
+      gender: user.gender,
+    );
   }
 }

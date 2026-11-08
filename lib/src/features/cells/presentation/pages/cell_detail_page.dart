@@ -14,6 +14,7 @@ import 'package:celulas_app/src/features/cells/data/models/prayer_request_model.
 import 'package:celulas_app/src/features/cells/data/models/unlinked_user_or_member_model.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/pages/reports_page.dart';
 
+import '../../../../core/utils/gender_helper.dart';
 import '../../data/models/cell_join_request_model.dart';
 
 class CellDetailPage extends StatefulWidget {
@@ -196,24 +197,8 @@ class _CellDetailPageState extends State<CellDetailPage>
     } catch (_) {}
   }
 
-  String _formatMemberRole(String role) {
-    final lower = role.toLowerCase().trim();
-    switch (lower) {
-      case 'lider':
-      case 'leader':
-      case 'líder':
-        return 'Líder';
-      case 'colider':
-      case 'co-leader':
-      case 'co-líder':
-        return 'Co-líder';
-      case 'anfitriao':
-      case 'host':
-      case 'anfitrião':
-        return 'Anfitrião';
-      default:
-        return 'Membro';
-    }
+  String _formatMemberRole(String role, {String? gender}) {
+    return GenderHelper.formatRole(role, gender: gender);
   }
 
   String _normalizeRole(String role) {

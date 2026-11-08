@@ -1,11 +1,13 @@
 // lib/src/features/profile/presentation/pages/profile_page.dart
 
+import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
+import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/profile/presentation/pages/fill_profile_page.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   final UserEntity user;
   final VoidCallback onProfileUpdated;
 
@@ -15,30 +17,63 @@ class ProfilePage extends StatelessWidget {
     required this.onProfileUpdated,
   });
 
-  /// Calcula a porcentagem de preenchimento considerando os 14 campos do perfil
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  String _cellName = 'Carregando...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCellName();
+  }
+
+  Future<void> _loadCellName() async {
+    final cellId = widget.user.primaryCellId;
+    if (cellId == null || cellId.trim().isEmpty) {
+      if (mounted) setState(() => _cellName = 'Sem Célula Vinculada');
+      return;
+    }
+    try {
+      final dataSource = getIt<ICellRemoteDataSource>();
+      final cell = await dataSource.getCellById(cellId);
+      if (mounted) {
+        setState(() => _cellName = cell.name ?? 'Célula sem Nome');
+      }
+    } catch (_) {
+      if (mounted) setState(() => _cellName = 'Sem Célula Vinculada');
+    }
+  }
+
+  /// Calcula a porcentagem de preenchimento considerando 15 campos totais
   double _calculateProfileCompletion() {
-    int totalFields = 14; // Atualizado para incluir os 3 novos campos espirituais
+    int totalFields = 15;
     int filledFields = 0;
 
-    // Dados Pessoais & Foto (5)
-    if (user.photoUrl != null && user.photoUrl!.trim().isNotEmpty) filledFields++;
-    if (user.name != null && user.name!.trim().length >= 3) filledFields++;
-    if (user.phone != null && user.phone!.trim().isNotEmpty) filledFields++;
-    if (user.birthDate != null) filledFields++;
-    if (user.gender != null && user.gender!.trim().isNotEmpty) filledFields++;
+    // Dados Pessoais (5)
+    if (widget.user.photoUrl != null && widget.user.photoUrl!.trim().isNotEmpty) filledFields++;
+    if (widget.user.name != null && widget.user.name!.trim().length >= 3) filledFields++;
+    if (widget.user.phone != null && widget.user.phone!.trim().isNotEmpty) filledFields++;
+    if (widget.user.birthDate != null) filledFields++;
+    if (widget.user.gender != null && widget.user.gender!.trim().isNotEmpty) filledFields++;
 
     // Informações Complementares (3)
-    if (user.maritalStatus != null && user.maritalStatus!.trim().isNotEmpty) filledFields++;
-    if (user.profession != null && user.profession!.trim().isNotEmpty) filledFields++;
-    if (user.address != null && user.address!.trim().isNotEmpty) filledFields++;
+    if (widget.user.maritalStatus != null && widget.user.maritalStatus!.trim().isNotEmpty) filledFields++;
+    if (widget.user.profession != null && widget.user.profession!.trim().isNotEmpty) filledFields++;
+    if (widget.user.address != null && widget.user.address!.trim().isNotEmpty) filledFields++;
 
-    // Jornada Espiritual & Ministerial (6)
-    if (user.originChurch != null && user.originChurch!.trim().isNotEmpty) filledFields++;
-    if (user.conversionDate != null) filledFields++;
-    if (user.isWaterBaptized != null) filledFields++;
-    if (user.isHolySpiritBaptized != null) filledFields++;
-    if (user.completedCourses != null && user.completedCourses!.trim().isNotEmpty) filledFields++;
-    if (user.ministry != null && user.ministry!.trim().isNotEmpty) filledFields++;
+    // Vínculo Ecumênico & Jornada Espiritual (5)
+    if (widget.user.originChurch != null && widget.user.originChurch!.trim().isNotEmpty) filledFields++;
+    if (widget.user.conversionDate != null) filledFields++;
+    if (widget.user.isWaterBaptized != null) filledFields++;
+    if (widget.user.isHolySpiritBaptized != null) filledFields++;
+    if (widget.user.completedCourses != null && widget.user.completedCourses!.trim().isNotEmpty) filledFields++;
+
+    // Vínculo Institucional & Ministério (2)
+    if (widget.user.customRoles != null && widget.user.customRoles!.trim().isNotEmpty) filledFields++;
+    if (widget.user.ministry != null && widget.user.ministry!.trim().isNotEmpty) filledFields++;
 
     return filledFields / totalFields;
   }
@@ -47,6 +82,7 @@ class ProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = _calculateProfileCompletion();
     final bool isComplete = progress >= 1.0;
+    final user = widget.user;
 
     return Scaffold(
       appBar: AppBar(
@@ -61,7 +97,7 @@ class ProfilePage extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (_) => FillProfilePage(
                     user: user,
-                    onProfileUpdated: onProfileUpdated,
+                    onProfileUpdated: widget.onProfileUpdated,
                   ),
                 ),
               );
@@ -101,12 +137,29 @@ class ProfilePage extends StatelessWidget {
                     fontSize: 14,
                   ),
                 ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  alignment: WrapAlignment.center,
+                  children: user.displayRoles.map((roleStr) {
+                    return Chip(
+                      label: Text(
+                        roleStr,
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor: Colors.purple.shade50,
+                      side: BorderSide(color: Colors.purple.shade200),
+                    );
+                  }).toList(),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
-          // BARRA DE PROGRESSO E AVISO DISCRETO
+          // BARRA DE PROGRESSO DO PERFIL
           if (!isComplete) ...[
             Container(
               padding: const EdgeInsets.all(16),
@@ -163,7 +216,7 @@ class ProfilePage extends StatelessWidget {
                           MaterialPageRoute(
                             builder: (_) => FillProfilePage(
                               user: user,
-                              onProfileUpdated: onProfileUpdated,
+                              onProfileUpdated: widget.onProfileUpdated,
                             ),
                           ),
                         );
@@ -182,7 +235,7 @@ class ProfilePage extends StatelessWidget {
             const SizedBox(height: 20),
           ],
 
-          // SEÇÃO: DADOS PESSOAIS
+          // 1. SEÇÃO: DADOS PESSOAIS
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -223,7 +276,7 @@ class ProfilePage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // SEÇÃO: INFORMAÇÕES COMPLEMENTARES
+          // 2. SEÇÃO: INFORMAÇÕES COMPLEMENTARES
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -259,7 +312,7 @@ class ProfilePage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // SEÇÃO: JORNADA ESPIRITUAL
+          // 3. SEÇÃO: VÍNCULO ECUMÊNICO & JORNADA ESPIRITUAL
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -267,7 +320,7 @@ class ProfilePage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Jornada Espiritual & Ministerial',
+                    'Vínculo Ecumênico & Jornada Espiritual',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -305,6 +358,38 @@ class ProfilePage extends StatelessWidget {
                     Icons.school_outlined,
                     'Cursos / Trilhas Concluídas',
                     user.completedCourses,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 4. SEÇÃO: VÍNCULO INSTITUCIONAL & MINISTÉRIO
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Vínculo Institucional & Ministério',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo,
+                    ),
+                  ),
+                  const Divider(height: 20),
+                  _buildInfoRow(
+                    Icons.groups_outlined,
+                    'Célula Atual',
+                    _cellName,
+                  ),
+                  _buildInfoRow(
+                    Icons.admin_panel_settings_outlined,
+                    'Cargos / Funções',
+                    user.displayRoles.join(', '),
                   ),
                   _buildInfoRow(
                     Icons.volunteer_activism_outlined,

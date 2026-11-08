@@ -24,7 +24,8 @@ class UserModel extends UserEntity {
     super.isHolySpiritBaptized,
     super.originChurch,
     super.ministry,
-    super.completedCourses, // <--- NOVO CAMPO ADICIONADO
+    super.completedCourses,
+    super.customRoles,
   });
 
   factory UserModel.fromFirebaseUser(firebase.User user, {String? primaryCellId}) {
@@ -66,7 +67,8 @@ class UserModel extends UserEntity {
       isHolySpiritBaptized: map['isHolySpiritBaptized'],
       originChurch: map['originChurch'],
       ministry: map['ministry'],
-      completedCourses: map['completedCourses'], // <--- LIDO DO FIRESTORE
+      completedCourses: map['completedCourses'],
+      customRoles: map['customRoles'],
     );
   }
 
@@ -92,7 +94,8 @@ class UserModel extends UserEntity {
       'isHolySpiritBaptized': isHolySpiritBaptized,
       'originChurch': originChurch,
       'ministry': ministry,
-      'completedCourses': completedCourses, // <--- SALVO NO FIRESTORE
+      'completedCourses': completedCourses,
+      'customRoles': customRoles,
     };
   }
 
@@ -116,7 +119,8 @@ class UserModel extends UserEntity {
       isHolySpiritBaptized: entity.isHolySpiritBaptized,
       originChurch: entity.originChurch,
       ministry: entity.ministry,
-      completedCourses: entity.completedCourses, // <--- REPASSADO DA ENTITY
+      completedCourses: entity.completedCourses,
+      customRoles: entity.customRoles,
     );
   }
 }
