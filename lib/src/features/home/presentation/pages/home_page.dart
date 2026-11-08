@@ -155,7 +155,7 @@ class _HomePageState extends State<HomePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Olá, ${_currentUser.name ?? _currentUser.email.split('@').first}',
+                  'Olá, ${_currentUser.displayName}',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),

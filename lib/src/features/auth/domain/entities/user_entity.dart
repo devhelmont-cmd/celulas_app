@@ -15,7 +15,7 @@ class UserEntity {
   // DADOS PESSOAIS
   final String? phone;
   final DateTime? birthDate;
-  final String? gender; // 'masculino', 'feminino' ou null (Não informado)
+  final String? gender;
   final String? maritalStatus;
   final String? profession;
   final String? address;
@@ -55,18 +55,25 @@ class UserEntity {
     this.customRoles,
   });
 
+  bool get isPastor => roles.contains(UserRole.pastor);
   bool get isPastorOrCoordinator =>
       roles.contains(UserRole.pastor) || roles.contains(UserRole.coordinator);
-
   bool get isLeader => roles.contains(UserRole.leader);
-
   bool get isMember => roles.contains(UserRole.member);
+
+  /// Retorna o nome formatado para exibição pública.
+  /// Se for pastor(a), insere automaticamente 'Pr.' ou 'Pra.' na frente do nome.
+  String get displayName => GenderHelper.formatDisplayName(
+    name: name,
+    isPastor: isPastor,
+    gender: gender,
+    defaultIfEmpty: email.split('@').first,
+  );
 
   /// Retorna os cargos e funções formatados dinamicamente por gênero.
   List<String> get displayRoles {
     final List<String> list = [];
 
-    // Roles do sistema tratadas com o helper de gênero
     if (roles.contains(UserRole.pastor)) {
       list.add(GenderHelper.formatRole('pastor', gender: gender));
     }
@@ -77,7 +84,6 @@ class UserEntity {
       list.add('${GenderHelper.formatRole('líder', gender: gender)} de Célula');
     }
 
-    // Roles customizados (texto livre)
     if (customRoles != null && customRoles!.trim().isNotEmpty) {
       final customList = customRoles!
           .split(',')
@@ -90,7 +96,6 @@ class UserEntity {
       }
     }
 
-    // Oculta a palavra "Membro" caso haja outro cargo qualquer.
     if (list.isEmpty) {
       list.add(GenderHelper.formatRole('membro', gender: gender));
     }
@@ -98,7 +103,6 @@ class UserEntity {
     return list;
   }
 
-  /// Sexo é Opcional. Consideramos o perfil suficiente se tiver Nome Completo, Telefone e Nascimento.
   bool get isProfileComplete {
     final hasName = name != null && name!.trim().length >= 3;
     final hasPhone = phone != null && phone!.trim().isNotEmpty;

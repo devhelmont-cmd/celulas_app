@@ -4,6 +4,7 @@ import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/profile/presentation/pages/fill_profile_page.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -47,9 +48,9 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  /// Calcula a porcentagem de preenchimento considerando 15 campos totais
+  /// Calcula a porcentagem de preenchimento considerando 13 campos estruturais
   double _calculateProfileCompletion() {
-    int totalFields = 15;
+    int totalFields = 13;
     int filledFields = 0;
 
     // Dados Pessoais (5)
@@ -64,18 +65,67 @@ class _ProfilePageState extends State<ProfilePage> {
     if (widget.user.profession != null && widget.user.profession!.trim().isNotEmpty) filledFields++;
     if (widget.user.address != null && widget.user.address!.trim().isNotEmpty) filledFields++;
 
-    // Vínculo Ecumênico & Jornada Espiritual (5)
+    // Jornada Espiritual & Origem (5)
     if (widget.user.originChurch != null && widget.user.originChurch!.trim().isNotEmpty) filledFields++;
     if (widget.user.conversionDate != null) filledFields++;
     if (widget.user.isWaterBaptized != null) filledFields++;
     if (widget.user.isHolySpiritBaptized != null) filledFields++;
     if (widget.user.completedCourses != null && widget.user.completedCourses!.trim().isNotEmpty) filledFields++;
 
-    // Vínculo Institucional & Ministério (2)
-    if (widget.user.customRoles != null && widget.user.customRoles!.trim().isNotEmpty) filledFields++;
-    if (widget.user.ministry != null && widget.user.ministry!.trim().isNotEmpty) filledFields++;
-
     return filledFields / totalFields;
+  }
+
+  String _getAuthProviderLabel() {
+    final currentUser = firebase.FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return 'E-mail e Senha';
+
+    final providers = currentUser.providerData.map((p) => p.providerId).toList();
+    if (providers.contains('google.com')) {
+      return 'Google / E-mail';
+    }
+    return 'E-mail e Senha';
+  }
+
+  Future<void> _requestEmailChange() async {
+    // Diálogo informativo sobre alteração de e-mail
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Alteração de E-mail'),
+        content: const Text(
+          'Para alterar seu e-mail principal com segurança, por favor entre em contato com a secretaria da igreja ou com o suporte técnico.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _requestPasswordReset() async {
+    try {
+      await firebase.FirebaseAuth.instance.sendPasswordResetEmail(
+        email: widget.user.email,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('E-mail de redefinição de senha enviado com sucesso!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao enviar e-mail: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -108,7 +158,7 @@ class _ProfilePageState extends State<ProfilePage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // CABEÇALHO DO PERFIL
+          // CABEÇALHO DO PERFIL (Livre de e-mail poluindo o topo)
           Center(
             child: Column(
               children: [
@@ -123,18 +173,10 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  user.name?.isNotEmpty == true ? user.name! : 'Nome não informado',
+                  user.displayName,
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  user.email,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -312,7 +354,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           const SizedBox(height: 16),
 
-          // 3. SEÇÃO: VÍNCULO ECUMÊNICO & JORNADA ESPIRITUAL
+          // 3. SEÇÃO: JORNADA ESPIRITUAL & ORIGEM
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -320,7 +362,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Vínculo Ecumênico & Jornada Espiritual',
+                    'Jornada Espiritual & Origem',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -400,6 +442,50 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             ),
           ),
+
+          const SizedBox(height: 16),
+
+          // 5. SEÇÃO: CONTA E SEGURANÇA (NOVA)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Conta e Segurança',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.teal,
+                    ),
+                  ),
+                  const Divider(height: 20),
+                  _buildActionInfoRow(
+                    Icons.email_outlined,
+                    'E-mail Principal',
+                    user.email,
+                    actionLabel: 'Solicitar Alteração',
+                    onAction: _requestEmailChange,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildActionInfoRow(
+                    Icons.lock_outline,
+                    'Senha de Acesso',
+                    '••••••••',
+                    actionLabel: 'Alterar Senha',
+                    onAction: _requestPasswordReset,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildInfoRow(
+                    Icons.link,
+                    'Vínculos de Login',
+                    _getAuthProviderLabel(),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -433,6 +519,53 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionInfoRow(
+      IconData icon,
+      String label,
+      String value, {
+        required String actionLabel,
+        required VoidCallback onAction,
+      }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(icon, size: 20, color: Colors.grey.shade600),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onAction,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              visualDensity: VisualDensity.compact,
+            ),
+            child: Text(actionLabel, style: const TextStyle(fontSize: 12)),
           ),
         ],
       ),

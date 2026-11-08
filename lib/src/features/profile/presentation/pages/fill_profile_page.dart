@@ -103,10 +103,10 @@ class _FillProfilePageState extends State<FillProfilePage> {
   }
 
   Future<void> _selectDate(
-    BuildContext context,
-    DateTime? initial,
-    Function(DateTime) onSelected,
-  ) async {
+      BuildContext context,
+      DateTime? initial,
+      Function(DateTime) onSelected,
+      ) async {
     final picked = await showDatePicker(
       context: context,
       initialDate: initial ?? DateTime(2000, 1, 1),
@@ -185,371 +185,363 @@ class _FillProfilePageState extends State<FillProfilePage> {
         ],
       ),
       body:
-          _isSaving
-              ? const Center(child: CircularProgressIndicator())
-              : Form(
-                key: _formKey,
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
+      _isSaving
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            // CABEÇALHO DO PERFIL
+            Center(
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundImage:
+                    widget.user.photoUrl != null &&
+                        widget.user.photoUrl!.isNotEmpty
+                        ? NetworkImage(widget.user.photoUrl!)
+                        : null,
+                    child:
+                    (widget.user.photoUrl == null ||
+                        widget.user.photoUrl!.isEmpty)
+                        ? const Icon(Icons.person, size: 40)
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // 1. SEÇÃO: DADOS PESSOAIS (OBRIGATÓRIOS)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // CABEÇALHO DO PERFIL
-                    Center(
-                      child: Column(
-                        children: [
-                          CircleAvatar(
-                            radius: 40,
-                            backgroundImage:
-                                widget.user.photoUrl != null &&
-                                        widget.user.photoUrl!.isNotEmpty
-                                    ? NetworkImage(widget.user.photoUrl!)
-                                    : null,
-                            child:
-                                (widget.user.photoUrl == null ||
-                                        widget.user.photoUrl!.isEmpty)
-                                    ? const Icon(Icons.person, size: 40)
-                                    : null,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            widget.user.email,
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
+                    const Text(
+                      'Dados Pessoais (Obrigatórios)',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueAccent,
                       ),
                     ),
-                    const SizedBox(height: 24),
-
-                    // 1. SEÇÃO: DADOS PESSOAIS (OBRIGATÓRIOS)
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Dados Pessoais (Obrigatórios)',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blueAccent,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _nameCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Nome Completo *',
-                                prefixIcon: Icon(Icons.person_outline),
-                              ),
-                              validator:
-                                  (v) =>
-                                      (v == null || v.trim().length < 3)
-                                          ? 'Informe seu nome completo'
-                                          : null,
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _phoneCtrl,
-                              keyboardType: TextInputType.phone,
-                              decoration: const InputDecoration(
-                                labelText: 'WhatsApp / Telefone *',
-                                prefixIcon: Icon(Icons.phone_outlined),
-                              ),
-                              validator:
-                                  (v) =>
-                                      (v == null || v.trim().isEmpty)
-                                          ? 'Informe seu WhatsApp para contato'
-                                          : null,
-                            ),
-                            const SizedBox(height: 12),
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Icons.cake_outlined),
-                              title: Text(
-                                _birthDate == null
-                                    ? 'Data de Nascimento * (Clique para definir)'
-                                    : 'Nascimento: ${DateFormat('dd/MM/yyyy').format(_birthDate!)}',
-                              ),
-                              trailing: const Icon(
-                                Icons.calendar_today,
-                                size: 18,
-                              ),
-                              onTap:
-                                  () => _selectDate(
-                                    context,
-                                    _birthDate,
-                                    (d) => _birthDate = d,
-                                  ),
-                            ),
-                            const SizedBox(height: 8),
-                            DropdownButtonFormField<String?>(
-                              value: _gender,
-                              decoration: const InputDecoration(
-                                labelText: 'Sexo',
-                                prefixIcon: Icon(Icons.wc_outlined),
-                              ),
-                              items: const [
-                                DropdownMenuItem<String?>(
-                                  value: 'masculino',
-                                  child: Text('Masculino'),
-                                ),
-                                DropdownMenuItem<String?>(
-                                  value: 'feminino',
-                                  child: Text('Feminino'),
-                                ),
-                              ],
-                              onChanged: (v) => setState(() => _gender = v),
-                              validator: null,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
                     const SizedBox(height: 16),
-
-                    // 2. SEÇÃO: INFORMAÇÕES COMPLEMENTARES
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Informações Complementares',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            DropdownButtonFormField<String>(
-                              value: _maritalStatus,
-                              decoration: const InputDecoration(
-                                labelText: 'Estado Civil',
-                                prefixIcon: Icon(Icons.favorite_border),
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'solteiro',
-                                  child: Text('Solteiro(a)'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'casado',
-                                  child: Text('Casado(a)'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'divorciado',
-                                  child: Text('Divorciado(a)'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'viuvo',
-                                  child: Text('Viúvo(a)'),
-                                ),
-                              ],
-                              onChanged:
-                                  (v) => setState(() => _maritalStatus = v),
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _professionCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Profissão / Área de Atuação',
-                                prefixIcon: Icon(Icons.work_outline),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _addressCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Endereço Residencial',
-                                prefixIcon: Icon(Icons.home_outlined),
-                              ),
-                            ),
-                          ],
-                        ),
+                    TextFormField(
+                      controller: _nameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome Completo *',
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
+                      validator:
+                          (v) =>
+                      (v == null || v.trim().length < 3)
+                          ? 'Informe seu nome completo'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'WhatsApp / Telefone *',
+                        prefixIcon: Icon(Icons.phone_outlined),
+                      ),
+                      validator:
+                          (v) =>
+                      (v == null || v.trim().isEmpty)
+                          ? 'Informe seu WhatsApp para contato'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.cake_outlined),
+                      title: Text(
+                        _birthDate == null
+                            ? 'Data de Nascimento * (Clique para definir)'
+                            : 'Nascimento: ${DateFormat('dd/MM/yyyy').format(_birthDate!)}',
+                      ),
+                      trailing: const Icon(
+                        Icons.calendar_today,
+                        size: 18,
+                      ),
+                      onTap:
+                          () => _selectDate(
+                        context,
+                        _birthDate,
+                            (d) => _birthDate = d,
                       ),
                     ),
-
-                    const SizedBox(height: 16),
-
-                    // 3. SEÇÃO: VÍNCULO ECUMÊNICO & JORNADA ESPIRITUAL
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Vínculo Ecumênico & Jornada Espiritual',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.purple,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _originChurchCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Igreja de Origem / Sede',
-                                prefixIcon: Icon(
-                                  Icons.account_balance_outlined,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: const Icon(
-                                Icons.event_available_outlined,
-                              ),
-                              title: Text(
-                                _conversionDate == null
-                                    ? 'Data de Conversão / Decisão (Opcional)'
-                                    : 'Conversão: ${DateFormat('dd/MM/yyyy').format(_conversionDate!)}',
-                              ),
-                              trailing: const Icon(
-                                Icons.calendar_today,
-                                size: 18,
-                              ),
-                              onTap:
-                                  () => _selectDate(
-                                    context,
-                                    _conversionDate,
-                                    (d) => _conversionDate = d,
-                                  ),
-                            ),
-                            const Divider(height: 20),
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Batizado nas Águas'),
-                              value: _isWaterBaptized,
-                              onChanged:
-                                  (v) => setState(() => _isWaterBaptized = v),
-                            ),
-                            if (_isWaterBaptized) ...[
-                              ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const Icon(Icons.water_drop_outlined),
-                                title: Text(
-                                  _waterBaptismDate == null
-                                      ? 'Data do Batismo (Opcional)'
-                                      : 'Data Batismo: ${DateFormat('dd/MM/yyyy').format(_waterBaptismDate!)}',
-                                ),
-                                onTap:
-                                    () => _selectDate(
-                                      context,
-                                      _waterBaptismDate,
-                                      (d) => _waterBaptismDate = d,
-                                    ),
-                              ),
-                            ],
-                            SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Batizado no Espírito Santo'),
-                              value: _isHolySpiritBaptized,
-                              onChanged:
-                                  (v) =>
-                                      setState(() => _isHolySpiritBaptized = v),
-                            ),
-                            const Divider(height: 20),
-                            TextFormField(
-                              controller: _completedCoursesCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Cursos / Trilhas Concluídas',
-                                hintText:
-                                    'Ex: Encontro com Deus, Escola de Líderes',
-                                prefixIcon: Icon(Icons.school_outlined),
-                              ),
-                            ),
-                          ],
-                        ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String?>(
+                      value: _gender,
+                      decoration: const InputDecoration(
+                        labelText: 'Sexo',
+                        prefixIcon: Icon(Icons.wc_outlined),
                       ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // 4. SEÇÃO: VÍNCULO INSTITUCIONAL & MINISTÉRIO
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Vínculo Institucional & Ministério',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.indigo,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              initialValue: _cellName,
-                              readOnly: true,
-                              enabled: false,
-                              decoration: const InputDecoration(
-                                labelText: 'Célula Atual',
-                                helperText:
-                                    'Gerenciada automaticamente via transferência/vínculo de células.',
-                                prefixIcon: Icon(Icons.groups_outlined),
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              initialValue: widget.user.displayRoles.join(', '),
-                              readOnly: true,
-                              enabled: false,
-                              decoration: const InputDecoration(
-                                labelText: 'Cargos do Sistema',
-                                helperText:
-                                    'Definidos pelo Pastor/Coordenador nas telas de gestão.',
-                                prefixIcon: Icon(
-                                  Icons.admin_panel_settings_outlined,
-                                ),
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _customRolesCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Outras Funções / Cargos Internos',
-                                hintText:
-                                    'Ex: Líder de Louvor, Missionário, Diácono',
-                                prefixIcon: Icon(Icons.badge_outlined),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _ministryCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Ministério em que Serve',
-                                hintText: 'Ex: Louvor, Recepção, Infantil',
-                                prefixIcon: Icon(
-                                  Icons.volunteer_activism_outlined,
-                                ),
-                              ),
-                            ),
-                          ],
+                      items: const [
+                        DropdownMenuItem<String?>(
+                          value: 'masculino',
+                          child: Text('Masculino'),
                         ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-                    FilledButton(
-                      onPressed: _isSaving ? null : _saveProfile,
-                      child: const Text('Salvar Alterações'),
+                        DropdownMenuItem<String?>(
+                          value: 'feminino',
+                          child: Text('Feminino'),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => _gender = v),
+                      validator: null,
                     ),
                   ],
                 ),
               ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 2. SEÇÃO: INFORMAÇÕES COMPLEMENTARES
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Informações Complementares',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: _maritalStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Estado Civil',
+                        prefixIcon: Icon(Icons.favorite_border),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'solteiro',
+                          child: Text('Solteiro(a)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'casado',
+                          child: Text('Casado(a)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'divorciado',
+                          child: Text('Divorciado(a)'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'viuvo',
+                          child: Text('Viúvo(a)'),
+                        ),
+                      ],
+                      onChanged:
+                          (v) => setState(() => _maritalStatus = v),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _professionCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Profissão / Área de Atuação',
+                        prefixIcon: Icon(Icons.work_outline),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _addressCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Endereço Residencial',
+                        prefixIcon: Icon(Icons.home_outlined),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 3. SEÇÃO: JORNADA ESPIRITUAL & ORIGEM
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Jornada Espiritual & Origem',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purple,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _originChurchCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Igreja de Origem / Sede',
+                        prefixIcon: Icon(
+                          Icons.account_balance_outlined,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(
+                        Icons.event_available_outlined,
+                      ),
+                      title: Text(
+                        _conversionDate == null
+                            ? 'Data de Conversão / Decisão (Opcional)'
+                            : 'Conversão: ${DateFormat('dd/MM/yyyy').format(_conversionDate!)}',
+                      ),
+                      trailing: const Icon(
+                        Icons.calendar_today,
+                        size: 18,
+                      ),
+                      onTap:
+                          () => _selectDate(
+                        context,
+                        _conversionDate,
+                            (d) => _conversionDate = d,
+                      ),
+                    ),
+                    const Divider(height: 20),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Batizado nas Águas'),
+                      value: _isWaterBaptized,
+                      onChanged:
+                          (v) => setState(() => _isWaterBaptized = v),
+                    ),
+                    if (_isWaterBaptized) ...[
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.water_drop_outlined),
+                        title: Text(
+                          _waterBaptismDate == null
+                              ? 'Data do Batismo (Opcional)'
+                              : 'Data Batismo: ${DateFormat('dd/MM/yyyy').format(_waterBaptismDate!)}',
+                        ),
+                        onTap:
+                            () => _selectDate(
+                          context,
+                          _waterBaptismDate,
+                              (d) => _waterBaptismDate = d,
+                        ),
+                      ),
+                    ],
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Batizado no Espírito Santo'),
+                      value: _isHolySpiritBaptized,
+                      onChanged:
+                          (v) =>
+                          setState(() => _isHolySpiritBaptized = v),
+                    ),
+                    const Divider(height: 20),
+                    TextFormField(
+                      controller: _completedCoursesCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Cursos / Trilhas Concluídas',
+                        hintText:
+                        'Ex: Encontro com Deus, Escola de Líderes',
+                        prefixIcon: Icon(Icons.school_outlined),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // 4. SEÇÃO: VÍNCULO INSTITUCIONAL & MINISTÉRIO
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Vínculo Institucional & Ministério',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.indigo,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      initialValue: _cellName,
+                      readOnly: true,
+                      enabled: false,
+                      decoration: const InputDecoration(
+                        labelText: 'Célula Atual',
+                        helperText:
+                        'Gerenciada automaticamente via transferência/vínculo de células.',
+                        prefixIcon: Icon(Icons.groups_outlined),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      initialValue: widget.user.displayRoles.join(', '),
+                      readOnly: true,
+                      enabled: false,
+                      decoration: const InputDecoration(
+                        labelText: 'Cargos do Sistema',
+                        helperText:
+                        'Definidos pelo Pastor/Coordenador nas telas de gestão.',
+                        prefixIcon: Icon(
+                          Icons.admin_panel_settings_outlined,
+                        ),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _customRolesCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Outras Funções / Cargos Internos',
+                        hintText:
+                        'Ex: Líder de Louvor, Missionário, Diácono',
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _ministryCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Ministério em que Serve',
+                        hintText: 'Ex: Louvor, Recepção, Infantil',
+                        prefixIcon: Icon(
+                          Icons.volunteer_activism_outlined,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: _isSaving ? null : _saveProfile,
+              child: const Text('Salvar Alterações'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

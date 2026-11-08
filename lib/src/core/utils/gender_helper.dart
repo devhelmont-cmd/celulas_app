@@ -1,7 +1,7 @@
 // lib/src/core/utils/gender_helper.dart
 
 class GenderHelper {
-  /// Retorna o gênero normalizado: 'masculino', 'feminino' ou null (quando omitido ou inválido)
+  /// Retorna o gênero normalizado: 'masculino', 'feminino' ou null
   static String? normalizeGender(String? gender) {
     if (gender == null) return null;
     final g = gender.toLowerCase().trim();
@@ -10,10 +10,48 @@ class GenderHelper {
     return null;
   }
 
+  /// Retorna o título pastoral apropriado com base no gênero.
+  /// Masculino: 'Pr.' | Feminino: 'Pra.' | Omitido/Neutro: 'Pr.(a)'
+  static String getPastorPrefix(String? gender) {
+    final normGender = normalizeGender(gender);
+    if (normGender == 'masculino') return 'Pr.';
+    if (normGender == 'feminino') return 'Pra.';
+    return 'Pr.(a)';
+  }
+
+  /// Formata o nome para exibição pública no aplicativo.
+  /// Se a pessoa possuir o papel de Pastor, adiciona o prefixo 'Pr.' ou 'Pra.' automaticamente.
+  /// Para outros cargos (Líder, Coordenador, Membro), mantém o nome limpo original.
+  static String formatDisplayName({
+    required String? name,
+    required bool isPastor,
+    String? gender,
+    String defaultIfEmpty = 'Nome não informado',
+  }) {
+    if (name == null || name.trim().isEmpty) {
+      return defaultIfEmpty;
+    }
+
+    final cleanName = name.trim();
+
+    if (isPastor) {
+      // Evita duplicar o prefixo caso o usuário já tenha digitado 'Pr.' ou 'Pastor' no cadastro
+      final lowerName = cleanName.toLowerCase();
+      if (lowerName.startsWith('pr.') ||
+          lowerName.startsWith('pra.') ||
+          lowerName.startsWith('pastor ') ||
+          lowerName.startsWith('pastora ')) {
+        return cleanName;
+      }
+
+      final prefix = getPastorPrefix(gender);
+      return '$prefix $cleanName';
+    }
+
+    return cleanName;
+  }
+
   /// Retorna o termo apropriado para o cargo/função com base no gênero.
-  /// Se [gender] for 'masculino', usa a forma masculina.
-  /// Se [gender] for 'feminino', usa a forma feminina.
-  /// Se [gender] for nulo/não informado, usa a forma neutra/ambígua com (a).
   static String formatRole(String roleKey, {String? gender}) {
     final normGender = normalizeGender(gender);
     final key = roleKey.toLowerCase().trim();
@@ -36,7 +74,7 @@ class GenderHelper {
       case 'líder':
       case 'leader':
         if (normGender == 'masculino') return 'Líder';
-        if (normGender == 'feminino') return 'Líder'; // 'Líder' é sobrecomum
+        if (normGender == 'feminino') return 'Líder';
         return 'Líder';
 
       case 'anfitriao':
