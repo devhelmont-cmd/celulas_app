@@ -25,6 +25,7 @@ class UserEntity {
   final bool? isHolySpiritBaptized;
   final String? originChurch;
   final String? ministry;
+  final String? completedCourses; // <--- NOVO CAMPO ADICIONADO
 
   const UserEntity({
     required this.id,
@@ -45,6 +46,7 @@ class UserEntity {
     this.isHolySpiritBaptized,
     this.originChurch,
     this.ministry,
+    this.completedCourses, // <--- NOVO CAMPO ADICIONADO
   });
 
   bool get isPastorOrCoordinator =>

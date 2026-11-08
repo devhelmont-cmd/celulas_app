@@ -12,6 +12,7 @@ import 'package:celulas_app/src/features/cells/presentation/pages/cells_list_pag
 import 'package:celulas_app/src/features/home/presentation/widgets/leader_dashboard_widget.dart';
 import 'package:celulas_app/src/features/home/presentation/widgets/member_dashboard_widget.dart';
 import 'package:celulas_app/src/features/home/presentation/widgets/pastor_dashboard_widget.dart';
+import 'package:celulas_app/src/features/profile/presentation/pages/fill_profile_page.dart';
 import 'package:celulas_app/src/features/profile/presentation/pages/profile_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -99,10 +100,7 @@ class _HomePageState extends State<HomePage> {
             currentUser: _currentUser,
           ),
           ReportsPage(currentUser: _currentUser),
-          ProfilePage(
-            user: _currentUser,
-            onProfileUpdated: _loadUserData,
-          ),
+          ProfilePage(user: _currentUser, onProfileUpdated: _loadUserData)
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
