@@ -1,7 +1,10 @@
 import 'package:celulas_app/src/features/auth/data/models/user_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 
 abstract class AuthRemoteDataSource {
   Future<UserModel> loginWithEmail(String email, String password);
@@ -23,6 +26,8 @@ abstract class AuthRemoteDataSource {
   Future<UserModel?> getCurrentUser();
 
   Future<void> updateUserProfile(UserModel user);
+
+  Future<String> uploadProfilePhoto(String userId, XFile imageFile, String? oldPhotoUrl);
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -241,6 +246,53 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       throw Exception(_handleAuthException(e));
     } catch (e) {
       throw Exception('Erro ao atualizar dados do perfil: ${e.toString()}');
+    }
+  }
+
+  @override
+  Future<String> uploadProfilePhoto(
+      String userId,
+      XFile imageFile,
+      String? oldPhotoUrl,
+      ) async {
+    try {
+      // 1. Só tenta apagar se a foto antiga pertencer explicitamente ao Firebase Storage do app
+      if (oldPhotoUrl != null && oldPhotoUrl.isNotEmpty) {
+        if (!oldPhotoUrl.contains('googleusercontent.com') &&
+            (oldPhotoUrl.contains('firebasestorage.googleapis.com') ||
+                oldPhotoUrl.contains('firebasestorage.app'))) {
+          try {
+            final oldRef = FirebaseStorage.instance.refFromURL(oldPhotoUrl);
+            await oldRef.delete();
+          } catch (e) {
+            debugPrint('Arquivo antigo não encontrado no Storage, ignorando: $e');
+          }
+        }
+      }
+
+      // 2. Faz o upload da nova foto recortada com timestamp único
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('users_photos')
+          .child(userId)
+          .child('profile_${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      final bytes = await imageFile.readAsBytes();
+
+      final uploadTask = storageRef.putData(bytes, metadata);
+      final snapshot = await uploadTask;
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+
+      // 3. Atualiza também no Firebase Auth currentUser
+      final currentUser = _firebaseAuth.currentUser;
+      if (currentUser != null) {
+        await currentUser.updatePhotoURL(downloadUrl);
+      }
+
+      return downloadUrl;
+    } catch (e) {
+      throw Exception('Erro ao fazer upload da foto de perfil: ${e.toString()}');
     }
   }
 

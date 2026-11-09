@@ -1,11 +1,14 @@
 // lib/src/features/profile/presentation/pages/fill_profile_page.dart
 
+import 'dart:typed_data';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:celulas_app/src/features/auth/data/models/user_model.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 class FillProfilePage extends StatefulWidget {
@@ -26,6 +29,7 @@ class _FillProfilePageState extends State<FillProfilePage> {
   final _formKey = GlobalKey<FormState>();
   final _authDataSource = getIt<AuthRemoteDataSource>();
   final _cellDataSource = getIt<ICellRemoteDataSource>();
+  final ImagePicker _picker = ImagePicker();
 
   late TextEditingController _nameCtrl;
   late TextEditingController _phoneCtrl;
@@ -47,6 +51,9 @@ class _FillProfilePageState extends State<FillProfilePage> {
 
   bool _isSaving = false;
   String _cellName = 'Buscando...';
+
+  XFile? _selectedImageFile;
+  Uint8List? _selectedImageBytes;
 
   @override
   void initState() {
@@ -102,6 +109,53 @@ class _FillProfilePageState extends State<FillProfilePage> {
     super.dispose();
   }
 
+  Future<void> _pickAndCropImage() async {
+    try {
+      final pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        // Abre a tela de recorte para focar o rosto
+        final croppedFile = await ImageCropper().cropImage(
+          sourcePath: pickedFile.path,
+          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1), // Formato quadrado ideal para avatar
+          uiSettings: [
+            AndroidUiSettings(
+              toolbarTitle: 'Recortar Foto de Perfil',
+              toolbarColor: Theme.of(context).primaryColor,
+              toolbarWidgetColor: Colors.white,
+              initAspectRatio: CropAspectRatioPreset.square,
+              lockAspectRatio: true,
+            ),
+            IOSUiSettings(
+              title: 'Recortar Foto',
+            ),
+            WebUiSettings(
+              context: context,
+            ),
+          ],
+        );
+
+        if (croppedFile != null) {
+          final croppedXFile = XFile(croppedFile.path);
+          final bytes = await croppedXFile.readAsBytes();
+          setState(() {
+            _selectedImageFile = croppedXFile;
+            _selectedImageBytes = bytes;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao selecionar/recortar imagem: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _selectDate(
       BuildContext context,
       DateTime? initial,
@@ -123,10 +177,21 @@ class _FillProfilePageState extends State<FillProfilePage> {
 
     setState(() => _isSaving = true);
     try {
+      String? photoUrl = widget.user.photoUrl;
+
+      // Se uma nova foto recortada foi selecionada, faz o upload
+      if (_selectedImageFile != null) {
+        photoUrl = await _authDataSource.uploadProfilePhoto(
+          widget.user.id,
+          _selectedImageFile!,
+          widget.user.photoUrl,
+        );
+      }
+
       final updatedModel = UserModel(
         id: widget.user.id,
         email: widget.user.email,
-        photoUrl: widget.user.photoUrl,
+        photoUrl: photoUrl,
         roles: widget.user.roles,
         primaryCellId: widget.user.primaryCellId,
         name: _nameCtrl.text.trim(),
@@ -147,6 +212,8 @@ class _FillProfilePageState extends State<FillProfilePage> {
       );
 
       await _authDataSource.updateUserProfile(updatedModel);
+
+      // Notifica o app inteiro (atualiza a Home e o Perfil instantaneamente)
       widget.onProfileUpdated();
 
       if (mounted) {
@@ -184,37 +251,64 @@ class _FillProfilePageState extends State<FillProfilePage> {
           ),
         ],
       ),
-      body:
-      _isSaving
+      body: _isSaving
           ? const Center(child: CircularProgressIndicator())
           : Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // CABEÇALHO DO PERFIL
+            // CABEÇALHO DO PERFIL COM OPÇÃO DE RECORTAR FOTO
             Center(
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundImage:
-                    widget.user.photoUrl != null &&
-                        widget.user.photoUrl!.isNotEmpty
-                        ? NetworkImage(widget.user.photoUrl!)
-                        : null,
-                    child:
-                    (widget.user.photoUrl == null ||
-                        widget.user.photoUrl!.isEmpty)
-                        ? const Icon(Icons.person, size: 40)
-                        : null,
-                  ),
-                ],
+              child: GestureDetector(
+                onTap: _pickAndCropImage,
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 45,
+                      backgroundImage: _selectedImageBytes != null
+                          ? MemoryImage(_selectedImageBytes!)
+                          : (widget.user.photoUrl != null &&
+                          widget.user.photoUrl!.isNotEmpty
+                          ? NetworkImage(widget.user.photoUrl!)
+                          : null) as ImageProvider?,
+                      child: (_selectedImageBytes == null &&
+                          (widget.user.photoUrl == null ||
+                              widget.user.photoUrl!.isEmpty))
+                          ? const Icon(Icons.person, size: 45)
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).primaryColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Center(
+              child: Text(
+                'Toque na foto para alterar e recortar',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             ),
             const SizedBox(height: 24),
 
-            // 1. SEÇÃO: DADOS PESSOAIS (OBRIGATÓRIOS)
+            // 1. SEÇÃO: DADOS PESSOAIS
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -222,7 +316,7 @@ class _FillProfilePageState extends State<FillProfilePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Dados Pessoais (Obrigatórios)',
+                      'Dados Pessoais',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -236,9 +330,7 @@ class _FillProfilePageState extends State<FillProfilePage> {
                         labelText: 'Nome Completo *',
                         prefixIcon: Icon(Icons.person_outline),
                       ),
-                      validator:
-                          (v) =>
-                      (v == null || v.trim().length < 3)
+                      validator: (v) => (v == null || v.trim().length < 3)
                           ? 'Informe seu nome completo'
                           : null,
                     ),
@@ -250,9 +342,7 @@ class _FillProfilePageState extends State<FillProfilePage> {
                         labelText: 'WhatsApp / Telefone *',
                         prefixIcon: Icon(Icons.phone_outlined),
                       ),
-                      validator:
-                          (v) =>
-                      (v == null || v.trim().isEmpty)
+                      validator: (v) => (v == null || v.trim().isEmpty)
                           ? 'Informe seu WhatsApp para contato'
                           : null,
                     ),
@@ -269,8 +359,7 @@ class _FillProfilePageState extends State<FillProfilePage> {
                         Icons.calendar_today,
                         size: 18,
                       ),
-                      onTap:
-                          () => _selectDate(
+                      onTap: () => _selectDate(
                         context,
                         _birthDate,
                             (d) => _birthDate = d,
@@ -294,7 +383,6 @@ class _FillProfilePageState extends State<FillProfilePage> {
                         ),
                       ],
                       onChanged: (v) => setState(() => _gender = v),
-                      validator: null,
                     ),
                   ],
                 ),
@@ -342,8 +430,7 @@ class _FillProfilePageState extends State<FillProfilePage> {
                           child: Text('Viúvo(a)'),
                         ),
                       ],
-                      onChanged:
-                          (v) => setState(() => _maritalStatus = v),
+                      onChanged: (v) => setState(() => _maritalStatus = v),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -408,8 +495,7 @@ class _FillProfilePageState extends State<FillProfilePage> {
                         Icons.calendar_today,
                         size: 18,
                       ),
-                      onTap:
-                          () => _selectDate(
+                      onTap: () => _selectDate(
                         context,
                         _conversionDate,
                             (d) => _conversionDate = d,
@@ -420,8 +506,7 @@ class _FillProfilePageState extends State<FillProfilePage> {
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Batizado nas Águas'),
                       value: _isWaterBaptized,
-                      onChanged:
-                          (v) => setState(() => _isWaterBaptized = v),
+                      onChanged: (v) => setState(() => _isWaterBaptized = v),
                     ),
                     if (_isWaterBaptized) ...[
                       ListTile(
@@ -432,8 +517,7 @@ class _FillProfilePageState extends State<FillProfilePage> {
                               ? 'Data do Batismo (Opcional)'
                               : 'Data Batismo: ${DateFormat('dd/MM/yyyy').format(_waterBaptismDate!)}',
                         ),
-                        onTap:
-                            () => _selectDate(
+                        onTap: () => _selectDate(
                           context,
                           _waterBaptismDate,
                               (d) => _waterBaptismDate = d,
@@ -444,8 +528,7 @@ class _FillProfilePageState extends State<FillProfilePage> {
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Batizado no Espírito Santo'),
                       value: _isHolySpiritBaptized,
-                      onChanged:
-                          (v) =>
+                      onChanged: (v) =>
                           setState(() => _isHolySpiritBaptized = v),
                     ),
                     const Divider(height: 20),
