@@ -1,5 +1,6 @@
 // lib/src/features/profile/presentation/pages/profile_page.dart
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
@@ -54,23 +55,36 @@ class _ProfilePageState extends State<ProfilePage> {
     int filledFields = 0;
 
     // Dados Pessoais (5)
-    if (widget.user.photoUrl != null && widget.user.photoUrl!.trim().isNotEmpty) filledFields++;
-    if (widget.user.name != null && widget.user.name!.trim().length >= 3) filledFields++;
-    if (widget.user.phone != null && widget.user.phone!.trim().isNotEmpty) filledFields++;
+    if (widget.user.photoUrl != null && widget.user.photoUrl!.trim().isNotEmpty)
+      filledFields++;
+    if (widget.user.name != null && widget.user.name!.trim().length >= 3)
+      filledFields++;
+    if (widget.user.phone != null && widget.user.phone!.trim().isNotEmpty)
+      filledFields++;
     if (widget.user.birthDate != null) filledFields++;
-    if (widget.user.gender != null && widget.user.gender!.trim().isNotEmpty) filledFields++;
+    if (widget.user.gender != null && widget.user.gender!.trim().isNotEmpty)
+      filledFields++;
 
     // Informações Complementares (3)
-    if (widget.user.maritalStatus != null && widget.user.maritalStatus!.trim().isNotEmpty) filledFields++;
-    if (widget.user.profession != null && widget.user.profession!.trim().isNotEmpty) filledFields++;
-    if (widget.user.address != null && widget.user.address!.trim().isNotEmpty) filledFields++;
+    if (widget.user.maritalStatus != null &&
+        widget.user.maritalStatus!.trim().isNotEmpty)
+      filledFields++;
+    if (widget.user.profession != null &&
+        widget.user.profession!.trim().isNotEmpty)
+      filledFields++;
+    if (widget.user.address != null && widget.user.address!.trim().isNotEmpty)
+      filledFields++;
 
     // Jornada Espiritual & Origem (5)
-    if (widget.user.originChurch != null && widget.user.originChurch!.trim().isNotEmpty) filledFields++;
+    if (widget.user.originChurch != null &&
+        widget.user.originChurch!.trim().isNotEmpty)
+      filledFields++;
     if (widget.user.conversionDate != null) filledFields++;
     if (widget.user.isWaterBaptized != null) filledFields++;
     if (widget.user.isHolySpiritBaptized != null) filledFields++;
-    if (widget.user.completedCourses != null && widget.user.completedCourses!.trim().isNotEmpty) filledFields++;
+    if (widget.user.completedCourses != null &&
+        widget.user.completedCourses!.trim().isNotEmpty)
+      filledFields++;
 
     return filledFields / totalFields;
   }
@@ -79,7 +93,8 @@ class _ProfilePageState extends State<ProfilePage> {
     final currentUser = firebase.FirebaseAuth.instance.currentUser;
     if (currentUser == null) return 'E-mail e Senha';
 
-    final providers = currentUser.providerData.map((p) => p.providerId).toList();
+    final providers =
+        currentUser.providerData.map((p) => p.providerId).toList();
     if (providers.contains('google.com')) {
       return 'Google / E-mail';
     }
@@ -90,18 +105,19 @@ class _ProfilePageState extends State<ProfilePage> {
     // Diálogo informativo sobre alteração de e-mail
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Alteração de E-mail'),
-        content: const Text(
-          'Para alterar seu e-mail principal com segurança, por favor entre em contato com a secretaria da igreja ou com o suporte técnico.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Entendido'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Alteração de E-mail'),
+            content: const Text(
+              'Para alterar seu e-mail principal com segurança, por favor entre em contato com a secretaria da igreja ou com o suporte técnico.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Entendido'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -145,10 +161,11 @@ class _ProfilePageState extends State<ProfilePage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => FillProfilePage(
-                    user: user,
-                    onProfileUpdated: widget.onProfileUpdated,
-                  ),
+                  builder:
+                      (_) => FillProfilePage(
+                        user: user,
+                        onProfileUpdated: widget.onProfileUpdated,
+                      ),
                 ),
               );
             },
@@ -162,15 +179,33 @@ class _ProfilePageState extends State<ProfilePage> {
           Center(
             child: Column(
               children: [
-                CircleAvatar(
-                  radius: 45,
-                  backgroundImage: user.photoUrl != null && user.photoUrl!.isNotEmpty
-                      ? NetworkImage(user.photoUrl!)
-                      : null,
-                  child: (user.photoUrl == null || user.photoUrl!.isEmpty)
-                      ? const Icon(Icons.person, size: 45)
-                      : null,
-                ),
+                user.photoUrl != null && user.photoUrl!.isNotEmpty
+                    ? CachedNetworkImage(
+                      imageUrl: user.photoUrl!,
+                      imageBuilder:
+                          (context, imageProvider) => CircleAvatar(
+                            radius: 45,
+                            backgroundImage: imageProvider,
+                          ),
+                      placeholder:
+                          (context, url) => const CircleAvatar(
+                            radius: 45,
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                      errorWidget:
+                          (context, url, error) => const CircleAvatar(
+                            radius: 45,
+                            child: Icon(Icons.error_outline, size: 28),
+                          ),
+                    )
+                    : const CircleAvatar(
+                      radius: 45,
+                      child: Icon(Icons.person, size: 45),
+                    ),
                 const SizedBox(height: 12),
                 Text(
                   user.displayName,
@@ -184,17 +219,21 @@ class _ProfilePageState extends State<ProfilePage> {
                   spacing: 6,
                   runSpacing: 4,
                   alignment: WrapAlignment.center,
-                  children: user.displayRoles.map((roleStr) {
-                    return Chip(
-                      label: Text(
-                        roleStr,
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                      visualDensity: VisualDensity.compact,
-                      backgroundColor: Colors.purple.shade50,
-                      side: BorderSide(color: Colors.purple.shade200),
-                    );
-                  }).toList(),
+                  children:
+                      user.displayRoles.map((roleStr) {
+                        return Chip(
+                          label: Text(
+                            roleStr,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          backgroundColor: Colors.purple.shade50,
+                          side: BorderSide(color: Colors.purple.shade200),
+                        );
+                      }).toList(),
                 ),
               ],
             ),
@@ -256,10 +295,11 @@ class _ProfilePageState extends State<ProfilePage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => FillProfilePage(
-                              user: user,
-                              onProfileUpdated: widget.onProfileUpdated,
-                            ),
+                            builder:
+                                (_) => FillProfilePage(
+                                  user: user,
+                                  onProfileUpdated: widget.onProfileUpdated,
+                                ),
                           ),
                         );
                       },
@@ -309,7 +349,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     Icons.wc_outlined,
                     'Sexo',
                     user.gender != null
-                        ? (user.gender == 'masculino' ? 'Masculino' : 'Feminino')
+                        ? (user.gender == 'masculino'
+                            ? 'Masculino'
+                            : 'Feminino')
                         : null,
                   ),
                 ],
@@ -327,10 +369,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 children: [
                   const Text(
                     'Informações Complementares',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const Divider(height: 20),
                   _buildInfoRow(
@@ -343,11 +382,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     'Profissão',
                     user.profession,
                   ),
-                  _buildInfoRow(
-                    Icons.home_outlined,
-                    'Endereço',
-                    user.address,
-                  ),
+                  _buildInfoRow(Icons.home_outlined, 'Endereço', user.address),
                 ],
               ),
             ),
@@ -387,8 +422,8 @@ class _ProfilePageState extends State<ProfilePage> {
                     'Batizado nas Águas',
                     user.isWaterBaptized == true
                         ? (user.waterBaptismDate != null
-                        ? 'Sim (${DateFormat('dd/MM/yyyy').format(user.waterBaptismDate!)})'
-                        : 'Sim')
+                            ? 'Sim (${DateFormat('dd/MM/yyyy').format(user.waterBaptismDate!)})'
+                            : 'Sim')
                         : 'Não',
                   ),
                   _buildInfoRow(
@@ -526,12 +561,12 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildActionInfoRow(
-      IconData icon,
-      String label,
-      String value, {
-        required String actionLabel,
-        required VoidCallback onAction,
-      }) {
+    IconData icon,
+    String label,
+    String value, {
+    required String actionLabel,
+    required VoidCallback onAction,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(

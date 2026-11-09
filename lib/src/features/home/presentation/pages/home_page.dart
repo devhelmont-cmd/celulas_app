@@ -1,5 +1,6 @@
 // lib/src/features/home/presentation/pages/home_page.dart
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/data/models/user_model.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
@@ -48,10 +49,11 @@ class _HomePageState extends State<HomePage> {
     try {
       final cells = await _cellDataSource.getCells();
 
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_currentUser.id)
-          .get();
+      final userDoc =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(_currentUser.id)
+              .get();
 
       UserEntity updatedUser = _currentUser;
       if (userDoc.exists && userDoc.data() != null) {
@@ -97,12 +99,12 @@ class _HomePageState extends State<HomePage> {
           _isLoadingCells
               ? const Center(child: CircularProgressIndicator())
               : CellsListPage(
-            cells: _cells,
-            onRefresh: _loadUserData,
-            currentUser: _currentUser,
-          ),
+                cells: _cells,
+                onRefresh: _loadUserData,
+                currentUser: _currentUser,
+              ),
           ReportsPage(currentUser: _currentUser),
-          ProfilePage(user: _currentUser, onProfileUpdated: _loadUserData)
+          ProfilePage(user: _currentUser, onProfileUpdated: _loadUserData),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -130,26 +132,43 @@ class _HomePageState extends State<HomePage> {
       children: [
         Row(
           children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundImage: _currentUser.photoUrl != null &&
-                  _currentUser.photoUrl!.isNotEmpty
-                  ? NetworkImage(_currentUser.photoUrl!)
-                  : null,
-              child: (_currentUser.photoUrl == null ||
-                  _currentUser.photoUrl!.isEmpty)
-                  ? (_currentUser.name != null &&
-                  _currentUser.name!.trim().isNotEmpty)
-                  ? Text(
-                _currentUser.name!.trim()[0].toUpperCase(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
+            _currentUser.photoUrl != null && _currentUser.photoUrl!.isNotEmpty
+                ? CachedNetworkImage(
+                  imageUrl: _currentUser.photoUrl!,
+                  imageBuilder:
+                      (context, imageProvider) => CircleAvatar(
+                        radius: 28,
+                        backgroundImage: imageProvider,
+                      ),
+                  placeholder:
+                      (context, url) => const CircleAvatar(
+                        radius: 28,
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                  errorWidget:
+                      (context, url, error) => const CircleAvatar(
+                        radius: 28,
+                        child: Icon(Icons.error_outline, size: 20),
+                      ),
+                )
+                : CircleAvatar(
+                  radius: 28,
+                  child:
+                      (_currentUser.name != null &&
+                              _currentUser.name!.trim().isNotEmpty)
+                          ? Text(
+                            _currentUser.name!.trim()[0].toUpperCase(),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                          )
+                          : const Icon(Icons.person, size: 28),
                 ),
-              )
-                  : const Icon(Icons.person, size: 28)
-                  : null,
-            ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,8 +201,11 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.all(16.0),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      color: Colors.amber, size: 36),
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.amber,
+                    size: 36,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
