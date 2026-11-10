@@ -14,6 +14,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../cells/domain/entities/cell_member_entity.dart';
+import 'member_analytics_widget.dart';
+
 class LeaderAnalyticsWidget extends StatefulWidget {
   final UserEntity currentUser;
   final bool isEmbedded;
@@ -412,6 +415,204 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Widget contendo o botão de alternância (SegmentedButton) para o Líder
+/// entre ver o Desempenho da Célula e ver a Análise dos Membros da Célula.
+class LeaderDashboardWithMembersView extends StatefulWidget {
+  final UserEntity currentUser;
+
+  const LeaderDashboardWithMembersView({super.key, required this.currentUser});
+
+  @override
+  State<LeaderDashboardWithMembersView> createState() => _LeaderDashboardWithMembersViewState();
+}
+
+class _LeaderDashboardWithMembersViewState extends State<LeaderDashboardWithMembersView> {
+  bool _isViewingMembers = false;
+  List<CellMemberEntity> _cellMembers = [];
+  bool _isLoadingMembers = true;
+  String? _selectedMemberUserId;
+  CellModel? _leaderCell;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLeaderCellAndMembers();
+  }
+
+  Future<void> _loadLeaderCellAndMembers() async {
+    try {
+      final dataSource = getIt<ICellRemoteDataSource>();
+      final allCells = await dataSource.getCells(currentUser: widget.currentUser);
+
+      CellModel? foundCell;
+      final user = widget.currentUser;
+
+      if (user.primaryCellId != null && user.primaryCellId!.trim().isNotEmpty) {
+        try {
+          foundCell = allCells.firstWhere((c) => c.id == user.primaryCellId);
+        } catch (_) {}
+      }
+
+      if (foundCell == null) {
+        for (var c in allCells) {
+          if (c.leaderId == user.id ||
+              (user.name != null && c.leaderId?.trim().toLowerCase() == user.name!.trim().toLowerCase())) {
+            foundCell = c;
+            break;
+          }
+        }
+      }
+
+      if (foundCell != null) {
+        final members = await dataSource.getCellMembers(foundCell.id);
+        members.sort((a, b) => a.name.compareTo(b.name));
+
+        if (mounted) {
+          setState(() {
+            _leaderCell = foundCell;
+            _cellMembers = members;
+            if (members.isNotEmpty) {
+              _selectedMemberUserId = members.first.userId ?? members.first.id;
+            }
+            _isLoadingMembers = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isLoadingMembers = false);
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingMembers = false);
+      debugPrint('Erro ao carregar membros para o líder: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoadingMembers) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_leaderCell == null) {
+      return const Center(child: Text('Célula do líder não encontrada.'));
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Center(
+          child: SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment<bool>(
+                value: false,
+                icon: Icon(Icons.analytics_outlined, size: 16),
+                label: Text('Desempenho da Célula'),
+              ),
+              ButtonSegment<bool>(
+                value: true,
+                icon: Icon(Icons.people_outline, size: 16),
+                label: Text('Membros da Célula'),
+              ),
+            ],
+            selected: {_isViewingMembers},
+            onSelectionChanged: (Set<bool> newSelection) {
+              setState(() {
+                _isViewingMembers = newSelection.first;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        if (!_isViewingMembers)
+          LeaderAnalyticsWidget(currentUser: widget.currentUser, isEmbedded: true)
+        else
+          _buildCellMembersAnalyticsSection(),
+      ],
+    );
+  }
+
+  Widget _buildCellMembersAnalyticsSection() {
+    if (_cellMembers.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: Text('Nenhum membro cadastrado nesta célula.'),
+        ),
+      );
+    }
+
+    if (_selectedMemberUserId == null || !_cellMembers.any((m) => (m.userId ?? m.id) == _selectedMemberUserId)) {
+      _selectedMemberUserId = _cellMembers.first.userId ?? _cellMembers.first.id;
+    }
+
+    // Busca segura para evitar erros de tipo no firstWhere/orElse
+    CellMemberEntity? selectedMember;
+    try {
+      selectedMember = _cellMembers.firstWhere(
+            (m) => (m.userId ?? m.id) == _selectedMemberUserId,
+      );
+    } catch (_) {
+      selectedMember = _cellMembers.first;
+    }
+
+    final pseudoMemberUser = UserEntity(
+      id: selectedMember.userId ?? selectedMember.id,
+      name: selectedMember.name,
+      email: '',
+      primaryCellId: _leaderCell?.id,
+      roles: [],
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text('Membro: ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedMemberUserId,
+                    isExpanded: true,
+                    items: _cellMembers.map((member) {
+                      final mId = member.userId ?? member.id;
+                      return DropdownMenuItem<String>(
+                        value: mId,
+                        child: Text(member.name, style: const TextStyle(fontSize: 14)),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() => _selectedMemberUserId = val);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        MemberAnalyticsWidget(
+          key: ValueKey(_selectedMemberUserId),
+          currentUser: pseudoMemberUser,
+          viewerUser: widget.currentUser, // Passa o líder logado como viewer
+          isEmbedded: true,
+          enableTapToAnalyze: true, // Habilita o clique para abrir a MemberAnalysisPage
+        ),
+      ],
     );
   }
 }

@@ -6,6 +6,7 @@ class CellMemberEntity {
   final String role;
   final DateTime joinedAt;
   final String? cellName;
+  final String? photoUrl; // <-- Adicionado
 
   const CellMemberEntity({
     required this.id,
@@ -15,5 +16,6 @@ class CellMemberEntity {
     required this.role,
     required this.joinedAt,
     this.cellName,
+    this.photoUrl,
   });
 }

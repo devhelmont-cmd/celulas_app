@@ -520,6 +520,12 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
         MemberAnalyticsWidget(
           key: ValueKey(_selectedMemberUserId),
           currentUser: pseudoMemberUser,
+          viewerUser: UserEntity(
+            id: FirebaseAuth.instance.currentUser?.uid ?? 'pastor',
+            name: 'Pastor',
+            email: '',
+            roles: [UserRole.pastor],
+          ), // Passa o contexto de quem está olhando (Pastor)
           isEmbedded: true,
         ),
       ],

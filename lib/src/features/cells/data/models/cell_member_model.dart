@@ -1,5 +1,6 @@
-import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../../domain/entities/cell_member_entity.dart';
 
 class CellMemberModel extends CellMemberEntity {
   CellMemberModel({
@@ -10,6 +11,7 @@ class CellMemberModel extends CellMemberEntity {
     required super.role,
     required super.joinedAt,
     super.cellName,
+    super.photoUrl,
   });
 
   factory CellMemberModel.fromMap(
@@ -25,9 +27,11 @@ class CellMemberModel extends CellMemberEntity {
       role: map['role'] ?? 'membro',
       joinedAt: (map['joinedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       cellName: cellName ?? map['cellName'],
+      photoUrl: map['photoUrl'],
     );
   }
 
+  @override
   Map<String, dynamic> toMap() {
     return {
       'cellId': cellId,
@@ -35,6 +39,7 @@ class CellMemberModel extends CellMemberEntity {
       'name': name,
       'role': role,
       'joinedAt': Timestamp.fromDate(joinedAt),
+      'photoUrl': photoUrl,
     };
   }
 
@@ -47,6 +52,7 @@ class CellMemberModel extends CellMemberEntity {
       role: entity.role,
       joinedAt: entity.joinedAt,
       cellName: entity.cellName,
+      photoUrl: entity.photoUrl,
     );
   }
 }

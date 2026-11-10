@@ -1,4 +1,5 @@
 // lib/src/features/cells/presentation/pages/cell_detail_page.dart
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
@@ -1036,11 +1037,17 @@ class _CellDetailPageState extends State<CellDetailPage>
                                       member.cellName ?? 'Sem Célula';
                                   return ListTile(
                                     leading: CircleAvatar(
-                                      child: Text(
-                                        member.name.isNotEmpty
-                                            ? member.name[0].toUpperCase()
-                                            : 'M',
-                                      ),
+                                      radius: 20,
+                                      backgroundColor: Colors.grey.shade200,
+                                      backgroundImage: (member.photoUrl != null && member.photoUrl!.trim().isNotEmpty)
+                                          ? CachedNetworkImageProvider(member.photoUrl!)
+                                          : null,
+                                      child: (member.photoUrl == null || member.photoUrl!.trim().isEmpty)
+                                          ? Text(
+                                        member.name.isNotEmpty ? member.name[0].toUpperCase() : 'M',
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      )
+                                          : null,
                                     ),
                                     title: Text(member.name),
                                     subtitle: Text(
@@ -2703,30 +2710,53 @@ class _CellDetailPageState extends State<CellDetailPage>
                                   margin: const EdgeInsets.only(bottom: 8),
                                   child: ListTile(
                                     onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder:
-                                              (_) => MemberAnalysisPage(
-                                                memberData: {
-                                                  'id': member.id,
-                                                  'userId': member.userId,
-                                                  'name': member.name,
-                                                  'role': member.role,
-                                                  'cellId': _currentCell.id,
-                                                },
-                                                currentUser:
-                                                    widget.currentUser!,
-                                              ),
-                                        ),
-                                      );
+                                      final currentUser = widget.currentUser;
+                                      final isPastorOrCoord = currentUser?.isPastorOrCoordinator ?? false;
+
+                                      final bool isLeaderOfThisCell = currentUser != null &&
+                                          (_currentCell.leaderId == currentUser.id ||
+                                              (_currentCell.leaderId != null &&
+                                                  currentUser.name != null &&
+                                                  _currentCell.leaderId!.trim().toLowerCase() ==
+                                                      currentUser.name!.trim().toLowerCase()));
+
+                                      final bool isSelf = currentUser != null &&
+                                          (member.userId == currentUser.id ||
+                                              member.name.trim().toLowerCase() == currentUser.name?.trim().toLowerCase());
+
+                                      // Membro comum não tem permissão para abrir análises de outros membros (nem dele por aqui se preferir, ou apenas se for ele próprio).
+                                      // Regra solicitada: "membro comum não vai poder olhar perfil de ninguem... o onTap nesse caso é desativado".
+                                      if (isPastorOrCoord || isLeaderOfThisCell || isSelf) {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => MemberAnalysisPage(
+                                              memberData: {
+                                                'id': member.id,
+                                                'userId': member.userId,
+                                                'name': member.name,
+                                                'role': member.role,
+                                                'cellId': _currentCell.id,
+                                                'photoUrl': member.photoUrl,
+                                              },
+                                              currentUser: widget.currentUser!,
+                                            ),
+                                          ),
+                                        );
+                                      }
                                     },
                                     leading: CircleAvatar(
-                                      child: Text(
-                                        member.name.isNotEmpty
-                                            ? member.name[0].toUpperCase()
-                                            : 'M',
-                                      ),
+                                      radius: 20,
+                                      backgroundColor: Colors.grey.shade200,
+                                      backgroundImage: (member.photoUrl != null && member.photoUrl!.trim().isNotEmpty)
+                                          ? CachedNetworkImageProvider(member.photoUrl!)
+                                          : null,
+                                      child: (member.photoUrl == null || member.photoUrl!.trim().isEmpty)
+                                          ? Text(
+                                        member.name.isNotEmpty ? member.name[0].toUpperCase() : 'M',
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      )
+                                          : null,
                                     ),
                                     title: Text(member.name),
                                     subtitle: Text(

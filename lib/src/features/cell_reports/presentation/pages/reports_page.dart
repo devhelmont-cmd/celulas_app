@@ -669,9 +669,13 @@ class _ReportsPageState extends State<ReportsPage>
     if (user.isPastorOrCoordinator) {
       return const PastorAnalyticsWidget();
     } else if (user.isLeader) {
-      return LeaderAnalyticsWidget(currentUser: user);
+      // Líder visualiza o painel unificado da sua célula e dos membros dela
+      return LeaderDashboardWithMembersView(currentUser: user);
     }
-    return MemberAnalyticsWidget(currentUser: user);
+    return MemberAnalyticsWidget(
+      currentUser: user,
+      viewerUser: user,
+    );
   }
 
   Widget _buildReportsTab(UserEntity user) {
@@ -1013,7 +1017,7 @@ class _ReportsPageState extends State<ReportsPage>
           typeIcon = Icons.edit_calendar;
         } else if (studyTopic != null && studyTopic.isNotEmpty) {
           meetingTypeDesc = "Tema: $studyTopic";
-          statusBadgeText = "Normal"; // <--- Padronizado como 'Normal' conforme solicitado
+          statusBadgeText = "Normal";
           cardBgColor = Colors.teal.shade50;
           cardBorderColor = Colors.teal.shade200;
           typeTextColor = Colors.teal.shade900;
@@ -1105,7 +1109,6 @@ class _ReportsPageState extends State<ReportsPage>
                       ],
                     ),
                     const SizedBox(height: 4),
-                    // Indicação do Ciclo Semanal
                     Row(
                       children: [
                         const Icon(Icons.calendar_view_week, size: 13, color: Colors.grey),

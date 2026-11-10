@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'package:celulas_app/src/core/injections/injection_container.dart';
@@ -25,6 +26,7 @@ class _MembersManagementPageState extends State<MembersManagementPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _dataSource = getIt<ICellRemoteDataSource>();
+  final _firestore = FirebaseFirestore.instance;
 
   List<Map<String, dynamic>> _membersWithCell = [];
   List<Map<String, dynamic>> _membersWithoutCell = [];
@@ -48,10 +50,18 @@ class _MembersManagementPageState extends State<MembersManagementPage>
       final results = await Future.wait([
         _dataSource.getAllMembers(),
         _dataSource.getCells(currentUser: widget.currentUser),
+        _firestore.collection('users').get(),
       ]);
 
-      final allMembers = results[0] as List<Map<String, dynamic>>;
+      final rawMembers = results[0] as List<Map<String, dynamic>>;
       final allCells = results[1] as List<CellModel>;
+      final usersSnap = results[2] as QuerySnapshot<Map<String, dynamic>>;
+
+      // Mapeia dados dos usuários por ID para enriquecimento rápido
+      final usersMap = <String, Map<String, dynamic>>{};
+      for (var doc in usersSnap.docs) {
+        usersMap[doc.id] = doc.data();
+      }
 
       final cellMap = <String, String>{};
       for (var cell in allCells) {
@@ -61,15 +71,33 @@ class _MembersManagementPageState extends State<MembersManagementPage>
       final withCell = <Map<String, dynamic>>[];
       final withoutCell = <Map<String, dynamic>>[];
 
-      for (var member in allMembers) {
-        final cellId = (member['cellId'] ?? member['primaryCellId']) as String?;
+      for (var member in rawMembers) {
+        final mergedMember = Map<String, dynamic>.from(member);
+        final userId = mergedMember['userId'] as String?;
+
+        // Enriquece foto e telefone se o usuário possuir perfil em 'users'
+        if (userId != null && usersMap.containsKey(userId)) {
+          final uData = usersMap[userId]!;
+          if ((mergedMember['photoUrl'] == null ||
+                  (mergedMember['photoUrl'] as String).isEmpty) &&
+              uData['photoUrl'] != null) {
+            mergedMember['photoUrl'] = uData['photoUrl'];
+          }
+          if (uData['phone'] != null || uData['whatsapp'] != null) {
+            mergedMember['phone'] = uData['phone'] ?? uData['whatsapp'];
+          }
+        }
+
+        final cellId =
+            (mergedMember['cellId'] ?? mergedMember['primaryCellId'])
+                as String?;
         final hasCell =
             cellId != null && cellId.trim().isNotEmpty && cellId != 'null';
 
         if (hasCell) {
-          withCell.add(member);
+          withCell.add(mergedMember);
         } else {
-          withoutCell.add(member);
+          withoutCell.add(mergedMember);
         }
       }
 
@@ -168,11 +196,11 @@ class _MembersManagementPageState extends State<MembersManagementPage>
                 radius: 24,
                 backgroundColor: Colors.grey.shade200,
                 backgroundImage:
-                    photoUrl != null && photoUrl.isNotEmpty
+                    (photoUrl != null && photoUrl.trim().isNotEmpty)
                         ? CachedNetworkImageProvider(photoUrl)
                         : null,
                 child:
-                    (photoUrl == null || photoUrl.isEmpty)
+                    (photoUrl == null || photoUrl.trim().isEmpty)
                         ? Text(
                           name.isNotEmpty ? name[0].toUpperCase() : '?',
                           style: const TextStyle(fontWeight: FontWeight.bold),

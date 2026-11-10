@@ -49,7 +49,7 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
 
       Map<String, dynamic> mergedMap = Map<String, dynamic>.from(widget.memberData);
 
-      // 1. Tenta enriquecer com os dados completos de cadastro na coleção 'users' (se houver conta vinculada)
+      // 1. Busca os dados atualizados da coleção 'users' (se houver userId)
       if (userId != null && userId.trim().isNotEmpty) {
         final userDoc = await _firestore.collection('users').doc(userId).get();
         if (userDoc.exists && userDoc.data() != null) {
@@ -59,10 +59,16 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
               mergedMap[key] = value;
             }
           });
+          // Garante a uniformidade das chaves de telefone e foto
+          if (userData['phone'] != null || userData['whatsapp'] != null) {
+            mergedMap['phone'] = userData['phone'] ?? userData['whatsapp'];
+          }
+          if (userData['photoUrl'] != null) {
+            mergedMap['photoUrl'] = userData['photoUrl'];
+          }
         }
       }
 
-      // Cria a entidade temporária/completa do membro para alimentar as métricas
       _targetUserEntity = UserModel.fromMap(
         mergedMap,
         userId ?? memberId ?? '',
@@ -177,8 +183,10 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: MemberAnalyticsWidget(
-                    currentUser: user,
+                    currentUser: user,         // O membro cujo perfil está sendo analisado
+                    viewerUser: widget.currentUser, // Quem está operando o app (Pastor ou Líder)
                     isEmbedded: true,
+                    showAvatar: false, // Oculta a foto interna, pois o topo da página já possui uma
                   ),
                 ),
               ),

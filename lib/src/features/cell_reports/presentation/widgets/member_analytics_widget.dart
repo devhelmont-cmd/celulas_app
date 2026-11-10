@@ -1,5 +1,6 @@
 // lib/src/features/cell_reports/presentation/widgets/member_analytics_widget.dart
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
@@ -7,17 +8,26 @@ import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_repor
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../members/presentation/pages/member_analysis_page.dart';
+
 class MemberAnalyticsWidget extends StatefulWidget {
-  final UserEntity currentUser;
+  final UserEntity currentUser; // Representa o membro cujo perfil está sendo analisado
+  final UserEntity? viewerUser;  // Quem está logado visualizando (Pastor, Líder ou o próprio membro)
   final bool isEmbedded;
+  final bool showAvatar; // Controla a exibição da foto interna
+  final bool enableTapToAnalyze; // Habilita o clique para abrir a página de análise completa
 
   const MemberAnalyticsWidget({
     super.key,
     required this.currentUser,
+    this.viewerUser,
     this.isEmbedded = false,
+    this.showAvatar = true,
+    this.enableTapToAnalyze = false,
   });
 
   @override
@@ -33,6 +43,7 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
   List<CellReportEntity> _cellReports = [];
   String? _cellId;
   String? _cellName;
+  String? _memberPhotoUrl;
 
   String _selectedMonthKey = 'all';
 
@@ -92,11 +103,25 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
           fetchedCellName = cellEntity.name;
         } catch (_) {}
 
+        String? fetchedPhotoUrl = foundMember?.photoUrl;
+        if (foundMember?.userId != null && (fetchedPhotoUrl == null || fetchedPhotoUrl.isEmpty)) {
+          try {
+            final userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(foundMember!.userId)
+                .get();
+            if (userDoc.exists) {
+              fetchedPhotoUrl = userDoc.data()?['photoUrl'] as String?;
+            }
+          } catch (_) {}
+        }
+
         if (mounted) {
           setState(() {
             _cellId = targetCellId;
             _cellName = fetchedCellName;
             _currentMember = foundMember;
+            _memberPhotoUrl = fetchedPhotoUrl;
             _cellReports = reports;
             _isLoading = false;
           });
@@ -161,7 +186,7 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Text(
-            'Não foi possível vincular seu perfil de membro na célula atual.\n\nVerifique com o líder se seu nome está cadastrado na lista de membros da célula.',
+            'Não foi possível vincular o perfil de membro na célula atual.\n\nVerifique com o líder se o nome está cadastrado na lista de membros da célula.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
           ),
@@ -169,11 +194,25 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       );
     }
 
-    // --- LÓGICA DE DEFINIÇÃO DA PRIMEIRA DATA DE INGRESSO (EFETIVA) ---
-    // 1. Procura a data da reunião com a PRESENÇA mais antiga registrada para este membro
+    final loggedUserId = widget.viewerUser?.id;
+    final targetUserId = widget.currentUser.id;
+    final bool isViewingSelf = loggedUserId == null || loggedUserId == targetUserId;
+
+    final memberName = _currentMember?.name ?? widget.currentUser.name ?? 'Membro';
+    final firstName = memberName.split(' ').first;
+
+    final jornadaTitle = 'Jornada na Célula';
+
+    final jornadaSubtitle = isViewingSelf
+        ? 'Acompanhe sua frequência e participações.'
+        : 'Acompanhe a frequência e participações de $firstName.';
+
+    final cooperacaoTitle = isViewingSelf
+        ? 'Minha Cooperação em Servir'
+        : 'Cooperação de $firstName em Servir';
+
     DateTime? firstPresenceDate;
 
-    // Ordenamos todas as reuniões por data (mais antigas primeiro) para achar a primeira presença
     final sortedReportsForHistory = List<CellReportEntity>.from(_cellReports)
       ..sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
 
@@ -194,7 +233,7 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
           report.scheduledDate.month,
           report.scheduledDate.day,
         );
-        break; // Achou a primeira presença da história dele nessa célula
+        break;
       }
     }
 
@@ -204,13 +243,11 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       _currentMember!.joinedAt.day,
     );
 
-    // 2. A data efetiva de início será a primeira presença OU a data que ele entrou no sistema (a que for mais antiga)
     DateTime effectiveStartDate = systemJoinedDateOnly;
     if (firstPresenceDate != null && firstPresenceDate.isBefore(systemJoinedDateOnly)) {
       effectiveStartDate = firstPresenceDate;
     }
 
-    // --- FILTRAGEM POR MÊS/PERÍODO ---
     List<CellReportEntity> filteredReports = _cellReports;
     if (_selectedMonthKey != 'all') {
       filteredReports = _cellReports.where((r) {
@@ -221,7 +258,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       }).toList();
     }
 
-    // --- CÁLCULO DAS MÉTRICAS ---
     int totalValidMeetingsHeld = 0;
     int presences = 0;
     int justifiedAbsences = 0;
@@ -229,7 +265,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
     final Map<String, int> rolesCountMap = {};
 
     for (var report in filteredReports) {
-      // Ignora reuniões canceladas
       if (report.status == ReportStatus.cacelled) {
         continue;
       }
@@ -240,7 +275,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
         report.scheduledDate.day,
       );
 
-      // Desconsidera reuniões anteriores à data de início efetivo do membro
       if (meetingDateOnly.isBefore(effectiveStartDate)) {
         continue;
       }
@@ -282,76 +316,127 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       physics: widget.isEmbedded ? const NeverScrollableScrollPhysics() : null,
       padding: widget.isEmbedded ? EdgeInsets.zero : const EdgeInsets.all(16),
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Sua Jornada na Célula',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  if (_cellName != null && _cellName!.isNotEmpty)
-                    Text(
-                      'Célula: $_cellName',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Acompanhe sua frequência e participações.',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value:
-                  availableMonths.any((m) => m['key'] == _selectedMonthKey)
-                      ? _selectedMonthKey
-                      : 'all',
-                  icon: const Icon(
-                    Icons.arrow_drop_down,
-                    color: Colors.blueAccent,
-                  ),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blueAccent,
-                  ),
-                  items: availableMonths.map((item) {
-                    return DropdownMenuItem<String>(
-                      value: item['key'],
-                      child: Text(item['label']!),
-                    );
-                  }).toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() => _selectedMonthKey = val);
-                    }
-                  },
+        InkWell(
+          onTap: widget.enableTapToAnalyze
+              ? () {
+            final memberMap = {
+              'userId': widget.currentUser.id,
+              'id': _currentMember?.id ?? widget.currentUser.id,
+              'name': memberName,
+              'cellId': _cellId ?? widget.currentUser.primaryCellId,
+              //'phone': _currentMember?.phone,
+              'photoUrl': _memberPhotoUrl,
+              'role': _currentMember?.role ?? 'membro',
+            };
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => MemberAnalysisPage(
+                  memberData: memberMap,
+                  currentUser: widget.viewerUser ?? widget.currentUser,
                 ),
               ),
+            );
+          }
+              : null,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            child: Row(
+              children: [
+                if (widget.showAvatar) ...[
+                  CircleAvatar(
+                    radius: 26,
+                    backgroundColor: Colors.grey.shade200,
+                    backgroundImage: (_memberPhotoUrl != null && _memberPhotoUrl!.trim().isNotEmpty)
+                        ? CachedNetworkImageProvider(_memberPhotoUrl!)
+                        : null,
+                    child: (_memberPhotoUrl == null || _memberPhotoUrl!.trim().isEmpty)
+                        ? Text(
+                      memberName.isNotEmpty ? memberName[0].toUpperCase() : 'M',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    )
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              jornadaTitle,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          if (widget.enableTapToAnalyze) ...[
+                            Icon(Icons.chevron_right, color: Colors.blue.shade700, size: 20),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      if (_cellName != null && _cellName!.isNotEmpty)
+                        Text(
+                          'Célula: $_cellName',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value:
+                      availableMonths.any((m) => m['key'] == _selectedMonthKey)
+                          ? _selectedMonthKey
+                          : 'all',
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: Colors.blueAccent,
+                      ),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueAccent,
+                      ),
+                      items: availableMonths.map((item) {
+                        return DropdownMenuItem<String>(
+                          value: item['key'],
+                          child: Text(item['label']!),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _selectedMonthKey = val);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          jornadaSubtitle,
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
         ),
         const SizedBox(height: 16),
         Row(
@@ -389,17 +474,17 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.volunteer_activism,
                       color: Colors.purple,
                       size: 20,
                     ),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     Text(
-                      'Minha Cooperação em Servir',
-                      style: TextStyle(
+                      cooperacaoTitle,
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
