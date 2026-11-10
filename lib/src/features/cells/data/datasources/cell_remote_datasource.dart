@@ -42,6 +42,8 @@ abstract class ICellRemoteDataSource {
 
   Future<String?> getUserNameById(String userId, {String? cellId});
 
+  Future<List<Map<String, dynamic>>> getAllMembers();
+
   Future<void> addCellMember(CellMemberModel member);
 
   Future<void> updateCellMember(CellMemberModel member);
@@ -302,6 +304,16 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       }
       return null;
     }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getAllMembers() async {
+    final snapshot = await _firestore.collection('members').orderBy('name').get();
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+      data['id'] = doc.id;
+      return data;
+    }).toList();
   }
 
   Future<String?> _findLeaderNameByCellId(String? cellId) async {

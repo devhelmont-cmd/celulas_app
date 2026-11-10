@@ -15,6 +15,7 @@ import 'package:celulas_app/src/features/cells/data/models/unlinked_user_or_memb
 import 'package:celulas_app/src/features/cell_reports/presentation/pages/reports_page.dart';
 
 import '../../../../core/utils/gender_helper.dart';
+import '../../../members/presentation/pages/member_analysis_page.dart';
 import '../../data/models/cell_join_request_model.dart';
 
 class CellDetailPage extends StatefulWidget {
@@ -82,13 +83,13 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (user.isPastorOrCoordinator) return true;
     if (user.primaryCellId == _currentCell.id) return true;
     if (_membersController.value is CellMemberLoadedState) {
-      final members = (_membersController.value as CellMemberLoadedState).members;
+      final members =
+          (_membersController.value as CellMemberLoadedState).members;
       return members.any(
-            (m) =>
-        m.userId == user.id ||
+        (m) =>
+            m.userId == user.id ||
             (user.name != null &&
-                m.name.trim().toLowerCase() ==
-                    user.name!.trim().toLowerCase()),
+                m.name.trim().toLowerCase() == user.name!.trim().toLowerCase()),
       );
     }
     return false;
@@ -123,7 +124,11 @@ class _CellDetailPageState extends State<CellDetailPage>
       daysUntil += 7;
     }
 
-    return DateTime(now.year, now.month, now.day).add(Duration(days: daysUntil));
+    return DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(Duration(days: daysUntil));
   }
 
   bool _isMeetingExpired(CellMeetingModel? meeting) {
@@ -138,9 +143,9 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _loadPendingRequests() async {
     final bool canViewRequests =
         widget.currentUser != null &&
-            (widget.currentUser!.isPastorOrCoordinator ||
-                (widget.currentUser!.isLeader &&
-                    _currentCell.leaderId == widget.currentUser!.id));
+        (widget.currentUser!.isPastorOrCoordinator ||
+            (widget.currentUser!.isLeader &&
+                _currentCell.leaderId == widget.currentUser!.id));
 
     if (!canViewRequests) return;
 
@@ -166,7 +171,9 @@ class _CellDetailPageState extends State<CellDetailPage>
     try {
       final dataSource = getIt<ICellRemoteDataSource>();
       final meeting = await dataSource.getLatestMeeting(_currentCell.id);
-      final allMeetings = await dataSource.getAllMeetingsForCell(_currentCell.id);
+      final allMeetings = await dataSource.getAllMeetingsForCell(
+        _currentCell.id,
+      );
       final prayers = await dataSource.getPrayerRequests(_currentCell.id);
 
       if (mounted) {
@@ -288,11 +295,12 @@ class _CellDetailPageState extends State<CellDetailPage>
                   decoration: const InputDecoration(
                     labelText: 'Dia da Reunião',
                   ),
-                  items: days
-                      .map(
-                        (d) => DropdownMenuItem(value: d, child: Text(d)),
-                  )
-                      .toList(),
+                  items:
+                      days
+                          .map(
+                            (d) => DropdownMenuItem(value: d, child: Text(d)),
+                          )
+                          .toList(),
                   onChanged: (val) {
                     if (val != null) selectedDay = val;
                   },
@@ -358,24 +366,25 @@ class _CellDetailPageState extends State<CellDetailPage>
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('${newStatus ? "Reativar" : "Inativar"} Célula'),
-        content: Text(
-          newStatus
-              ? 'Deseja reativar esta célula? Ela voltará a ficar visível para todos os membros.'
-              : 'Ao inativar a célula, ela manterá o histórico, mas todos os membros e líderes ficarão avulsos (sem célula).',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+      builder:
+          (ctx) => AlertDialog(
+            title: Text('${newStatus ? "Reativar" : "Inativar"} Célula'),
+            content: Text(
+              newStatus
+                  ? 'Deseja reativar esta célula? Ela voltará a ficar visível para todos os membros.'
+                  : 'Ao inativar a célula, ela manterá o histórico, mas todos os membros e líderes ficarão avulsos (sem célula).',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text('Confirmar $actionText'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Confirmar $actionText'),
-          ),
-        ],
-      ),
     );
 
     if (confirm == true) {
@@ -396,27 +405,28 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _deleteCellCompletely() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Desfazer / Excluir Célula'),
-        content: const Text(
-          'ATENÇÃO: Esta ação é irreversível!\n\n'
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Desfazer / Excluir Célula'),
+            content: const Text(
+              'ATENÇÃO: Esta ação é irreversível!\n\n'
               'A célula deixará de existir no sistema e todos os membros, líderes, co-líderes e anfitriões ficarão avulsos (sem célula).',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Excluir Célula',
-              style: TextStyle(color: Colors.white),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text(
+                  'Excluir Célula',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
 
     if (confirm == true) {
@@ -448,22 +458,23 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _onTapAddButton() async {
     final choice = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Adicionar à Célula'),
-        content: const Text(
-          'Deseja cadastrar um novo membro sem conta ou adicionar uma pessoa avulsa sem célula?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'novo'),
-            child: const Text('Novo Membro Sem Conta'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Adicionar à Célula'),
+            content: const Text(
+              'Deseja cadastrar um novo membro sem conta ou adicionar uma pessoa avulsa sem célula?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'novo'),
+                child: const Text('Novo Membro Sem Conta'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, 'avulso'),
+                child: const Text('Adicionar Pessoa Sem Célula'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, 'avulso'),
-            child: const Text('Adicionar Pessoa Sem Célula'),
-          ),
-        ],
-      ),
     );
 
     if (choice == 'novo') {
@@ -486,7 +497,7 @@ class _CellDetailPageState extends State<CellDetailPage>
     try {
       candidates = await dataSource.getUsersAndMembersWithoutCell();
       candidates.sort(
-            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
       );
     } catch (e) {
       debugPrint('Erro ao buscar pessoas sem célula: $e');
@@ -498,18 +509,19 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (candidates.isEmpty) {
       await showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Ninguém sem célula'),
-          content: const Text(
-            'Não foram encontrados membros ou usuários avulsos sem célula cadastrados.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Ninguém sem célula'),
+              content: const Text(
+                'Não foram encontrados membros ou usuários avulsos sem célula cadastrados.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       return;
     }
@@ -520,11 +532,12 @@ class _CellDetailPageState extends State<CellDetailPage>
         String query = '';
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final filtered = candidates.where((c) {
-              return c.name.toLowerCase().contains(
-                query.toLowerCase().trim(),
-              );
-            }).toList();
+            final filtered =
+                candidates.where((c) {
+                  return c.name.toLowerCase().contains(
+                    query.toLowerCase().trim(),
+                  );
+                }).toList();
 
             return AlertDialog(
               title: const Text('Selecionar Pessoa Sem Célula'),
@@ -545,37 +558,39 @@ class _CellDetailPageState extends State<CellDetailPage>
                     ),
                     const SizedBox(height: 12),
                     Expanded(
-                      child: filtered.isEmpty
-                          ? const Center(
-                        child: Text(
-                          'Nenhuma pessoa avulsa encontrada.',
-                        ),
-                      )
-                          : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) {
-                          final item = filtered[index];
-                          final badge = item.isRegisteredUser
-                              ? 'Com Conta no App'
-                              : 'Membro Sem Conta';
+                      child:
+                          filtered.isEmpty
+                              ? const Center(
+                                child: Text(
+                                  'Nenhuma pessoa avulsa encontrada.',
+                                ),
+                              )
+                              : ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: filtered.length,
+                                itemBuilder: (context, index) {
+                                  final item = filtered[index];
+                                  final badge =
+                                      item.isRegisteredUser
+                                          ? 'Com Conta no App'
+                                          : 'Membro Sem Conta';
 
-                          return ListTile(
-                            leading: CircleAvatar(
-                              child: Text(
-                                item.name.isNotEmpty
-                                    ? item.name[0].toUpperCase()
-                                    : 'P',
+                                  return ListTile(
+                                    leading: CircleAvatar(
+                                      child: Text(
+                                        item.name.isNotEmpty
+                                            ? item.name[0].toUpperCase()
+                                            : 'P',
+                                      ),
+                                    ),
+                                    title: Text(item.name),
+                                    subtitle: Text(
+                                      '$badge ${item.email != null ? "(${item.email})" : ""}',
+                                    ),
+                                    onTap: () => Navigator.pop(ctx, item),
+                                  );
+                                },
                               ),
-                            ),
-                            title: Text(item.name),
-                            subtitle: Text(
-                              '$badge ${item.email != null ? "(${item.email})" : ""}',
-                            ),
-                            onTap: () => Navigator.pop(ctx, item),
-                          );
-                        },
-                      ),
                     ),
                   ],
                 ),
@@ -598,55 +613,60 @@ class _CellDetailPageState extends State<CellDetailPage>
       if (selected.isRegisteredUser) {
         final option = await showDialog<String>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            title: Text('Adicionar ${selected.name}'),
-            content: Text(
-              'Deseja adicionar ${selected.name} como novo membro ou vinculá-lo(a) a um histórico de membro existente (sem conta)?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, 'novo'),
-                child: const Text('Adicionar Direto'),
+          builder:
+              (ctx) => AlertDialog(
+                title: Text('Adicionar ${selected.name}'),
+                content: Text(
+                  'Deseja adicionar ${selected.name} como novo membro ou vinculá-lo(a) a um histórico de membro existente (sem conta)?',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, 'novo'),
+                    child: const Text('Adicionar Direto'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, 'vincular'),
+                    child: const Text('Vincular a Membro Existente'),
+                  ),
+                ],
               ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, 'vincular'),
-                child: const Text('Vincular a Membro Existente'),
-              ),
-            ],
-          ),
         );
 
         if (option == null) return;
 
         if (option == 'vincular') {
-          matchedMember = await _showLinkMemberDialog(targetName: selected.name);
+          matchedMember = await _showLinkMemberDialog(
+            targetName: selected.name,
+          );
           if (matchedMember == null) return;
         }
       }
 
       bool setAsLeader = false;
       final isLeaderEmpty =
-          _currentCell.leaderId == null || _currentCell.leaderId!.trim().isEmpty;
+          _currentCell.leaderId == null ||
+          _currentCell.leaderId!.trim().isEmpty;
 
       if (isLeaderEmpty) {
         final shouldBeLeader = await showDialog<bool>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Definir como Líder?'),
-            content: Text(
-              'Esta célula ainda não possui um líder definido. Deseja adicionar ${selected.name} já definindo-o(a) como Líder desta célula?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Apenas como Membro'),
+          builder:
+              (ctx) => AlertDialog(
+                title: const Text('Definir como Líder?'),
+                content: Text(
+                  'Esta célula ainda não possui um líder definido. Deseja adicionar ${selected.name} já definindo-o(a) como Líder desta célula?',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Apenas como Membro'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Sim, Definir como Líder'),
+                  ),
+                ],
               ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Sim, Definir como Líder'),
-              ),
-            ],
-          ),
         );
 
         if (shouldBeLeader == null) return;
@@ -665,7 +685,9 @@ class _CellDetailPageState extends State<CellDetailPage>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${selected.name} adicionado(a) à célula com sucesso!'),
+            content: Text(
+              '${selected.name} adicionado(a) à célula com sucesso!',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -678,18 +700,19 @@ class _CellDetailPageState extends State<CellDetailPage>
     String selectedRole = 'membro';
 
     final isPastorOrCoord = widget.currentUser?.isPastorOrCoordinator ?? false;
-    final Map<String, String> roleOptions = isPastorOrCoord
-        ? {
-      'membro': 'Membro',
-      'anfitriao': 'Anfitrião',
-      'colider': 'Co-líder',
-      'lider': 'Líder',
-    }
-        : {
-      'membro': 'Membro',
-      'anfitriao': 'Anfitrião',
-      'colider': 'Co-líder',
-    };
+    final Map<String, String> roleOptions =
+        isPastorOrCoord
+            ? {
+              'membro': 'Membro',
+              'anfitriao': 'Anfitrião',
+              'colider': 'Co-líder',
+              'lider': 'Líder',
+            }
+            : {
+              'membro': 'Membro',
+              'anfitriao': 'Anfitrião',
+              'colider': 'Co-líder',
+            };
 
     final result = await showDialog<bool>(
       context: context,
@@ -718,12 +741,13 @@ class _CellDetailPageState extends State<CellDetailPage>
                         labelText: 'Função na Célula',
                         border: OutlineInputBorder(),
                       ),
-                      items: roleOptions.entries.map((entry) {
-                        return DropdownMenuItem<String>(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        );
-                      }).toList(),
+                      items:
+                          roleOptions.entries.map((entry) {
+                            return DropdownMenuItem<String>(
+                              value: entry.key,
+                              child: Text(entry.value),
+                            );
+                          }).toList(),
                       onChanged: (val) {
                         if (val != null) {
                           setDialogState(() => selectedRole = val);
@@ -750,10 +774,11 @@ class _CellDetailPageState extends State<CellDetailPage>
                       return;
                     }
 
-                    final words = rawName
-                        .split(' ')
-                        .where((w) => w.trim().isNotEmpty)
-                        .toList();
+                    final words =
+                        rawName
+                            .split(' ')
+                            .where((w) => w.trim().isNotEmpty)
+                            .toList();
                     if (words.length < 2) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -837,12 +862,13 @@ class _CellDetailPageState extends State<CellDetailPage>
                       labelText: 'Sua Função',
                       border: OutlineInputBorder(),
                     ),
-                    items: roleOptions.entries.map((entry) {
-                      return DropdownMenuItem<String>(
-                        value: entry.key,
-                        child: Text(entry.value),
-                      );
-                    }).toList(),
+                    items:
+                        roleOptions.entries.map((entry) {
+                          return DropdownMenuItem<String>(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          );
+                        }).toList(),
                     onChanged: (val) {
                       if (val != null) {
                         setDialogState(() => selectedRole = val);
@@ -872,7 +898,8 @@ class _CellDetailPageState extends State<CellDetailPage>
         id: '',
         cellId: _currentCell.id,
         userId: widget.currentUser!.id,
-        name: widget.currentUser!.name ??
+        name:
+            widget.currentUser!.name ??
             widget.currentUser!.email.split('@').first,
         role: selectedRole,
         joinedAt: DateTime.now(),
@@ -929,18 +956,19 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (unlinkedMembers.isEmpty) {
       await showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Nenhum Membro Sem Conta'),
-          content: const Text(
-            'Não existem membros avulsos cadastrados no sistema.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Nenhum Membro Sem Conta'),
+              content: const Text(
+                'Não existem membros avulsos cadastrados no sistema.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       return null;
     }
@@ -968,11 +996,12 @@ class _CellDetailPageState extends State<CellDetailPage>
         String searchQuery = '';
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            final filtered = unlinkedMembers.where((m) {
-              return m.name.toLowerCase().contains(
-                searchQuery.toLowerCase().trim(),
-              );
-            }).toList();
+            final filtered =
+                unlinkedMembers.where((m) {
+                  return m.name.toLowerCase().contains(
+                    searchQuery.toLowerCase().trim(),
+                  );
+                }).toList();
 
             return AlertDialog(
               title: const Text('Vincular a Membro sem Conta'),
@@ -993,32 +1022,34 @@ class _CellDetailPageState extends State<CellDetailPage>
                     ),
                     const SizedBox(height: 12),
                     Expanded(
-                      child: filtered.isEmpty
-                          ? const Center(
-                        child: Text('Nenhum membro encontrado.'),
-                      )
-                          : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) {
-                          final member = filtered[index];
-                          final cellName = member.cellName ?? 'Sem Célula';
-                          return ListTile(
-                            leading: CircleAvatar(
-                              child: Text(
-                                member.name.isNotEmpty
-                                    ? member.name[0].toUpperCase()
-                                    : 'M',
+                      child:
+                          filtered.isEmpty
+                              ? const Center(
+                                child: Text('Nenhum membro encontrado.'),
+                              )
+                              : ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: filtered.length,
+                                itemBuilder: (context, index) {
+                                  final member = filtered[index];
+                                  final cellName =
+                                      member.cellName ?? 'Sem Célula';
+                                  return ListTile(
+                                    leading: CircleAvatar(
+                                      child: Text(
+                                        member.name.isNotEmpty
+                                            ? member.name[0].toUpperCase()
+                                            : 'M',
+                                      ),
+                                    ),
+                                    title: Text(member.name),
+                                    subtitle: Text(
+                                      'Origem: $cellName | Função: ${_formatMemberRole(member.role)}',
+                                    ),
+                                    onTap: () => Navigator.pop(ctx, member),
+                                  );
+                                },
                               ),
-                            ),
-                            title: Text(member.name),
-                            subtitle: Text(
-                              'Origem: $cellName | Função: ${_formatMemberRole(member.role)}',
-                            ),
-                            onTap: () => Navigator.pop(ctx, member),
-                          );
-                        },
-                      ),
                     ),
                   ],
                 ),
@@ -1041,28 +1072,31 @@ class _CellDetailPageState extends State<CellDetailPage>
 
     final option = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Aprovar ${request.userName}'),
-        content: Text(
-          'Deseja vincular ${request.userName} a um membro já existente (sem conta) ou aprová-lo(a) como um novo membro?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'novo'),
-            child: const Text('Aprovar como Novo Membro'),
+      builder:
+          (ctx) => AlertDialog(
+            title: Text('Aprovar ${request.userName}'),
+            content: Text(
+              'Deseja vincular ${request.userName} a um membro já existente (sem conta) ou aprová-lo(a) como um novo membro?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'novo'),
+                child: const Text('Aprovar como Novo Membro'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, 'vincular'),
+                child: const Text('Vincular a Membro Existente'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, 'vincular'),
-            child: const Text('Vincular a Membro Existente'),
-          ),
-        ],
-      ),
     );
 
     if (option == null) return;
 
     if (option == 'vincular') {
-      selectedMember = await _showLinkMemberDialog(targetName: request.userName);
+      selectedMember = await _showLinkMemberDialog(
+        targetName: request.userName,
+      );
       if (selectedMember == null) return;
     }
 
@@ -1073,22 +1107,23 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (isLeaderEmpty) {
       final shouldBeLeader = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Definir como Líder?'),
-          content: Text(
-            'Esta célula ainda não possui um líder definido. Deseja aprovar ${request.userName} já definindo-o(a) como Líder desta célula?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Apenas como Membro'),
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Definir como Líder?'),
+              content: Text(
+                'Esta célula ainda não possui um líder definido. Deseja aprovar ${request.userName} já definindo-o(a) como Líder desta célula?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Apenas como Membro'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Sim, Definir como Líder'),
+                ),
+              ],
             ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Sim, Definir como Líder'),
-            ),
-          ],
-        ),
       );
 
       if (shouldBeLeader == null) return;
@@ -1147,32 +1182,37 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _leaveCell(CellMemberEntity member) async {
     final bool isUserLeaderOfThisCell =
         widget.currentUser != null &&
-            (_currentCell.leaderId == widget.currentUser!.id ||
-                (widget.currentUser!.name != null &&
-                    _currentCell.leaderId?.trim().toLowerCase() ==
-                        widget.currentUser!.name!.trim().toLowerCase()));
+        (_currentCell.leaderId == widget.currentUser!.id ||
+            (widget.currentUser!.name != null &&
+                _currentCell.leaderId?.trim().toLowerCase() ==
+                    widget.currentUser!.name!.trim().toLowerCase()));
 
-    final message = isUserLeaderOfThisCell
-        ? 'Você é o líder desta célula. Ao sair, a célula ficará sem líder e você será desvinculado. Deseja continuar?'
-        : 'Tem certeza de que deseja sair desta célula? Você ficará sem célula vinculada.';
+    final message =
+        isUserLeaderOfThisCell
+            ? 'Você é o líder desta célula. Ao sair, a célula ficará sem líder e você será desvinculado. Deseja continuar?'
+            : 'Tem certeza de que deseja sair desta célula? Você ficará sem célula vinculada.';
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sair da Célula'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Sair da Célula'),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text(
+                  'Sair',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sair', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
     );
 
     if (confirm != true) return;
@@ -1185,7 +1225,10 @@ class _CellDetailPageState extends State<CellDetailPage>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao sair: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Erro ao sair: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -1193,18 +1236,19 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _showRoleChangeDialog(CellMemberEntity member) async {
     final isPastorOrCoord = widget.currentUser?.isPastorOrCoordinator ?? false;
 
-    final Map<String, String> roleOptions = isPastorOrCoord
-        ? {
-      'lider': 'Líder',
-      'colider': 'Co-líder',
-      'anfitriao': 'Anfitrião',
-      'membro': 'Membro',
-    }
-        : {
-      'colider': 'Co-líder',
-      'anfitriao': 'Anfitrião',
-      'membro': 'Membro',
-    };
+    final Map<String, String> roleOptions =
+        isPastorOrCoord
+            ? {
+              'lider': 'Líder',
+              'colider': 'Co-líder',
+              'anfitriao': 'Anfitrião',
+              'membro': 'Membro',
+            }
+            : {
+              'colider': 'Co-líder',
+              'anfitriao': 'Anfitrião',
+              'membro': 'Membro',
+            };
 
     String currentSelection = _normalizeRole(member.role);
     if (!roleOptions.containsKey(currentSelection)) {
@@ -1221,16 +1265,17 @@ class _CellDetailPageState extends State<CellDetailPage>
               title: Text('Alterar Função de ${member.name}'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: roleOptions.entries.map((entry) {
-                  return RadioListTile<String>(
-                    title: Text(entry.value),
-                    value: entry.key,
-                    groupValue: tempSelection,
-                    onChanged: (val) {
-                      setState(() => tempSelection = val!);
-                    },
-                  );
-                }).toList(),
+                children:
+                    roleOptions.entries.map((entry) {
+                      return RadioListTile<String>(
+                        title: Text(entry.value),
+                        value: entry.key,
+                        groupValue: tempSelection,
+                        onChanged: (val) {
+                          setState(() => tempSelection = val!);
+                        },
+                      );
+                    }).toList(),
               ),
               actions: [
                 TextButton(
@@ -1257,22 +1302,23 @@ class _CellDetailPageState extends State<CellDetailPage>
         if (isCurrentlyLeader && newRole != 'lider') {
           final confirmLeaderless = await showDialog<bool>(
             context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Célula Sem Líder'),
-              content: Text(
-                'Ao alterar a função de ${member.name}, a célula ficará sem um líder definido. Deseja continuar?',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancelar'),
+            builder:
+                (ctx) => AlertDialog(
+                  title: const Text('Célula Sem Líder'),
+                  content: Text(
+                    'Ao alterar a função de ${member.name}, a célula ficará sem um líder definido. Deseja continuar?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancelar'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Confirmar'),
+                    ),
+                  ],
                 ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Confirmar'),
-                ),
-              ],
-            ),
           );
 
           if (confirmLeaderless != true) return;
@@ -1283,36 +1329,38 @@ class _CellDetailPageState extends State<CellDetailPage>
               .cast<CellMemberEntity>()
               .firstWhere(
                 (m) => _normalizeRole(m.role) == newRole && m.id != member.id,
-            orElse: () => CellMemberEntity(
-              id: '',
-              cellId: '',
-              name: '',
-              role: '',
-              joinedAt: DateTime.now(),
-            ),
-          );
+                orElse:
+                    () => CellMemberEntity(
+                      id: '',
+                      cellId: '',
+                      name: '',
+                      role: '',
+                      joinedAt: DateTime.now(),
+                    ),
+              );
 
           if (existingOccupant.id.isNotEmpty) {
             final String roleTitle = roleOptions[newRole] ?? newRole;
             final confirmReplacement = await showDialog<bool>(
               context: context,
-              builder: (ctx) => AlertDialog(
-                title: Text('Substituir $roleTitle?'),
-                content: Text(
-                  'A célula já possui ${existingOccupant.name} como $roleTitle. '
+              builder:
+                  (ctx) => AlertDialog(
+                    title: Text('Substituir $roleTitle?'),
+                    content: Text(
+                      'A célula já possui ${existingOccupant.name} como $roleTitle. '
                       'Ao confirmar, ${existingOccupant.name} passará a ser Membro e ${member.name} assumirá o cargo.',
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text('Cancelar'),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancelar'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Substituir'),
+                      ),
+                    ],
                   ),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('Substituir'),
-                  ),
-                ],
-              ),
             );
 
             if (confirmReplacement != true) return;
@@ -1438,26 +1486,27 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _removeMemberCompletely(CellMemberEntity member) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Remover Membro'),
-        content: Text(
-          'Tem certeza de que deseja remover ${member.name} desta célula?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Remover',
-              style: TextStyle(color: Colors.white),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Remover Membro'),
+            content: Text(
+              'Tem certeza de que deseja remover ${member.name} desta célula?',
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text(
+                  'Remover',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
 
     if (confirm == true) {
@@ -1469,22 +1518,33 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _showEditMeetingConfigDialog() async {
     final bool isExpiredOrNull = _isMeetingExpired(_currentMeeting);
 
-    String status = isExpiredOrNull ? 'normal' : (_currentMeeting?.status ?? 'normal');
-    String eventName = isExpiredOrNull ? '' : (_currentMeeting?.eventName ?? '');
-    String statusNote = isExpiredOrNull ? '' : (_currentMeeting?.statusNote ?? '');
-    bool hasRoles = isExpiredOrNull ? true : (_currentMeeting?.hasRoles ?? true);
+    String status =
+        isExpiredOrNull ? 'normal' : (_currentMeeting?.status ?? 'normal');
+    String eventName =
+        isExpiredOrNull ? '' : (_currentMeeting?.eventName ?? '');
+    String statusNote =
+        isExpiredOrNull ? '' : (_currentMeeting?.statusNote ?? '');
+    bool hasRoles =
+        isExpiredOrNull ? true : (_currentMeeting?.hasRoles ?? true);
 
-    DateTime meetingDate = (!isExpiredOrNull && _currentMeeting != null)
-        ? _currentMeeting!.meetingDate
-        : _calculateNextMeetingDate(_currentCell.meetingDay);
+    DateTime meetingDate =
+        (!isExpiredOrNull && _currentMeeting != null)
+            ? _currentMeeting!.meetingDate
+            : _calculateNextMeetingDate(_currentCell.meetingDay);
 
-    String defaultTime = (!isExpiredOrNull ? _currentMeeting?.meetingTime : null) ?? _currentCell.meetingTime ?? '19:30';
+    String defaultTime =
+        (!isExpiredOrNull ? _currentMeeting?.meetingTime : null) ??
+        _currentCell.meetingTime ??
+        '19:30';
     TimeOfDay selectedTime = TimeOfDay(
       hour: int.tryParse(defaultTime.split(':').first) ?? 19,
       minute: int.tryParse(defaultTime.split(':').last) ?? 30,
     );
 
-    String defaultLocation = (!isExpiredOrNull ? _currentMeeting?.meetingLocation : null) ?? _currentCell.address ?? '';
+    String defaultLocation =
+        (!isExpiredOrNull ? _currentMeeting?.meetingLocation : null) ??
+        _currentCell.address ??
+        '';
     final locationController = TextEditingController(text: defaultLocation);
     final eventNameController = TextEditingController(text: eventName);
     final noteController = TextEditingController(text: statusNote);
@@ -1582,8 +1642,12 @@ class _CellDetailPageState extends State<CellDetailPage>
                           final picked = await showDatePicker(
                             context: context,
                             initialDate: meetingDate,
-                            firstDate: DateTime.now().subtract(const Duration(days: 7)),
-                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                            firstDate: DateTime.now().subtract(
+                              const Duration(days: 7),
+                            ),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 365),
+                            ),
                           );
                           if (picked != null) {
                             setDialogState(() => meetingDate = picked);
@@ -1633,12 +1697,14 @@ class _CellDetailPageState extends State<CellDetailPage>
     );
 
     if (result == true) {
-      final formattedTime = '${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}';
+      final formattedTime =
+          '${selectedTime.hour.toString().padLeft(2, '0')}:${selectedTime.minute.toString().padLeft(2, '0')}';
       final meetingId = isExpiredOrNull ? '' : _currentMeeting!.id;
 
-      final DateTime finalMeetingDate = (status == 'normal' || status == 'canceled')
-          ? _calculateNextMeetingDate(_currentCell.meetingDay)
-          : meetingDate;
+      final DateTime finalMeetingDate =
+          (status == 'normal' || status == 'canceled')
+              ? _calculateNextMeetingDate(_currentCell.meetingDay)
+              : meetingDate;
 
       final updatedMeeting = CellMeetingModel(
         id: meetingId,
@@ -1646,18 +1712,33 @@ class _CellDetailPageState extends State<CellDetailPage>
         meetingDate: finalMeetingDate,
         status: status,
         hasRoles: status == 'bridge_event' ? hasRoles : true,
-        eventName: status == 'bridge_event' ? eventNameController.text.trim() : null,
-        statusNote: status == 'canceled' ? noteController.text.trim() : (status == 'bridge_event' || status == 'rescheduled' ? locationController.text.trim() : null),
-        meetingTime: status != 'normal' && status != 'canceled' ? formattedTime : null,
-        meetingLocation: status != 'normal' && status != 'canceled' ? locationController.text.trim() : null,
-        initialPrayerName: isExpiredOrNull ? null : _currentMeeting?.initialPrayerName,
-        icebreakerName: isExpiredOrNull ? null : _currentMeeting?.icebreakerName,
+        eventName:
+            status == 'bridge_event' ? eventNameController.text.trim() : null,
+        statusNote:
+            status == 'canceled'
+                ? noteController.text.trim()
+                : (status == 'bridge_event' || status == 'rescheduled'
+                    ? locationController.text.trim()
+                    : null),
+        meetingTime:
+            status != 'normal' && status != 'canceled' ? formattedTime : null,
+        meetingLocation:
+            status != 'normal' && status != 'canceled'
+                ? locationController.text.trim()
+                : null,
+        initialPrayerName:
+            isExpiredOrNull ? null : _currentMeeting?.initialPrayerName,
+        icebreakerName:
+            isExpiredOrNull ? null : _currentMeeting?.icebreakerName,
         worshipName: isExpiredOrNull ? null : _currentMeeting?.worshipName,
         wordName: isExpiredOrNull ? null : _currentMeeting?.wordName,
-        finalPrayerName: isExpiredOrNull ? null : _currentMeeting?.finalPrayerName,
+        finalPrayerName:
+            isExpiredOrNull ? null : _currentMeeting?.finalPrayerName,
         snackName: isExpiredOrNull ? null : _currentMeeting?.snackName,
-        officialPhotoName: isExpiredOrNull ? null : _currentMeeting?.officialPhotoName,
-        reportFillerName: isExpiredOrNull ? null : _currentMeeting?.reportFillerName,
+        officialPhotoName:
+            isExpiredOrNull ? null : _currentMeeting?.officialPhotoName,
+        reportFillerName:
+            isExpiredOrNull ? null : _currentMeeting?.reportFillerName,
         isReportFilled: false,
       );
 
@@ -1694,28 +1775,65 @@ class _CellDetailPageState extends State<CellDetailPage>
 
     final bool isExpiredOrNull = _isMeetingExpired(_currentMeeting);
 
-    String initialPrayer = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.initialPrayerName ?? 'Não definido');
-    String icebreaker = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.icebreakerName ?? 'Não definido');
-    String worship = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.worshipName ?? 'Não definido');
-    String word = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.wordName ?? 'Não definido');
-    String finalPrayer = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.finalPrayerName ?? 'Não definido');
-    String snack = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.snackName ?? 'Não definido');
-    String officialPhoto = isExpiredOrNull ? 'Não definido' : (_currentMeeting?.officialPhotoName ?? 'Não definido');
+    String initialPrayer =
+        isExpiredOrNull
+            ? 'Não definido'
+            : (_currentMeeting?.initialPrayerName ?? 'Não definido');
+    String icebreaker =
+        isExpiredOrNull
+            ? 'Não definido'
+            : (_currentMeeting?.icebreakerName ?? 'Não definido');
+    String worship =
+        isExpiredOrNull
+            ? 'Não definido'
+            : (_currentMeeting?.worshipName ?? 'Não definido');
+    String word =
+        isExpiredOrNull
+            ? 'Não definido'
+            : (_currentMeeting?.wordName ?? 'Não definido');
+    String finalPrayer =
+        isExpiredOrNull
+            ? 'Não definido'
+            : (_currentMeeting?.finalPrayerName ?? 'Não definido');
+    String snack =
+        isExpiredOrNull
+            ? 'Não definido'
+            : (_currentMeeting?.snackName ?? 'Não definido');
+    String officialPhoto =
+        isExpiredOrNull
+            ? 'Não definido'
+            : (_currentMeeting?.officialPhotoName ?? 'Não definido');
 
-    String reportFiller = isExpiredOrNull ? '' : (_currentMeeting?.reportFillerName ?? '');
+    String reportFiller =
+        isExpiredOrNull ? '' : (_currentMeeting?.reportFillerName ?? '');
     if (reportFiller.isEmpty || reportFiller == 'Não definido') {
       final leader = members.cast<CellMemberEntity>().firstWhere(
-            (m) => _normalizeRole(m.role) == 'lider',
-        orElse: () => CellMemberEntity(id: '', cellId: '', name: '', role: '', joinedAt: DateTime.now()),
+        (m) => _normalizeRole(m.role) == 'lider',
+        orElse:
+            () => CellMemberEntity(
+              id: '',
+              cellId: '',
+              name: '',
+              role: '',
+              joinedAt: DateTime.now(),
+            ),
       );
       if (leader.name.isNotEmpty) {
         reportFiller = leader.name;
       } else {
         final coLeader = members.cast<CellMemberEntity>().firstWhere(
-              (m) => _normalizeRole(m.role) == 'colider',
-          orElse: () => CellMemberEntity(id: '', cellId: '', name: '', role: '', joinedAt: DateTime.now()),
+          (m) => _normalizeRole(m.role) == 'colider',
+          orElse:
+              () => CellMemberEntity(
+                id: '',
+                cellId: '',
+                name: '',
+                role: '',
+                joinedAt: DateTime.now(),
+              ),
         );
-        reportFiller = coLeader.name.isNotEmpty ? coLeader.name : 'Não definido';
+        reportFiller =
+            coLeader.name.isNotEmpty ? coLeader.name : 'Não definido';
       }
     }
 
@@ -1736,49 +1854,49 @@ class _CellDetailPageState extends State<CellDetailPage>
                       'Oração Inicial',
                       initialPrayer,
                       memberNames,
-                          (v) => initialPrayer = v,
+                      (v) => initialPrayer = v,
                     ),
                     _buildRoleDropdown(
                       'Quebra-gelo',
                       icebreaker,
                       memberNames,
-                          (v) => icebreaker = v,
+                      (v) => icebreaker = v,
                     ),
                     _buildRoleDropdown(
                       'Louvor',
                       worship,
                       memberNames,
-                          (v) => worship = v,
+                      (v) => worship = v,
                     ),
                     _buildRoleDropdown(
                       'Palavra',
                       word,
                       memberNames,
-                          (v) => word = v,
+                      (v) => word = v,
                     ),
                     _buildRoleDropdown(
                       'Oração Final',
                       finalPrayer,
                       memberNames,
-                          (v) => finalPrayer = v,
+                      (v) => finalPrayer = v,
                     ),
                     _buildRoleDropdown(
                       'Lanche',
                       snack,
                       memberNames,
-                          (v) => snack = v,
+                      (v) => snack = v,
                     ),
                     _buildRoleDropdown(
                       'Foto Oficial',
                       officialPhoto,
                       memberNames,
-                          (v) => officialPhoto = v,
+                      (v) => officialPhoto = v,
                     ),
                     _buildRoleDropdown(
                       'Preenchimento do Relatório (Líder)',
                       reportFiller,
                       memberNames,
-                          (v) => reportFiller = v,
+                      (v) => reportFiller = v,
                     ),
                   ],
                 ),
@@ -1802,12 +1920,14 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (result == true) {
       final meetingId = isExpiredOrNull ? '' : _currentMeeting!.id;
 
-      final currentStatus = isExpiredOrNull ? 'normal' : (_currentMeeting?.status ?? 'normal');
-      final DateTime meetingDate = (currentStatus == 'normal' || currentStatus == 'canceled')
-          ? _calculateNextMeetingDate(_currentCell.meetingDay)
-          : ((_currentMeeting != null && !isExpiredOrNull)
-          ? _currentMeeting!.meetingDate
-          : _calculateNextMeetingDate(_currentCell.meetingDay));
+      final currentStatus =
+          isExpiredOrNull ? 'normal' : (_currentMeeting?.status ?? 'normal');
+      final DateTime meetingDate =
+          (currentStatus == 'normal' || currentStatus == 'canceled')
+              ? _calculateNextMeetingDate(_currentCell.meetingDay)
+              : ((_currentMeeting != null && !isExpiredOrNull)
+                  ? _currentMeeting!.meetingDate
+                  : _calculateNextMeetingDate(_currentCell.meetingDay));
 
       final updatedMeeting = CellMeetingModel(
         id: meetingId,
@@ -1817,14 +1937,17 @@ class _CellDetailPageState extends State<CellDetailPage>
         statusNote: isExpiredOrNull ? null : _currentMeeting?.statusNote,
         eventName: isExpiredOrNull ? null : _currentMeeting?.eventName,
         meetingTime: isExpiredOrNull ? null : _currentMeeting?.meetingTime,
-        meetingLocation: isExpiredOrNull ? null : _currentMeeting?.meetingLocation,
-        initialPrayerName: initialPrayer == 'Não definido' ? null : initialPrayer,
+        meetingLocation:
+            isExpiredOrNull ? null : _currentMeeting?.meetingLocation,
+        initialPrayerName:
+            initialPrayer == 'Não definido' ? null : initialPrayer,
         icebreakerName: icebreaker == 'Não definido' ? null : icebreaker,
         worshipName: worship == 'Não definido' ? null : worship,
         wordName: word == 'Não definido' ? null : word,
         finalPrayerName: finalPrayer == 'Não definido' ? null : finalPrayer,
         snackName: snack == 'Não definido' ? null : snack,
-        officialPhotoName: officialPhoto == 'Não definido' ? null : officialPhoto,
+        officialPhotoName:
+            officialPhoto == 'Não definido' ? null : officialPhoto,
         reportFillerName: reportFiller == 'Não definido' ? null : reportFiller,
         isReportFilled: false,
       );
@@ -1844,12 +1967,13 @@ class _CellDetailPageState extends State<CellDetailPage>
   }
 
   Widget _buildRoleDropdown(
-      String label,
-      String currentValue,
-      List<String> options,
-      Function(String) onChanged,
-      ) {
-    final String val = options.contains(currentValue) ? currentValue : options.first;
+    String label,
+    String currentValue,
+    List<String> options,
+    Function(String) onChanged,
+  ) {
+    final String val =
+        options.contains(currentValue) ? currentValue : options.first;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
       child: DropdownButtonFormField<String>(
@@ -1859,9 +1983,10 @@ class _CellDetailPageState extends State<CellDetailPage>
           isDense: true,
           border: const OutlineInputBorder(),
         ),
-        items: options
-            .map((opt) => DropdownMenuItem(value: opt, child: Text(opt)))
-            .toList(),
+        items:
+            options
+                .map((opt) => DropdownMenuItem(value: opt, child: Text(opt)))
+                .toList(),
         onChanged: (v) {
           if (v != null) onChanged(v);
         },
@@ -1873,27 +1998,28 @@ class _CellDetailPageState extends State<CellDetailPage>
     final ctrl = TextEditingController();
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Novo Pedido de Oração'),
-        content: TextField(
-          controller: ctrl,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: 'Escreva seu pedido de oração...',
-            border: OutlineInputBorder(),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Novo Pedido de Oração'),
+            content: TextField(
+              controller: ctrl,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Escreva seu pedido de oração...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Enviar'),
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Enviar'),
-          ),
-        ],
-      ),
     );
 
     if (result == true && ctrl.text.trim().isNotEmpty) {
@@ -1927,9 +2053,9 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (user.isPastorOrCoordinator) return true;
     final isAuthor =
         prayer.authorId == user.id ||
-            (user.name != null &&
-                prayer.authorName.trim().toLowerCase() ==
-                    user.name!.trim().toLowerCase());
+        (user.name != null &&
+            prayer.authorName.trim().toLowerCase() ==
+                user.name!.trim().toLowerCase());
     return isAuthor;
   }
 
@@ -1939,18 +2065,18 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (user.isPastorOrCoordinator) return true;
     final isAuthor =
         prayer.authorId == user.id ||
-            (user.name != null &&
-                prayer.authorName.trim().toLowerCase() ==
-                    user.name!.trim().toLowerCase());
+        (user.name != null &&
+            prayer.authorName.trim().toLowerCase() ==
+                user.name!.trim().toLowerCase());
     if (isAuthor) return true;
 
     final bool isUserLeader =
         user.isLeader ||
-            _currentCell.leaderId == user.id ||
-            (_currentCell.leaderId != null &&
-                user.name != null &&
-                _currentCell.leaderId!.trim().toLowerCase() ==
-                    user.name!.trim().toLowerCase());
+        _currentCell.leaderId == user.id ||
+        (_currentCell.leaderId != null &&
+            user.name != null &&
+            _currentCell.leaderId!.trim().toLowerCase() ==
+                user.name!.trim().toLowerCase());
 
     if (isUserLeader) {
       List<CellMemberEntity> members = [];
@@ -1958,9 +2084,10 @@ class _CellDetailPageState extends State<CellDetailPage>
         members = (_membersController.value as CellMemberLoadedState).members;
       }
       final isMemberOfCell = members.any(
-            (m) =>
-        m.userId == prayer.authorId ||
-            m.name.trim().toLowerCase() == prayer.authorName.trim().toLowerCase(),
+        (m) =>
+            m.userId == prayer.authorId ||
+            m.name.trim().toLowerCase() ==
+                prayer.authorName.trim().toLowerCase(),
       );
       if (isMemberOfCell) return true;
     }
@@ -1972,24 +2099,25 @@ class _CellDetailPageState extends State<CellDetailPage>
     final ctrl = TextEditingController(text: prayer.request);
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Editar Pedido de Oração'),
-        content: TextField(
-          controller: ctrl,
-          maxLines: 3,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Editar Pedido de Oração'),
+            content: TextField(
+              controller: ctrl,
+              maxLines: 3,
+              decoration: const InputDecoration(border: OutlineInputBorder()),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Salvar'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
     );
 
     if (result == true && ctrl.text.trim().isNotEmpty) {
@@ -2019,26 +2147,27 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _deletePrayerRequest(PrayerRequestModel prayer) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Excluir Pedido'),
-        content: const Text(
-          'Tem certeza de que deseja excluir este pedido de oração?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Excluir',
-              style: TextStyle(color: Colors.white),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Excluir Pedido'),
+            content: const Text(
+              'Tem certeza de que deseja excluir este pedido de oração?',
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text(
+                  'Excluir',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
 
     if (confirm == true) {
@@ -2065,10 +2194,10 @@ class _CellDetailPageState extends State<CellDetailPage>
     final isPastorOrCoord = user?.isPastorOrCoordinator ?? false;
     final bool isUserLeaderOfThisCell =
         user != null &&
-            (cell.leaderId == user.id ||
-                (user.name != null &&
-                    cell.leaderId?.trim().toLowerCase() ==
-                        user.name!.trim().toLowerCase()));
+        (cell.leaderId == user.id ||
+            (user.name != null &&
+                cell.leaderId?.trim().toLowerCase() ==
+                    user.name!.trim().toLowerCase()));
 
     final bool canEditCell = isPastorOrCoord || isUserLeaderOfThisCell;
     final bool canManageCellStatus = isPastorOrCoord;
@@ -2085,29 +2214,30 @@ class _CellDetailPageState extends State<CellDetailPage>
                 if (val == 'toggle') _toggleCellStatus();
                 if (val == 'delete') _deleteCellCompletely();
               },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Text('Editar Célula'),
-                ),
-                if (canManageCellStatus)
-                  PopupMenuItem(
-                    value: 'toggle',
-                    child: Text(
-                      _currentCell.isActive
-                          ? 'Inativar Célula'
-                          : 'Reativar Célula',
+              itemBuilder:
+                  (context) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Text('Editar Célula'),
                     ),
-                  ),
-                if (canManageCellStatus)
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Text(
-                      'Desfazer / Excluir Célula',
-                      style: TextStyle(color: Colors.red),
-                    ),
-                  ),
-              ],
+                    if (canManageCellStatus)
+                      PopupMenuItem(
+                        value: 'toggle',
+                        child: Text(
+                          _currentCell.isActive
+                              ? 'Inativar Célula'
+                              : 'Reativar Célula',
+                        ),
+                      ),
+                    if (canManageCellStatus)
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Text(
+                          'Desfazer / Excluir Célula',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                  ],
             ),
         ],
         bottom: TabBar(
@@ -2146,10 +2276,7 @@ class _CellDetailPageState extends State<CellDetailPage>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildMembersTab(
-                  isPastorOrCoord,
-                  isUserLeaderOfThisCell,
-                ),
+                _buildMembersTab(isPastorOrCoord, isUserLeaderOfThisCell),
                 _buildMeetingTab(canEditMeeting),
                 _buildPrayerTab(),
               ],
@@ -2160,10 +2287,7 @@ class _CellDetailPageState extends State<CellDetailPage>
     );
   }
 
-  Widget _buildMembersTab(
-      bool isPastorOrCoord,
-      bool isUserLeaderOfThisCell,
-      ) {
+  Widget _buildMembersTab(bool isPastorOrCoord, bool isUserLeaderOfThisCell) {
     final cell = _currentCell;
     final isLeaderEmpty =
         cell.leaderId == null || cell.leaderId!.trim().isEmpty;
@@ -2182,12 +2306,18 @@ class _CellDetailPageState extends State<CellDetailPage>
     String displayValue;
     String displayAddress;
 
-    if (meeting != null && (status == 'bridge_event' || status == 'rescheduled')) {
-      final formattedDate = '${meeting.meetingDate.day.toString().padLeft(2, '0')}/${meeting.meetingDate.month.toString().padLeft(2, '0')}/${meeting.meetingDate.year}';
+    if (meeting != null &&
+        (status == 'bridge_event' || status == 'rescheduled')) {
+      final formattedDate =
+          '${meeting.meetingDate.day.toString().padLeft(2, '0')}/${meeting.meetingDate.month.toString().padLeft(2, '0')}/${meeting.meetingDate.year}';
       final time = meeting.meetingTime ?? cell.meetingTime ?? '';
-      displayLabel = status == 'bridge_event' ? 'Data do Evento' : 'Data Remarcada';
+      displayLabel =
+          status == 'bridge_event' ? 'Data do Evento' : 'Data Remarcada';
       displayValue = '$formattedDate às $time';
-      displayAddress = meeting.meetingLocation?.isNotEmpty == true ? meeting.meetingLocation! : (cell.address ?? '');
+      displayAddress =
+          meeting.meetingLocation?.isNotEmpty == true
+              ? meeting.meetingLocation!
+              : (cell.address ?? '');
     } else {
       displayLabel = 'Reuniões';
       displayValue = '${cell.meetingDay ?? ''} às ${cell.meetingTime ?? ''}';
@@ -2220,42 +2350,42 @@ class _CellDetailPageState extends State<CellDetailPage>
                         const SizedBox(width: 8),
                         isLeaderEmpty
                             ? const Text(
-                          'Líder: Sem líder definido',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red,
-                          ),
-                        )
-                            : FutureBuilder<String?>(
-                          key: ValueKey(
-                            'leader_detail_${cell.id}_${cell.leaderId}',
-                          ),
-                          future: dataSource.getUserNameById(
-                            cell.leaderId!,
-                            cellId: cell.id,
-                          ),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return const Text(
-                                'Líder: Carregando...',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              );
-                            }
-                            final leaderName =
-                                snapshot.data ?? 'Sem líder definido';
-                            return Text(
-                              'Líder: $leaderName',
-                              style: const TextStyle(
+                              'Líder: Sem líder definido',
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: Colors.black87,
+                                color: Colors.red,
                               ),
-                            );
-                          },
-                        ),
+                            )
+                            : FutureBuilder<String?>(
+                              key: ValueKey(
+                                'leader_detail_${cell.id}_${cell.leaderId}',
+                              ),
+                              future: dataSource.getUserNameById(
+                                cell.leaderId!,
+                                cellId: cell.id,
+                              ),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const Text(
+                                    'Líder: Carregando...',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  );
+                                }
+                                final leaderName =
+                                    snapshot.data ?? 'Sem líder definido';
+                                return Text(
+                                  'Líder: $leaderName',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                );
+                              },
+                            ),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -2288,11 +2418,12 @@ class _CellDetailPageState extends State<CellDetailPage>
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: status == 'bridge_event'
-                            ? Colors.blue.shade50
-                            : status == 'canceled'
-                            ? Colors.red.shade50
-                            : Colors.purple.shade50,
+                        color:
+                            status == 'bridge_event'
+                                ? Colors.blue.shade50
+                                : status == 'canceled'
+                                ? Colors.red.shade50
+                                : Colors.purple.shade50,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -2304,11 +2435,12 @@ class _CellDetailPageState extends State<CellDetailPage>
                                 ? Icons.cancel
                                 : Icons.edit_calendar,
                             size: 18,
-                            color: status == 'bridge_event'
-                                ? Colors.blue
-                                : status == 'canceled'
-                                ? Colors.red
-                                : Colors.purple,
+                            color:
+                                status == 'bridge_event'
+                                    ? Colors.blue
+                                    : status == 'canceled'
+                                    ? Colors.red
+                                    : Colors.purple,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -2321,11 +2453,12 @@ class _CellDetailPageState extends State<CellDetailPage>
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
-                                color: status == 'bridge_event'
-                                    ? Colors.blue.shade800
-                                    : status == 'canceled'
-                                    ? Colors.red.shade800
-                                    : Colors.purple.shade800,
+                                color:
+                                    status == 'bridge_event'
+                                        ? Colors.blue.shade800
+                                        : status == 'canceled'
+                                        ? Colors.red.shade800
+                                        : Colors.purple.shade800,
                               ),
                             ),
                           ),
@@ -2418,8 +2551,8 @@ class _CellDetailPageState extends State<CellDetailPage>
                 bool isCurrentUserInCell = false;
                 if (state is CellMemberLoadedState && user != null) {
                   isCurrentUserInCell = state.members.any(
-                        (m) =>
-                    m.userId == user.id ||
+                    (m) =>
+                        m.userId == user.id ||
                         (user.name != null &&
                             m.name.trim().toLowerCase() ==
                                 user.name!.trim().toLowerCase()),
@@ -2515,20 +2648,16 @@ class _CellDetailPageState extends State<CellDetailPage>
                             members.sort((a, b) {
                               final bool isUserA =
                                   user != null &&
-                                      (a.userId == user.id ||
-                                          (user.name != null &&
-                                              a.name.trim().toLowerCase() ==
-                                                  user.name!
-                                                      .trim()
-                                                      .toLowerCase()));
+                                  (a.userId == user.id ||
+                                      (user.name != null &&
+                                          a.name.trim().toLowerCase() ==
+                                              user.name!.trim().toLowerCase()));
                               final bool isUserB =
                                   user != null &&
-                                      (b.userId == user.id ||
-                                          (user.name != null &&
-                                              b.name.trim().toLowerCase() ==
-                                                  user.name!
-                                                      .trim()
-                                                      .toLowerCase()));
+                                  (b.userId == user.id ||
+                                      (user.name != null &&
+                                          b.name.trim().toLowerCase() ==
+                                              user.name!.trim().toLowerCase()));
 
                               if (isUserA && !isUserB) return -1;
                               if (!isUserA && isUserB) return 1;
@@ -2555,17 +2684,17 @@ class _CellDetailPageState extends State<CellDetailPage>
 
                                 final bool isCurrentLogUserCard =
                                     user != null &&
-                                        (member.userId == user.id ||
-                                            (user.name != null &&
-                                                member.name.trim().toLowerCase() ==
-                                                    user.name!
-                                                        .trim()
-                                                        .toLowerCase()));
+                                    (member.userId == user.id ||
+                                        (user.name != null &&
+                                            member.name.trim().toLowerCase() ==
+                                                user.name!
+                                                    .trim()
+                                                    .toLowerCase()));
 
                                 final bool canEditMember =
                                     isPastorOrCoord ||
-                                        (isUserLeaderOfThisCell &&
-                                            !isCurrentLogUserCard);
+                                    (isUserLeaderOfThisCell &&
+                                        !isCurrentLogUserCard);
 
                                 final bool canSeeLeaveButton =
                                     isCurrentLogUserCard;
@@ -2573,6 +2702,25 @@ class _CellDetailPageState extends State<CellDetailPage>
                                 return Card(
                                   margin: const EdgeInsets.only(bottom: 8),
                                   child: ListTile(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder:
+                                              (_) => MemberAnalysisPage(
+                                                memberData: {
+                                                  'id': member.id,
+                                                  'userId': member.userId,
+                                                  'name': member.name,
+                                                  'role': member.role,
+                                                  'cellId': _currentCell.id,
+                                                },
+                                                currentUser:
+                                                    widget.currentUser!,
+                                              ),
+                                        ),
+                                      );
+                                    },
                                     leading: CircleAvatar(
                                       child: Text(
                                         member.name.isNotEmpty
@@ -2585,70 +2733,74 @@ class _CellDetailPageState extends State<CellDetailPage>
                                       formattedRole,
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: formattedRole == 'Líder'
-                                            ? Colors.blue.shade700
-                                            : Colors.grey.shade700,
+                                        color:
+                                            formattedRole == 'Líder'
+                                                ? Colors.blue.shade700
+                                                : Colors.grey.shade700,
                                       ),
                                     ),
-                                    trailing: canEditMember
-                                        ? PopupMenuButton<String>(
-                                      onSelected: (value) {
-                                        if (value == 'role') {
-                                          _showRoleChangeDialog(member);
-                                        } else if (value ==
-                                            'transfer') {
-                                          _showTransferDialog(member);
-                                        } else if (value == 'remove') {
-                                          if (isCurrentLogUserCard) {
-                                            _leaveCell(member);
-                                          } else {
-                                            _removeMemberCompletely(
-                                              member,
-                                            );
-                                          }
-                                        }
-                                      },
-                                      itemBuilder: (context) => [
-                                        const PopupMenuItem(
-                                          value: 'role',
-                                          child: Text(
-                                            'Alterar Função',
-                                          ),
-                                        ),
-                                        if (isPastorOrCoord &&
-                                            !isCurrentLogUserCard)
-                                          const PopupMenuItem(
-                                            value: 'transfer',
-                                            child: Text(
-                                              'Transferir de Célula',
-                                            ),
-                                          ),
-                                        PopupMenuItem(
-                                          value: 'remove',
-                                          child: Text(
-                                            isCurrentLogUserCard
-                                                ? 'Sair da Célula'
-                                                : 'Remover da Célula',
-                                            style: const TextStyle(
-                                              color: Colors.red,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                                        : canSeeLeaveButton
-                                        ? TextButton.icon(
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: Colors.red,
-                                      ),
-                                      onPressed: () => _leaveCell(member),
-                                      icon: const Icon(
-                                        Icons.logout,
-                                        size: 16,
-                                      ),
-                                      label: const Text('Sair'),
-                                    )
-                                        : null,
+                                    trailing:
+                                        canEditMember
+                                            ? PopupMenuButton<String>(
+                                              onSelected: (value) {
+                                                if (value == 'role') {
+                                                  _showRoleChangeDialog(member);
+                                                } else if (value ==
+                                                    'transfer') {
+                                                  _showTransferDialog(member);
+                                                } else if (value == 'remove') {
+                                                  if (isCurrentLogUserCard) {
+                                                    _leaveCell(member);
+                                                  } else {
+                                                    _removeMemberCompletely(
+                                                      member,
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                              itemBuilder:
+                                                  (context) => [
+                                                    const PopupMenuItem(
+                                                      value: 'role',
+                                                      child: Text(
+                                                        'Alterar Função',
+                                                      ),
+                                                    ),
+                                                    if (isPastorOrCoord &&
+                                                        !isCurrentLogUserCard)
+                                                      const PopupMenuItem(
+                                                        value: 'transfer',
+                                                        child: Text(
+                                                          'Transferir de Célula',
+                                                        ),
+                                                      ),
+                                                    PopupMenuItem(
+                                                      value: 'remove',
+                                                      child: Text(
+                                                        isCurrentLogUserCard
+                                                            ? 'Sair da Célula'
+                                                            : 'Remover da Célula',
+                                                        style: const TextStyle(
+                                                          color: Colors.red,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                            )
+                                            : canSeeLeaveButton
+                                            ? TextButton.icon(
+                                              style: TextButton.styleFrom(
+                                                foregroundColor: Colors.red,
+                                              ),
+                                              onPressed:
+                                                  () => _leaveCell(member),
+                                              icon: const Icon(
+                                                Icons.logout,
+                                                size: 16,
+                                              ),
+                                              label: const Text('Sair'),
+                                            )
+                                            : null,
                                   ),
                                 );
                               },
@@ -2683,10 +2835,10 @@ class _CellDetailPageState extends State<CellDetailPage>
     final isPastorOrCoord = user?.isPastorOrCoordinator ?? false;
     final bool isUserLeaderOfThisCell =
         user != null &&
-            (_currentCell.leaderId == user.id ||
-                (user.name != null &&
-                    _currentCell.leaderId?.trim().toLowerCase() ==
-                        user.name!.trim().toLowerCase()));
+        (_currentCell.leaderId == user.id ||
+            (user.name != null &&
+                _currentCell.leaderId?.trim().toLowerCase() ==
+                    user.name!.trim().toLowerCase()));
 
     final bool canManageCell = isPastorOrCoord || isUserLeaderOfThisCell;
 
@@ -2722,7 +2874,10 @@ class _CellDetailPageState extends State<CellDetailPage>
                             Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => ReportsPage(currentUser: widget.currentUser!),
+                                builder:
+                                    (_) => ReportsPage(
+                                      currentUser: widget.currentUser!,
+                                    ),
                               ),
                             );
                           }
@@ -2752,7 +2907,10 @@ class _CellDetailPageState extends State<CellDetailPage>
                   icon: const Icon(Icons.settings, size: 16),
                   label: const Text('Configurar'),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
                     textStyle: const TextStyle(fontSize: 12),
                   ),
                 ),
@@ -2781,11 +2939,7 @@ class _CellDetailPageState extends State<CellDetailPage>
             Card(
               color: Colors.red.shade50,
               child: ListTile(
-                leading: const Icon(
-                  Icons.cancel,
-                  color: Colors.red,
-                  size: 32,
-                ),
+                leading: const Icon(Icons.cancel, color: Colors.red, size: 32),
                 title: const Text(
                   'REUNIÃO CANCELADA',
                   style: TextStyle(
@@ -2799,39 +2953,39 @@ class _CellDetailPageState extends State<CellDetailPage>
               ),
             )
           else if (status == 'rescheduled')
-              Card(
-                color: Colors.purple.shade50,
-                child: ListTile(
-                  leading: const Icon(
-                    Icons.edit_calendar,
+            Card(
+              color: Colors.purple.shade50,
+              child: ListTile(
+                leading: const Icon(
+                  Icons.edit_calendar,
+                  color: Colors.purple,
+                  size: 32,
+                ),
+                title: const Text(
+                  'REUNIÃO REMARCADA',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
                     color: Colors.purple,
-                    size: 32,
-                  ),
-                  title: const Text(
-                    'REUNIÃO REMARCADA',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.purple,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Nova Data: ${meeting?.meetingDate.day.toString().padLeft(2, '0')}/${meeting?.meetingDate.month.toString().padLeft(2, '0')}/${meeting?.meetingDate.year} às ${meeting?.meetingTime ?? _currentCell.meetingTime}\nLocal: ${meeting?.meetingLocation ?? _currentCell.address}',
                   ),
                 ),
-              )
-            else
-              Card(
-                child: ListTile(
-                  leading: const Icon(Icons.event, color: Colors.green, size: 32),
-                  title: const Text(
-                    'Reunião Normal',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(
-                    'Padrão: ${_currentCell.meetingDay ?? "Sem dia"} às ${_currentCell.meetingTime ?? "Sem horário"} em ${_currentCell.address ?? "Sem endereço"}',
-                  ),
+                subtitle: Text(
+                  'Nova Data: ${meeting?.meetingDate.day.toString().padLeft(2, '0')}/${meeting?.meetingDate.month.toString().padLeft(2, '0')}/${meeting?.meetingDate.year} às ${meeting?.meetingTime ?? _currentCell.meetingTime}\nLocal: ${meeting?.meetingLocation ?? _currentCell.address}',
                 ),
               ),
+            )
+          else
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.event, color: Colors.green, size: 32),
+                title: const Text(
+                  'Reunião Normal',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  'Padrão: ${_currentCell.meetingDay ?? "Sem dia"} às ${_currentCell.meetingTime ?? "Sem horário"} em ${_currentCell.address ?? "Sem endereço"}',
+                ),
+              ),
+            ),
 
           const SizedBox(height: 24),
 
@@ -2852,7 +3006,10 @@ class _CellDetailPageState extends State<CellDetailPage>
                     icon: const Icon(Icons.edit, size: 16),
                     label: const Text('Definir'),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
+                      ),
                       textStyle: const TextStyle(fontSize: 12),
                     ),
                   ),
@@ -2875,8 +3032,16 @@ class _CellDetailPageState extends State<CellDetailPage>
               highlightPrayerAlert: true,
             ),
             _buildRoleCard('Lanche', meeting?.snackName, Icons.restaurant),
-            _buildRoleCard('Foto Oficial', meeting?.officialPhotoName, Icons.camera_alt),
-            _buildRoleCard('Preenchimento do Relatório (Líder)', meeting?.reportFillerName, Icons.description),
+            _buildRoleCard(
+              'Foto Oficial',
+              meeting?.officialPhotoName,
+              Icons.camera_alt,
+            ),
+            _buildRoleCard(
+              'Preenchimento do Relatório (Líder)',
+              meeting?.reportFillerName,
+              Icons.description,
+            ),
           ] else if (!isCanceled && !(meeting?.hasRoles ?? true)) ...[
             Container(
               padding: const EdgeInsets.all(16),
@@ -2892,7 +3057,10 @@ class _CellDetailPageState extends State<CellDetailPage>
                   Expanded(
                     child: Text(
                       'Este evento ponte não exige definição prévia de funções.',
-                      style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
@@ -2913,7 +3081,10 @@ class _CellDetailPageState extends State<CellDetailPage>
                   Expanded(
                     child: Text(
                       'Esta reunião está cancelada. Não há funções a serem realizadas.',
-                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
@@ -2944,10 +3115,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                   ),
                   Divider(),
                   ListTile(
-                    leading: Icon(
-                      Icons.record_voice_over,
-                      color: Colors.green,
-                    ),
+                    leading: Icon(Icons.record_voice_over, color: Colors.green),
                     title: Text(
                       'Testemunhos',
                       style: TextStyle(fontWeight: FontWeight.bold),
@@ -2966,16 +3134,16 @@ class _CellDetailPageState extends State<CellDetailPage>
   }
 
   Widget _buildRoleCard(
-      String title,
-      String? assignedName,
-      IconData icon, {
-        bool highlightPrayerAlert = false,
-      }) {
+    String title,
+    String? assignedName,
+    IconData icon, {
+    bool highlightPrayerAlert = false,
+  }) {
     final user = widget.currentUser;
     final bool isUserAssigned =
         user != null &&
-            assignedName != null &&
-            (user.name?.trim().toLowerCase() == assignedName.trim().toLowerCase());
+        assignedName != null &&
+        (user.name?.trim().toLowerCase() == assignedName.trim().toLowerCase());
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8.0),
@@ -2989,29 +3157,31 @@ class _CellDetailPageState extends State<CellDetailPage>
           assignedName ?? 'Não definido',
           style: TextStyle(
             color: assignedName != null ? Colors.black87 : Colors.grey,
-            fontWeight: assignedName != null ? FontWeight.bold : FontWeight.normal,
+            fontWeight:
+                assignedName != null ? FontWeight.bold : FontWeight.normal,
           ),
         ),
-        trailing: highlightPrayerAlert && assignedName != null
-            ? Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 4,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.orange.shade100,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Text(
-            'Orar pelos Pedidos!',
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.orange,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        )
-            : null,
+        trailing:
+            highlightPrayerAlert && assignedName != null
+                ? Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Orar pelos Pedidos!',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
+                : null,
       ),
     );
   }
@@ -3037,7 +3207,10 @@ class _CellDetailPageState extends State<CellDetailPage>
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Pedir Oração'),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
                     textStyle: const TextStyle(fontSize: 12),
                   ),
                 ),
@@ -3045,54 +3218,57 @@ class _CellDetailPageState extends State<CellDetailPage>
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: _prayerRequests.isEmpty
-                ? const Center(
-              child: Text(
-                'Nenhum pedido de oração registrado nesta célula.',
-              ),
-            )
-                : ListView.builder(
-              itemCount: _prayerRequests.length,
-              itemBuilder: (context, index) {
-                final prayer = _prayerRequests[index];
-                final canEdit = _canEditPrayer(prayer);
-                final canDelete = _canDeletePrayer(prayer);
+            child:
+                _prayerRequests.isEmpty
+                    ? const Center(
+                      child: Text(
+                        'Nenhum pedido de oração registrado nesta célula.',
+                      ),
+                    )
+                    : ListView.builder(
+                      itemCount: _prayerRequests.length,
+                      itemBuilder: (context, index) {
+                        final prayer = _prayerRequests[index];
+                        final canEdit = _canEditPrayer(prayer);
+                        final canDelete = _canDeletePrayer(prayer);
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8.0),
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.volunteer_activism, size: 20),
-                    ),
-                    title: Text(prayer.request),
-                    subtitle: Text('Por: ${prayer.authorName}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (canEdit)
-                          IconButton(
-                            icon: const Icon(
-                              Icons.edit,
-                              size: 20,
-                              color: Colors.blue,
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8.0),
+                          child: ListTile(
+                            leading: const CircleAvatar(
+                              child: Icon(Icons.volunteer_activism, size: 20),
                             ),
-                            onPressed: () => _showEditPrayerDialog(prayer),
-                          ),
-                        if (canDelete)
-                          IconButton(
-                            icon: const Icon(
-                              Icons.delete,
-                              size: 20,
-                              color: Colors.red,
+                            title: Text(prayer.request),
+                            subtitle: Text('Por: ${prayer.authorName}'),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (canEdit)
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.edit,
+                                      size: 20,
+                                      color: Colors.blue,
+                                    ),
+                                    onPressed:
+                                        () => _showEditPrayerDialog(prayer),
+                                  ),
+                                if (canDelete)
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      size: 20,
+                                      color: Colors.red,
+                                    ),
+                                    onPressed:
+                                        () => _deletePrayerRequest(prayer),
+                                  ),
+                              ],
                             ),
-                            onPressed: () => _deletePrayerRequest(prayer),
                           ),
-                      ],
+                        );
+                      },
                     ),
-                  ),
-                );
-              },
-            ),
           ),
         ],
       ),
