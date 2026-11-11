@@ -1,3 +1,4 @@
+// lib/src/features/members/presentation/pages/member_analysis_page.dart
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -32,6 +33,8 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
   String _cellName = 'Sem Célula';
   String? _cellLeaderName;
   String? _memberRole;
+  bool _hasCell = false;
+  bool _hasAccount = false; // Flag para controlar se possui conta no sistema
 
   @override
   void initState() {
@@ -47,10 +50,13 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
       final cellId = (widget.memberData['cellId'] ?? widget.memberData['primaryCellId']) as String?;
       _memberRole = widget.memberData['role'] as String? ?? 'membro';
 
+      // Verifica se possui userId válido ou se existe o documento na collection users
+      _hasAccount = userId != null && userId.trim().isNotEmpty;
+
       Map<String, dynamic> mergedMap = Map<String, dynamic>.from(widget.memberData);
 
       // 1. Busca os dados atualizados da coleção 'users' (se houver userId)
-      if (userId != null && userId.trim().isNotEmpty) {
+      if (_hasAccount) {
         final userDoc = await _firestore.collection('users').doc(userId).get();
         if (userDoc.exists && userDoc.data() != null) {
           final userData = userDoc.data()!;
@@ -59,12 +65,14 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
               mergedMap[key] = value;
             }
           });
-          // Garante a uniformidade das chaves de telefone e foto
           if (userData['phone'] != null || userData['whatsapp'] != null) {
             mergedMap['phone'] = userData['phone'] ?? userData['whatsapp'];
           }
           if (userData['photoUrl'] != null) {
             mergedMap['photoUrl'] = userData['photoUrl'];
+          }
+          if (userData['primaryCellId'] != null && (cellId == null || cellId.isEmpty)) {
+            mergedMap['cellId'] = userData['primaryCellId'];
           }
         }
       }
@@ -74,17 +82,24 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
         userId ?? memberId ?? '',
       );
 
+      final effectiveCellId = mergedMap['cellId'] ?? mergedMap['primaryCellId'] ?? _targetUserEntity?.primaryCellId;
+
       // 2. Busca informações da célula vinculada
-      if (cellId != null && cellId.trim().isNotEmpty) {
+      if (effectiveCellId != null && effectiveCellId.trim().isNotEmpty && effectiveCellId != 'null') {
         try {
-          final cell = await _cellDataSource.getCellById(cellId);
+          final cell = await _cellDataSource.getCellById(effectiveCellId);
           _cellName = cell.name ?? 'Célula sem Nome';
+          _hasCell = true;
           if (cell.leaderId != null && cell.leaderId!.isNotEmpty) {
             _cellLeaderName = await _cellDataSource.getUserNameById(cell.leaderId!, cellId: cell.id);
           }
         } catch (_) {
           _cellName = 'Sem Célula Vinculada';
+          _hasCell = false;
         }
+      } else {
+        _cellName = 'Sem Célula';
+        _hasCell = false;
       }
 
       if (mounted) setState(() => _isLoading = false);
@@ -150,21 +165,45 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
                           const SizedBox(height: 4),
                           Text('Telefone: $phone', style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
                           const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Colors.blue.shade200),
-                            ),
-                            child: Text(
-                              'Célula: $_cellName',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade800,
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.blue.shade200),
+                                ),
+                                child: Text(
+                                  'Célula: $_cellName',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue.shade800,
+                                  ),
+                                ),
                               ),
-                            ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: _hasAccount ? Colors.indigo.shade50 : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: _hasAccount ? Colors.indigo.shade200 : Colors.grey.shade300,
+                                  ),
+                                ),
+                                child: Text(
+                                  _hasAccount ? 'Com conta no sistema' : 'Sem conta no sistema',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: _hasAccount ? Colors.indigo.shade800 : Colors.grey.shade700,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -175,18 +214,18 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
             ),
             const SizedBox(height: 16),
 
-            // SEÇÃO 1: MÉTRICAS E DESEMPENHO NAS REUNIÕES (Frequência & Funções)
-            if (user != null) ...[
+            // SEÇÃO 1: MÉTRICAS E DESEMPENHO NAS REUNIÕES (Exibido apenas se o membro tiver célula)
+            if (_hasCell && user != null) ...[
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: MemberAnalyticsWidget(
-                    currentUser: user,         // O membro cujo perfil está sendo analisado
-                    viewerUser: widget.currentUser, // Quem está operando o app (Pastor ou Líder)
+                    currentUser: user,
+                    viewerUser: widget.currentUser,
                     isEmbedded: true,
-                    showAvatar: false, // Oculta a foto interna, pois o topo da página já possui uma
+                    showAvatar: false,
                   ),
                 ),
               ),
@@ -282,6 +321,11 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
                     _buildInfoRow(Icons.groups_outlined, 'Célula Atual', _cellName),
                     _buildInfoRow(Icons.person_outline, 'Líder da Célula', _cellLeaderName ?? 'Sem líder informado'),
                     _buildInfoRow(Icons.admin_panel_settings_outlined, 'Função na Célula', _memberRole?.toUpperCase() ?? 'MEMBRO'),
+                    _buildInfoRow(
+                      _hasAccount ? Icons.person_outline : Icons.person_off_outlined,
+                      'Status da Conta',
+                      _hasAccount ? 'Com conta cadastrada no sistema' : 'Membro sem conta no sistema',
+                    ),
                   ],
                 ),
               ),

@@ -320,11 +320,10 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
           onTap: widget.enableTapToAnalyze
               ? () {
             final memberMap = {
-              'userId': widget.currentUser.id,
+              'userId': _currentMember?.userId, // CORRIGIDO: Usa o userId real do membro (nulo se for avulso/sem conta)
               'id': _currentMember?.id ?? widget.currentUser.id,
               'name': memberName,
               'cellId': _cellId ?? widget.currentUser.primaryCellId,
-              //'phone': _currentMember?.phone,
               'photoUrl': _memberPhotoUrl,
               'role': _currentMember?.role ?? 'membro',
             };

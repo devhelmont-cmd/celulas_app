@@ -1,3 +1,4 @@
+// lib/src/features/members/presentation/pages/members_management_page.dart
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -184,6 +185,10 @@ class _MembersManagementPageState extends State<MembersManagementPage>
                   ? _cellNamesMap[cellId]
                   : 'Sem Célula';
 
+          // Verifica se possui conta vinculada no sistema (userId válido)
+          final userId = member['userId'] as String?;
+          final hasAccount = userId != null && userId.trim().isNotEmpty;
+
           return Card(
             margin: const EdgeInsets.only(bottom: 10),
             elevation: 1,
@@ -200,7 +205,7 @@ class _MembersManagementPageState extends State<MembersManagementPage>
                         ? CachedNetworkImageProvider(photoUrl)
                         : null,
                 child:
-                    (photoUrl == null || photoUrl.trim().isEmpty)
+                    (photoUrl == null || photoUrl.trim().isNotEmpty == false)
                         ? Text(
                           name.isNotEmpty ? name[0].toUpperCase() : '?',
                           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -233,6 +238,32 @@ class _MembersManagementPageState extends State<MembersManagementPage>
                               isLinked
                                   ? Colors.green.shade700
                                   : Colors.orange.shade800,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Icon(
+                        hasAccount
+                            ? Icons.person_outline
+                            : Icons.person_off_outlined,
+                        size: 14,
+                        color: hasAccount ? Colors.indigo : Colors.grey,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        hasAccount
+                            ? 'Com conta no sistema'
+                            : 'Sem conta no sistema',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color:
+                              hasAccount
+                                  ? Colors.indigo.shade700
+                                  : Colors.grey.shade600,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
