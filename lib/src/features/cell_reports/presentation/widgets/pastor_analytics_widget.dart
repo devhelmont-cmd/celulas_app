@@ -527,6 +527,7 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
             roles: [UserRole.pastor],
           ), // Passa o contexto de quem está olhando (Pastor)
           isEmbedded: true,
+          enableTapToAnalyze: true,
         ),
       ],
     );

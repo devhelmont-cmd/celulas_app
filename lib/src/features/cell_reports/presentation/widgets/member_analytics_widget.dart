@@ -375,9 +375,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
                               ),
                             ),
                           ),
-                          if (widget.enableTapToAnalyze) ...[
-                            Icon(Icons.chevron_right, color: Colors.blue.shade700, size: 20),
-                          ],
                         ],
                       ),
                       const SizedBox(height: 2),

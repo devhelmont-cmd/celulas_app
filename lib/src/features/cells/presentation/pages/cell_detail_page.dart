@@ -50,6 +50,8 @@ class _CellDetailPageState extends State<CellDetailPage>
   List<CellMeetingModel> _allMeetings = [];
   List<PrayerRequestModel> _prayerRequests = [];
   bool _isLoadingMeetingData = false;
+  bool _isLeaderOfThisCell = false;
+  bool _isPastorOrCoord = false;
 
   @override
   void initState() {
@@ -70,6 +72,14 @@ class _CellDetailPageState extends State<CellDetailPage>
         });
       }
     });
+    _isLeaderOfThisCell =
+        widget.currentUser != null &&
+        (_currentCell.leaderId == widget.currentUser!.id ||
+            (_currentCell.leaderId != null &&
+                widget.currentUser!.name != null &&
+                _currentCell.leaderId!.trim().toLowerCase() ==
+                    widget.currentUser!.name!.trim().toLowerCase()));
+    _isPastorOrCoord = widget.currentUser?.isPastorOrCoordinator ?? false;
   }
 
   @override
@@ -700,9 +710,9 @@ class _CellDetailPageState extends State<CellDetailPage>
     final nameController = TextEditingController();
     String selectedRole = 'membro';
 
-    final isPastorOrCoord = widget.currentUser?.isPastorOrCoordinator ?? false;
+    //final isPastorOrCoord = widget.currentUser?.isPastorOrCoordinator ?? false;
     final Map<String, String> roleOptions =
-        isPastorOrCoord
+        _isPastorOrCoord
             ? {
               'membro': 'Membro',
               'anfitriao': 'Anfitrião',
@@ -1039,15 +1049,30 @@ class _CellDetailPageState extends State<CellDetailPage>
                                     leading: CircleAvatar(
                                       radius: 20,
                                       backgroundColor: Colors.grey.shade200,
-                                      backgroundImage: (member.photoUrl != null && member.photoUrl!.trim().isNotEmpty)
-                                          ? CachedNetworkImageProvider(member.photoUrl!)
-                                          : null,
-                                      child: (member.photoUrl == null || member.photoUrl!.trim().isEmpty)
-                                          ? Text(
-                                        member.name.isNotEmpty ? member.name[0].toUpperCase() : 'M',
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
-                                      )
-                                          : null,
+                                      backgroundImage:
+                                          (member.photoUrl != null &&
+                                                  member.photoUrl!
+                                                      .trim()
+                                                      .isNotEmpty)
+                                              ? CachedNetworkImageProvider(
+                                                member.photoUrl!,
+                                              )
+                                              : null,
+                                      child:
+                                          (member.photoUrl == null ||
+                                                  member.photoUrl!
+                                                      .trim()
+                                                      .isEmpty)
+                                              ? Text(
+                                                member.name.isNotEmpty
+                                                    ? member.name[0]
+                                                        .toUpperCase()
+                                                    : 'M',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              )
+                                              : null,
                                     ),
                                     title: Text(member.name),
                                     subtitle: Text(
@@ -1241,10 +1266,10 @@ class _CellDetailPageState extends State<CellDetailPage>
   }
 
   Future<void> _showRoleChangeDialog(CellMemberEntity member) async {
-    final isPastorOrCoord = widget.currentUser?.isPastorOrCoordinator ?? false;
+    //final isPastorOrCoord = widget.currentUser?.isPastorOrCoordinator ?? false;
 
     final Map<String, String> roleOptions =
-        isPastorOrCoord
+        _isPastorOrCoord
             ? {
               'lider': 'Líder',
               'colider': 'Co-líder',
@@ -2198,7 +2223,7 @@ class _CellDetailPageState extends State<CellDetailPage>
     final cellName = cell.name ?? 'Detalhes da Célula';
 
     final user = widget.currentUser;
-    final isPastorOrCoord = user?.isPastorOrCoordinator ?? false;
+    //final isPastorOrCoord = user?.isPastorOrCoordinator ?? false;
     final bool isUserLeaderOfThisCell =
         user != null &&
         (cell.leaderId == user.id ||
@@ -2206,8 +2231,8 @@ class _CellDetailPageState extends State<CellDetailPage>
                 cell.leaderId?.trim().toLowerCase() ==
                     user.name!.trim().toLowerCase()));
 
-    final bool canEditCell = isPastorOrCoord || isUserLeaderOfThisCell;
-    final bool canManageCellStatus = isPastorOrCoord;
+    final bool canEditCell = _isPastorOrCoord || isUserLeaderOfThisCell;
+    final bool canManageCellStatus = _isPastorOrCoord;
     final bool canEditMeeting = canEditCell;
 
     return Scaffold(
@@ -2283,7 +2308,7 @@ class _CellDetailPageState extends State<CellDetailPage>
             child: TabBarView(
               controller: _tabController,
               children: [
-                _buildMembersTab(isPastorOrCoord, isUserLeaderOfThisCell),
+                _buildMembersTab(_isPastorOrCoord, isUserLeaderOfThisCell),
                 _buildMeetingTab(canEditMeeting),
                 _buildPrayerTab(),
               ],
@@ -2294,16 +2319,16 @@ class _CellDetailPageState extends State<CellDetailPage>
     );
   }
 
-  Widget _buildMembersTab(bool isPastorOrCoord, bool isUserLeaderOfThisCell) {
+  Widget _buildMembersTab(bool _isPastorOrCoord, bool isUserLeaderOfThisCell) {
     final cell = _currentCell;
     final isLeaderEmpty =
         cell.leaderId == null || cell.leaderId!.trim().isEmpty;
     final dataSource = getIt<ICellRemoteDataSource>();
     final user = widget.currentUser;
     final bool canViewRequests =
-        user != null && (isPastorOrCoord || isUserLeaderOfThisCell);
+        user != null && (_isPastorOrCoord || isUserLeaderOfThisCell);
     final bool canAddMember =
-        user != null && (isPastorOrCoord || isUserLeaderOfThisCell);
+        user != null && (_isPastorOrCoord || isUserLeaderOfThisCell);
 
     final rawMeeting = _currentMeeting;
     final meeting = _isMeetingExpired(rawMeeting) ? null : rawMeeting;
@@ -2567,7 +2592,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                 }
 
                 final bool canBindSelf =
-                    user != null && isPastorOrCoord && !isCurrentUserInCell;
+                    user != null && _isPastorOrCoord && !isCurrentUserInCell;
 
                 return Column(
                   children: [
@@ -2699,7 +2724,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                                                     .toLowerCase()));
 
                                 final bool canEditMember =
-                                    isPastorOrCoord ||
+                                    _isPastorOrCoord ||
                                     (isUserLeaderOfThisCell &&
                                         !isCurrentLogUserCard);
 
@@ -2709,54 +2734,75 @@ class _CellDetailPageState extends State<CellDetailPage>
                                 return Card(
                                   margin: const EdgeInsets.only(bottom: 8),
                                   child: ListTile(
-                                    onTap: () {
-                                      final currentUser = widget.currentUser;
-                                      final isPastorOrCoord = currentUser?.isPastorOrCoordinator ?? false;
+                                    onTap:
+                                        _isPastorOrCoord || _isLeaderOfThisCell
+                                            ? () {
+                                              /*final currentUser =
+                                                  widget.currentUser;
+                                              final isPastorOrCoord =
+                                                  currentUser
+                                                      ?.isPastorOrCoordinator ??
+                                                  false;
 
-                                      final bool isLeaderOfThisCell = currentUser != null &&
-                                          (_currentCell.leaderId == currentUser.id ||
-                                              (_currentCell.leaderId != null &&
-                                                  currentUser.name != null &&
-                                                  _currentCell.leaderId!.trim().toLowerCase() ==
-                                                      currentUser.name!.trim().toLowerCase()));
-
-                                      final bool isSelf = currentUser != null &&
+                                              final bool isSelf = currentUser != null &&
                                           (member.userId == currentUser.id ||
-                                              member.name.trim().toLowerCase() == currentUser.name?.trim().toLowerCase());
+                                              member.name.trim().toLowerCase() == currentUser.name?.trim().toLowerCase());*/
 
-                                      // Membro comum não tem permissão para abrir análises de outros membros (nem dele por aqui se preferir, ou apenas se for ele próprio).
-                                      // Regra solicitada: "membro comum não vai poder olhar perfil de ninguem... o onTap nesse caso é desativado".
-                                      if (isPastorOrCoord || isLeaderOfThisCell || isSelf) {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => MemberAnalysisPage(
-                                              memberData: {
-                                                'id': member.id,
-                                                'userId': member.userId,
-                                                'name': member.name,
-                                                'role': member.role,
-                                                'cellId': _currentCell.id,
-                                                'photoUrl': member.photoUrl,
-                                              },
-                                              currentUser: widget.currentUser!,
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    },
+                                              // Membro comum não tem permissão para abrir análises de outros membros (nem dele por aqui se preferir, ou apenas se for ele próprio).
+                                              // Regra solicitada: "membro comum não vai poder olhar perfil de ninguem... o onTap nesse caso é desativado".
+                                              /*if (isPastorOrCoord ||
+                                          isLeaderOfThisCell */ /* || isSelf*/ /* ) {*/
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder:
+                                                      (_) => MemberAnalysisPage(
+                                                        memberData: {
+                                                          'id': member.id,
+                                                          'userId':
+                                                              member.userId,
+                                                          'name': member.name,
+                                                          'role': member.role,
+                                                          'cellId':
+                                                              _currentCell.id,
+                                                          'photoUrl':
+                                                              member.photoUrl,
+                                                        },
+                                                        currentUser:
+                                                            widget.currentUser!,
+                                                      ),
+                                                ),
+                                              );
+                                              //}
+                                            }
+                                            : null,
                                     leading: CircleAvatar(
                                       radius: 20,
                                       backgroundColor: Colors.grey.shade200,
-                                      backgroundImage: (member.photoUrl != null && member.photoUrl!.trim().isNotEmpty)
-                                          ? CachedNetworkImageProvider(member.photoUrl!)
-                                          : null,
-                                      child: (member.photoUrl == null || member.photoUrl!.trim().isEmpty)
-                                          ? Text(
-                                        member.name.isNotEmpty ? member.name[0].toUpperCase() : 'M',
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
-                                      )
-                                          : null,
+                                      backgroundImage:
+                                          (member.photoUrl != null &&
+                                                  member.photoUrl!
+                                                      .trim()
+                                                      .isNotEmpty)
+                                              ? CachedNetworkImageProvider(
+                                                member.photoUrl!,
+                                              )
+                                              : null,
+                                      child:
+                                          (member.photoUrl == null ||
+                                                  member.photoUrl!
+                                                      .trim()
+                                                      .isEmpty)
+                                              ? Text(
+                                                member.name.isNotEmpty
+                                                    ? member.name[0]
+                                                        .toUpperCase()
+                                                    : 'M',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              )
+                                              : null,
                                     ),
                                     title: Text(member.name),
                                     subtitle: Text(
@@ -2796,7 +2842,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                                                         'Alterar Função',
                                                       ),
                                                     ),
-                                                    if (isPastorOrCoord &&
+                                                    if (_isPastorOrCoord &&
                                                         !isCurrentLogUserCard)
                                                       const PopupMenuItem(
                                                         value: 'transfer',
@@ -2862,7 +2908,7 @@ class _CellDetailPageState extends State<CellDetailPage>
     final bool isCanceled = status == 'canceled';
 
     final user = widget.currentUser;
-    final isPastorOrCoord = user?.isPastorOrCoordinator ?? false;
+    //final isPastorOrCoord = user?.isPastorOrCoordinator ?? false;
     final bool isUserLeaderOfThisCell =
         user != null &&
         (_currentCell.leaderId == user.id ||
@@ -2870,7 +2916,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                 _currentCell.leaderId?.trim().toLowerCase() ==
                     user.name!.trim().toLowerCase()));
 
-    final bool canManageCell = isPastorOrCoord || isUserLeaderOfThisCell;
+    final bool canManageCell = _isPastorOrCoord || isUserLeaderOfThisCell;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
