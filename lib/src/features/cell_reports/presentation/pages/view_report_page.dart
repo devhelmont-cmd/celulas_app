@@ -36,6 +36,7 @@ class _ViewReportPageState extends State<ViewReportPage> {
   CellReportModel? _report;
   List<CellMemberEntity> _members = [];
   Map<String, String> _memberNamesMap = {};
+  List<AttendanceEntity> _eligibleAttendances = [];
 
   String? _studyTopic;
   String? _offeringValue;
@@ -53,7 +54,32 @@ class _ViewReportPageState extends State<ViewReportPage> {
     setState(() => _isLoading = true);
     try {
       final members = await _cellDataSource.getCellMembers(widget.cell.id);
-      final memberMap = {for (var m in members) m.id: m.name};
+      final Map<String, String> memberMap = {};
+
+      for (var m in members) {
+        memberMap[m.id] = m.name;
+        if (m.userId != null && m.userId!.isNotEmpty) {
+          memberMap[m.userId!] = m.name;
+        }
+      }
+
+      // Também carrega todos os membros globais para resgatar transferidos ou sem célula
+      try {
+        final allGlobalMembers = await _cellDataSource.getAllMembers();
+        for (var gm in allGlobalMembers) {
+          final gmId = gm['id']?.toString() ?? '';
+          final gmUserId = gm['userId']?.toString() ?? '';
+          final gmName = gm['name']?.toString() ?? '';
+          if (gmName.isNotEmpty) {
+            if (gmId.isNotEmpty && !memberMap.containsKey(gmId)) {
+              memberMap[gmId] = gmName;
+            }
+            if (gmUserId.isNotEmpty && !memberMap.containsKey(gmUserId)) {
+              memberMap[gmUserId] = gmName;
+            }
+          }
+        }
+      } catch (_) {}
 
       final reports =
       await _reportsRepository.getReportsByCell(widget.cell.id);
@@ -67,25 +93,146 @@ class _ViewReportPageState extends State<ViewReportPage> {
         orElse: () => null,
       );
 
-      if (foundReport != null && foundReport.testimoniesAndNotes != null) {
-        final notes = foundReport.testimoniesAndNotes!;
-        List<String> testimonyLines = [];
+      // Resgata nomes de membros históricos que saíram/foram transferidos
+      if (foundReport != null) {
+        for (var att in foundReport.attendances) {
+          // 1. Se o modelo já tiver memberName salvo dinamicamente, usa ele
+          try {
+            final dynamic dynAtt = att;
+            final savedName = dynAtt.memberName as String?;
+            if (savedName != null && savedName.trim().isNotEmpty) {
+              memberMap[att.cellMemberId] = savedName.trim();
+              continue;
+            }
+          } catch (_) {}
 
-        for (var line in notes.split('\n')) {
-          final trimmed = line.trim();
-          if (trimmed.startsWith('Estudo/Tema:')) {
-            _studyTopic = trimmed.replaceFirst('Estudo/Tema:', '').trim();
-          } else if (trimmed.startsWith('Oferta:')) {
-            _offeringValue = trimmed.replaceFirst('Oferta:', '').trim();
-          } else if (trimmed.startsWith('Testemunhos e Obs:')) {
-            testimonyLines
-                .add(trimmed.replaceFirst('Testemunhos e Obs:', '').trim());
-          } else if (trimmed.isNotEmpty) {
-            testimonyLines.add(trimmed);
+          // 2. Se ainda não está no mapa, consulta no Firestore (users + members)
+          if (!memberMap.containsKey(att.cellMemberId)) {
+            final fetchedName = await _cellDataSource.getUserNameById(
+              att.cellMemberId,
+              cellId: widget.cell.id,
+            );
+            if (fetchedName != null &&
+                fetchedName.trim().isNotEmpty &&
+                fetchedName.trim().toLowerCase() != 'membro') {
+              memberMap[att.cellMemberId] = fetchedName.trim();
+            } else {
+              // 3. Fallback: procura se em algum outro relatório existe nome salvo para este ID
+              String? historicalNameFromOtherReports;
+              for (var otherReport in reports) {
+                for (var otherAtt in otherReport.attendances) {
+                  if (otherAtt.cellMemberId == att.cellMemberId) {
+                    try {
+                      final dynamic dynOther = otherAtt;
+                      final nameInOther = dynOther.memberName as String?;
+                      if (nameInOther != null &&
+                          nameInOther.trim().isNotEmpty) {
+                        historicalNameFromOtherReports = nameInOther.trim();
+                        break;
+                      }
+                    } catch (_) {}
+                  }
+                }
+                if (historicalNameFromOtherReports != null) break;
+              }
+
+              memberMap[att.cellMemberId] =
+                  historicalNameFromOtherReports ?? 'Participante (Histórico)';
+            }
           }
         }
-        _testimoniesAndNotes =
-        testimonyLines.isNotEmpty ? testimonyLines.join('\n') : null;
+      }
+
+      // Ordena relatórios cronologicamente para descobrir a primeira presença de cada membro
+      final sortedReports = List<CellReportEntity>.from(reports)
+        ..sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
+
+      final Map<String, DateTime> effectiveStartDates = {};
+      for (var member in members) {
+        DateTime? firstPresenceDate;
+        for (var r in sortedReports) {
+          if (r.status == ReportStatus.cacelled) continue;
+          final att = r.attendances.cast<AttendanceEntity?>().firstWhere(
+                (a) =>
+            a != null &&
+                (a.cellMemberId == member.id ||
+                    (member.userId != null &&
+                        a.cellMemberId == member.userId)),
+            orElse: () => null,
+          );
+          if (att != null && att.isPresent) {
+            firstPresenceDate = DateTime(
+              r.scheduledDate.year,
+              r.scheduledDate.month,
+              r.scheduledDate.day,
+            );
+            break;
+          }
+        }
+
+        final systemJoinedDateOnly = DateTime(
+          member.joinedAt.year,
+          member.joinedAt.month,
+          member.joinedAt.day,
+        );
+
+        DateTime effectiveStart = systemJoinedDateOnly;
+        if (firstPresenceDate != null &&
+            firstPresenceDate.isBefore(systemJoinedDateOnly)) {
+          effectiveStart = firstPresenceDate;
+        }
+        effectiveStartDates[member.id] = effectiveStart;
+      }
+
+      List<AttendanceEntity> filteredAttendances = [];
+      if (foundReport != null) {
+        final reportDateOnly = DateTime(
+          foundReport.scheduledDate.year,
+          foundReport.scheduledDate.month,
+          foundReport.scheduledDate.day,
+        );
+
+        filteredAttendances = foundReport.attendances.where((att) {
+          if (att.isPresent) return true;
+
+          CellMemberEntity? member;
+          try {
+            member = members.firstWhere(
+                  (m) => m.id == att.cellMemberId || m.userId == att.cellMemberId,
+            );
+          } catch (_) {}
+
+          // Membro transferido ou histórico que estava na lista naquela reunião: mantém no documento
+          if (member == null) return true;
+
+          final effectiveStart = effectiveStartDates[member.id];
+          if (effectiveStart != null &&
+              reportDateOnly.isBefore(effectiveStart)) {
+            return false; // Ainda não fazia parte da célula nesta data
+          }
+          return true;
+        }).toList();
+
+        if (foundReport.testimoniesAndNotes != null) {
+          final notes = foundReport.testimoniesAndNotes!;
+          List<String> testimonyLines = [];
+
+          for (var line in notes.split('\n')) {
+            final trimmed = line.trim();
+            if (trimmed.startsWith('Estudo/Tema:')) {
+              _studyTopic = trimmed.replaceFirst('Estudo/Tema:', '').trim();
+            } else if (trimmed.startsWith('Oferta:')) {
+              _offeringValue = trimmed.replaceFirst('Oferta:', '').trim();
+            } else if (trimmed.startsWith('Testemunhos e Obs:')) {
+              testimonyLines
+                  .add(trimmed.replaceFirst('Testemunhos e Obs:', '').trim());
+            } else if (trimmed.isNotEmpty) {
+              testimonyLines.add(trimmed);
+            }
+          }
+          _testimoniesAndNotes =
+          testimonyLines.isNotEmpty ? testimonyLines.join('\n') : null;
+        }
       }
 
       if (mounted) {
@@ -93,6 +240,7 @@ class _ViewReportPageState extends State<ViewReportPage> {
           _members = members;
           _memberNamesMap = memberMap;
           _report = foundReport;
+          _eligibleAttendances = filteredAttendances;
           _isLoading = false;
         });
       }
@@ -130,8 +278,7 @@ class _ViewReportPageState extends State<ViewReportPage> {
       );
       int weekNumber = ((sundayDate.day - 1) ~/ 7) + 1;
       final monthName = DateFormat('MMMM', 'pt_BR').format(sundayDate);
-      final capitalizedMonth =
-      monthName.isNotEmpty
+      final capitalizedMonth = monthName.isNotEmpty
           ? '${monthName[0].toUpperCase()}${monthName.substring(1)}'
           : '';
       return 'Ciclo Semanal: Semana $weekNumber de $capitalizedMonth';
@@ -184,41 +331,26 @@ class _ViewReportPageState extends State<ViewReportPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // CABEÇALHO DA REUNIÃO
             _buildHeaderCard(formattedDate, formattedCycle),
-
             const SizedBox(height: 16),
-
             if (_report!.status == ReportStatus.cacelled) ...[
               _buildCancellationCard(),
             ] else ...[
-              // RESUMO NUMÉRICO
               _buildSummaryMetrics(),
-
               const SizedBox(height: 16),
-
-              // DETALHES DO ESTUDO E OFERTA
               if ((_studyTopic != null && _studyTopic!.isNotEmpty) ||
                   (_offeringValue != null &&
                       _offeringValue!.isNotEmpty) ||
                   (_testimoniesAndNotes != null &&
                       _testimoniesAndNotes!.isNotEmpty))
                 _buildMeetingDetailsCard(),
-
               const SizedBox(height: 16),
-
-              // FREQUÊNCIA DOS MEMBROS
               _buildAttendanceCard(),
-
               const SizedBox(height: 16),
-
-              // VISITANTES
               if (_report!.visitors.isNotEmpty) ...[
                 _buildVisitorsCard(),
                 const SizedBox(height: 16),
               ],
-
-              // CONVERSÕES / DECISÕES
               if (_report!.conversions.isNotEmpty) ...[
                 _buildConversionsCard(),
                 const SizedBox(height: 16),
@@ -232,8 +364,8 @@ class _ViewReportPageState extends State<ViewReportPage> {
 
   Widget _buildHeaderCard(String formattedDate, String formattedCycle) {
     String statusTitle = "Reunião Realizada";
-    Color headerBg = Colors.teal.shade50;
-    Color headerText = Colors.teal.shade900;
+    Color headerBg = Colors.green.shade50;
+    Color headerText = Colors.green.shade900;
     IconData icon = Icons.check_circle_outline;
 
     if (_report!.status == ReportStatus.cacelled) {
@@ -291,7 +423,8 @@ class _ViewReportPageState extends State<ViewReportPage> {
           const SizedBox(height: 4),
           Row(
             children: [
-              const Icon(Icons.calendar_view_week, size: 14, color: Colors.blueGrey),
+              const Icon(Icons.calendar_view_week,
+                  size: 14, color: Colors.blueGrey),
               const SizedBox(width: 4),
               Text(
                 formattedCycle,
@@ -338,8 +471,8 @@ class _ViewReportPageState extends State<ViewReportPage> {
 
   Widget _buildSummaryMetrics() {
     final presentCount =
-        _report!.attendances.where((a) => a.isPresent).length;
-    final totalMembers = _report!.attendances.length;
+        _eligibleAttendances.where((a) => a.isPresent).length;
+    final totalMembers = _eligibleAttendances.length;
     final visitorsCount = _report!.visitors.length;
     final conversionsCount = _report!.conversions.length;
 
@@ -520,12 +653,12 @@ class _ViewReportPageState extends State<ViewReportPage> {
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _report!.attendances.length,
+              itemCount: _eligibleAttendances.length,
               separatorBuilder: (_, __) => const Divider(height: 8),
               itemBuilder: (context, index) {
-                final att = _report!.attendances[index];
-                final memberName =
-                    _memberNamesMap[att.cellMemberId] ?? 'Membro Removido';
+                final att = _eligibleAttendances[index];
+                final memberName = _memberNamesMap[att.cellMemberId] ??
+                    'Participante (Histórico)';
 
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -614,8 +747,8 @@ class _ViewReportPageState extends State<ViewReportPage> {
               return ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                leading:
-                const CircleAvatar(radius: 14, child: Icon(Icons.person, size: 16)),
+                leading: const CircleAvatar(
+                    radius: 14, child: Icon(Icons.person, size: 16)),
                 title: Text(v.name,
                     style: const TextStyle(fontWeight: FontWeight.w600)),
                 subtitle:

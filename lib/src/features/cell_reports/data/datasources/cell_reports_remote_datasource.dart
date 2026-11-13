@@ -123,10 +123,12 @@ class CellReportsRemoteDataSourceImpl implements ICellReportsRemoteDataSource {
         if (attendance.cellMemberId == cellMemberId) {
           return AttendanceModel(
             cellMemberId: attendance.cellMemberId,
+            memberName: attendance.memberName,
             isPresent: attendance.isPresent,
             isJustified: true,
             justificationReason: justification,
             rolesPerformed: attendance.rolesPerformed,
+            isExcused: attendance.isExcused,
           );
         }
         return attendance;

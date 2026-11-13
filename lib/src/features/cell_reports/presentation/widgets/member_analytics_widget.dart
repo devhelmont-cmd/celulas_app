@@ -14,12 +14,28 @@ import 'package:intl/intl.dart';
 
 import '../../../members/presentation/pages/member_analysis_page.dart';
 
+class _CellHistoryJourney {
+  final String cellId;
+  final String cellName;
+  final DateTime startDate;
+  final DateTime? endDate; // null se for a célula atual ativa
+  final bool isCurrent;
+
+  _CellHistoryJourney({
+    required this.cellId,
+    required this.cellName,
+    required this.startDate,
+    this.endDate,
+    this.isCurrent = false,
+  });
+}
+
 class MemberAnalyticsWidget extends StatefulWidget {
-  final UserEntity currentUser; // Representa o membro cujo perfil está sendo analisado
-  final UserEntity? viewerUser;  // Quem está logado visualizando (Pastor, Líder ou o próprio membro)
+  final UserEntity currentUser; // Membro cujo perfil está sendo analisado
+  final UserEntity? viewerUser; // Quem está visualizando
   final bool isEmbedded;
-  final bool showAvatar; // Controla a exibição da foto interna
-  final bool enableTapToAnalyze; // Habilita o clique para abrir a página de análise completa
+  final bool showAvatar;
+  final bool enableTapToAnalyze;
 
   const MemberAnalyticsWidget({
     super.key,
@@ -40,11 +56,13 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
 
   bool _isLoading = true;
   CellMemberEntity? _currentMember;
-  List<CellReportEntity> _cellReports = [];
-  String? _cellId;
-  String? _cellName;
+  List<CellReportEntity> _allMemberReports = [];
+  List<_CellHistoryJourney> _cellJourneys = [];
+  String? _currentCellId;
+  String? _currentCellName;
   String? _memberPhotoUrl;
 
+  String _selectedCellId = 'all'; // 'all' = Histórico Geral
   String _selectedMonthKey = 'all';
 
   @override
@@ -62,72 +80,203 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       String? targetCellId = user.primaryCellId;
 
       final allCells = await _cellDataSource.getCells(currentUser: user);
+      final Map<String, String> cellNamesById = {
+        for (var c in allCells) c.id: c.name,
+      };
 
-      if (targetCellId == null || targetCellId.trim().isEmpty) {
-        for (var cell in allCells) {
-          final members = await _cellDataSource.getCellMembers(cell.id);
-          final found = members.any(
-                (m) =>
-            m.userId == user.id ||
-                (user.name != null &&
-                    m.name.trim().toLowerCase() ==
-                        user.name!.trim().toLowerCase()),
-          );
-          if (found) {
-            targetCellId = cell.id;
-            break;
+      // Busca o registro atual em members (mesmo se estiver sem célula no momento)
+      CellMemberEntity? foundMember;
+      final allGlobalMembers = await _cellDataSource.getAllMembers();
+
+      for (var gm in allGlobalMembers) {
+        final gmId = gm['id']?.toString() ?? '';
+        final gmUserId = gm['userId']?.toString() ?? '';
+        final gmName = gm['name']?.toString() ?? '';
+
+        bool matchesId = gmId == user.id ||
+            (gmUserId.isNotEmpty && gmUserId == user.id);
+        bool matchesName = user.name != null &&
+            gmName.trim().toLowerCase() == user.name!.trim().toLowerCase();
+
+        if (matchesId || matchesName) {
+          final cellId = gm['cellId']?.toString() ?? '';
+          if (targetCellId == null || targetCellId.isEmpty) {
+            targetCellId = cellId.isNotEmpty ? cellId : null;
           }
+          foundMember = CellMemberEntity(
+            id: gmId,
+            cellId: cellId,
+            userId: gmUserId.isNotEmpty ? gmUserId : null,
+            name: gmName,
+            role: gm['role']?.toString() ?? 'membro',
+            joinedAt: (gm['joinedAt'] as Timestamp?)?.toDate() ??
+                DateTime.now(),
+            cellName: cellNamesById[cellId],
+            photoUrl: gm['photoUrl']?.toString(),
+          );
+          break;
         }
       }
 
-      if (targetCellId != null && targetCellId.trim().isNotEmpty) {
+      // Se não achou na lista global, tenta na célula primária
+      if (foundMember == null &&
+          targetCellId != null &&
+          targetCellId
+              .trim()
+              .isNotEmpty) {
         final members = await _cellDataSource.getCellMembers(targetCellId);
-
-        CellMemberEntity? foundMember;
         try {
           foundMember = members.firstWhere(
                 (m) =>
-            m.userId == user.id ||
+            m.id == user.id ||
+                m.userId == user.id ||
                 (user.name != null &&
                     m.name.trim().toLowerCase() ==
                         user.name!.trim().toLowerCase()),
           );
         } catch (_) {}
+      }
 
-        final reports =
-        await _reportsRepository.getReportsByCell(targetCellId);
-
-        String? fetchedCellName;
+      // Busca foto se ainda não tiver
+      String? fetchedPhotoUrl = foundMember?.photoUrl;
+      final effectiveUserId = foundMember?.userId ?? user.id;
+      if (effectiveUserId.isNotEmpty &&
+          (fetchedPhotoUrl == null || fetchedPhotoUrl.isEmpty)) {
         try {
-          final cellEntity = await _cellDataSource.getCellById(targetCellId);
-          fetchedCellName = cellEntity.name;
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(effectiveUserId)
+              .get();
+          if (userDoc.exists) {
+            fetchedPhotoUrl = userDoc.data()?['photoUrl'] as String?;
+          }
         } catch (_) {}
+      }
 
-        String? fetchedPhotoUrl = foundMember?.photoUrl;
-        if (foundMember?.userId != null && (fetchedPhotoUrl == null || fetchedPhotoUrl.isEmpty)) {
+      // Busca TODOS os relatórios do sistema para reconstruir o histórico completo do membro
+      final allReportsInSystem = await _reportsRepository.getAllReports();
+      final Set<String> candidateIds = {
+        user.id,
+        if (foundMember != null) foundMember.id,
+        if (foundMember?.userId != null && foundMember!.userId!.isNotEmpty)
+          foundMember!.userId!,
+      };
+
+      // Filtra relatórios onde o membro participou ou esteve listado na frequência
+      final List<CellReportEntity> memberReports = [];
+      for (var report in allReportsInSystem) {
+        final hasRecord = report.attendances.any(
+              (a) => candidateIds.contains(a.cellMemberId),
+        );
+        if (hasRecord) {
+          memberReports.add(report);
+        }
+      }
+
+      // Ordena cronologicamente (do mais antigo para o mais recente)
+      memberReports.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
+
+      // Reconstrói a linha do tempo de células do membro
+      final List<_CellHistoryJourney> journeys = [];
+      final Map<String, List<DateTime>> datesByCell = {};
+      final List<String> orderedCellIds = [];
+
+      for (var report in memberReports) {
+        if (!datesByCell.containsKey(report.cellId)) {
+          datesByCell[report.cellId] = [];
+          orderedCellIds.add(report.cellId);
+        }
+        datesByCell[report.cellId]!.add(
+          DateTime(
+            report.scheduledDate.year,
+            report.scheduledDate.month,
+            report.scheduledDate.day,
+          ),
+        );
+      }
+
+      // Garante que a célula atual esteja na lista mesmo antes do primeiro relatório nela
+      if (targetCellId != null &&
+          targetCellId.isNotEmpty &&
+          !datesByCell.containsKey(targetCellId)) {
+        orderedCellIds.add(targetCellId);
+        datesByCell[targetCellId] = [
+          foundMember != null
+              ? DateTime(
+            foundMember.joinedAt.year,
+            foundMember.joinedAt.month,
+            foundMember.joinedAt.day,
+          )
+              : DateTime.now(),
+        ];
+      }
+
+      for (int i = 0; i < orderedCellIds.length; i++) {
+        final cId = orderedCellIds[i];
+        final dates = datesByCell[cId]!
+          ..sort();
+        final isCurrentCell = (cId == targetCellId);
+
+        DateTime start = dates.first;
+        if (i == 0 && foundMember != null) {
+          final joinedOnly = DateTime(
+            foundMember.joinedAt.year,
+            foundMember.joinedAt.month,
+            foundMember.joinedAt.day,
+          );
+          if (joinedOnly.isBefore(start)) {
+            start = joinedOnly;
+          }
+        }
+
+        DateTime? end;
+        if (!isCurrentCell) {
+          // Se não é a célula atual, a data final é a última reunião registrada nessa célula
+          // ou um dia antes de iniciar na próxima célula
+          if (i + 1 < orderedCellIds.length) {
+            final nextStart = datesByCell[orderedCellIds[i + 1]]!.first;
+            end = nextStart.isAfter(dates.last)
+                ? nextStart.subtract(const Duration(days: 1))
+                : dates.last;
+          } else {
+            end = dates.last;
+          }
+        }
+
+        String cName = cellNamesById[cId] ?? '';
+        if (cName.isEmpty) {
           try {
-            final userDoc = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(foundMember!.userId)
-                .get();
-            if (userDoc.exists) {
-              fetchedPhotoUrl = userDoc.data()?['photoUrl'] as String?;
-            }
-          } catch (_) {}
+            final cEntity = await _cellDataSource.getCellById(cId);
+            cName = cEntity.name;
+            cellNamesById[cId] = cName;
+          } catch (_) {
+            cName = 'Célula Anterior';
+          }
         }
 
-        if (mounted) {
-          setState(() {
-            _cellId = targetCellId;
-            _cellName = fetchedCellName;
-            _currentMember = foundMember;
-            _memberPhotoUrl = fetchedPhotoUrl;
-            _cellReports = reports;
-            _isLoading = false;
-          });
-        }
-      } else {
-        if (mounted) setState(() => _isLoading = false);
+        journeys.add(
+          _CellHistoryJourney(
+            cellId: cId,
+            cellName: cName,
+            startDate: start,
+            endDate: end,
+            isCurrent: isCurrentCell,
+          ),
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          _currentCellId = targetCellId;
+          _currentCellName =
+          targetCellId != null ? cellNamesById[targetCellId] : null;
+          _currentMember = foundMember;
+          _memberPhotoUrl = fetchedPhotoUrl;
+          _allMemberReports = memberReports;
+          _cellJourneys = journeys;
+          _selectedCellId = 'all'; // Inicia sempre no Histórico Geral
+          _isLoading = false;
+        });
       }
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
@@ -135,10 +284,20 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
     }
   }
 
-  List<Map<String, String>> _getAvailableMonths() {
+  List<CellReportEntity> _getReportsForSelectedCell() {
+    if (_selectedCellId == 'all') {
+      return _allMemberReports;
+    }
+    return _allMemberReports
+        .where((r) => r.cellId == _selectedCellId)
+        .toList();
+  }
+
+  List<Map<String, String>> _getAvailableMonths(
+      List<CellReportEntity> sourceReports) {
     final Set<String> monthKeys = {};
 
-    for (var r in _cellReports) {
+    for (var r in sourceReports) {
       final cycleKey = (r.cycleKey != null && r.cycleKey!.isNotEmpty)
           ? r.cycleKey!
           : PastoralCycleHelper.getCycleKeyString(r.scheduledDate);
@@ -148,26 +307,31 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       }
     }
 
-    final sortedKeys = monthKeys.toList()..sort((a, b) => b.compareTo(a));
+    final sortedKeys = monthKeys.toList()
+      ..sort((a, b) => b.compareTo(a));
     final List<Map<String, String>> result = [
-    {'key': 'all', 'label': 'Todos os Períodos'},
+      {'key': 'all', 'label': 'Todos os Períodos'},
     ];
 
     for (var key in sortedKeys) {
-    final parts = key.split('-');
-    if (parts.length >= 2) {
-    final year = int.parse(parts[0]);
-    final month = int.parse(parts[1]);
-    final date = DateTime(year, month, 1);
+      final parts = key.split('-');
+      if (parts.length >= 2) {
+        final year = int.parse(parts[0]);
+        final month = int.parse(parts[1]);
+        final date = DateTime(year, month, 1);
 
-    String monthName = DateFormat("MMMM 'de' yyyy", 'pt_BR').format(date);
-    monthName = monthName[0].toUpperCase() + monthName.substring(1);
+        String monthName = DateFormat("MMMM 'de' yyyy", 'pt_BR').format(date);
+        monthName = monthName[0].toUpperCase() + monthName.substring(1);
 
-    result.add({'key': key, 'label': monthName});
-    }
+        result.add({'key': key, 'label': monthName});
+      }
     }
 
     return result;
+  }
+
+  String _formatShortDate(DateTime date) {
+    return DateFormat('dd/MM/yyyy').format(date);
   }
 
   @override
@@ -181,12 +345,12 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       );
     }
 
-    if (_currentMember == null) {
+    if (_currentMember == null && _allMemberReports.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Text(
-            'Não foi possível vincular o perfil de membro na célula atual.\n\nVerifique com o líder se o nome está cadastrado na lista de membros da célula.',
+            'Nenhum histórico de participação encontrado para este membro.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
           ),
@@ -196,12 +360,18 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
 
     final loggedUserId = widget.viewerUser?.id;
     final targetUserId = widget.currentUser.id;
-    final bool isViewingSelf = loggedUserId == null || loggedUserId == targetUserId;
+    final bool isViewingSelf =
+        loggedUserId == null || loggedUserId == targetUserId;
 
-    final memberName = _currentMember?.name ?? widget.currentUser.name ?? 'Membro';
-    final firstName = memberName.split(' ').first;
+    final memberName =
+        _currentMember?.name ?? widget.currentUser.name ?? 'Membro';
+    final firstName = memberName
+        .split(' ')
+        .first;
 
-    final jornadaTitle = 'Jornada na Célula';
+    final jornadaTitle = _selectedCellId == 'all'
+        ? 'Histórico Geral'
+        : 'Jornada na Célula';
 
     final jornadaSubtitle = isViewingSelf
         ? 'Acompanhe sua frequência e participações.'
@@ -211,63 +381,58 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
         ? 'Minha Cooperação em Servir'
         : 'Cooperação de $firstName em Servir';
 
-    DateTime? firstPresenceDate;
+    // Reports filtrados pela célula selecionada
+    final cellScopedReports = _getReportsForSelectedCell();
+    final availableMonths = _getAvailableMonths(cellScopedReports);
 
-    final sortedReportsForHistory = List<CellReportEntity>.from(_cellReports)
-      ..sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
+    final activeMonthKey =
+    availableMonths.any((m) => m['key'] == _selectedMonthKey)
+        ? _selectedMonthKey
+        : 'all';
 
-    for (var report in sortedReportsForHistory) {
-      if (report.status == ReportStatus.cacelled) continue;
-
-      final attendance = report.attendances.cast<AttendanceEntity?>().firstWhere(
-            (a) =>
-        a != null &&
-            (a.cellMemberId == _currentMember!.id ||
-                a.cellMemberId == _currentMember!.userId),
+    // Data de início efetiva considerando o histórico global ou a célula selecionada
+    DateTime? effectiveStartDate;
+    if (_selectedCellId != 'all') {
+      final journey = _cellJourneys.cast<_CellHistoryJourney?>().firstWhere(
+            (j) => j != null && j.cellId == _selectedCellId,
         orElse: () => null,
       );
-
-      if (attendance != null && attendance.isPresent) {
-        firstPresenceDate = DateTime(
-          report.scheduledDate.year,
-          report.scheduledDate.month,
-          report.scheduledDate.day,
-        );
-        break;
-      }
+      effectiveStartDate = journey?.startDate;
+    } else if (_cellJourneys.isNotEmpty) {
+      effectiveStartDate = _cellJourneys.first.startDate;
+    } else if (_currentMember != null) {
+      effectiveStartDate = DateTime(
+        _currentMember!.joinedAt.year,
+        _currentMember!.joinedAt.month,
+        _currentMember!.joinedAt.day,
+      );
     }
 
-    final systemJoinedDateOnly = DateTime(
-      _currentMember!.joinedAt.year,
-      _currentMember!.joinedAt.month,
-      _currentMember!.joinedAt.day,
-    );
-
-    DateTime effectiveStartDate = systemJoinedDateOnly;
-    if (firstPresenceDate != null && firstPresenceDate.isBefore(systemJoinedDateOnly)) {
-      effectiveStartDate = firstPresenceDate;
-    }
-
-    List<CellReportEntity> filteredReports = _cellReports;
-    if (_selectedMonthKey != 'all') {
-      filteredReports = _cellReports.where((r) {
+    List<CellReportEntity> filteredReports = cellScopedReports;
+    if (activeMonthKey != 'all') {
+      filteredReports = cellScopedReports.where((r) {
         final cycleKey = (r.cycleKey != null && r.cycleKey!.isNotEmpty)
             ? r.cycleKey!
             : PastoralCycleHelper.getCycleKeyString(r.scheduledDate);
-        return cycleKey.startsWith(_selectedMonthKey);
+        return cycleKey.startsWith(activeMonthKey);
       }).toList();
     }
+
+    final Set<String> candidateIds = {
+      widget.currentUser.id,
+      if (_currentMember != null) _currentMember!.id,
+      if (_currentMember?.userId != null &&
+          _currentMember!.userId!.isNotEmpty)
+        _currentMember!.userId!,
+    };
 
     int totalValidMeetingsHeld = 0;
     int presences = 0;
     int justifiedAbsences = 0;
-    int unjustifiedAbsences = 0;
     final Map<String, int> rolesCountMap = {};
 
     for (var report in filteredReports) {
-      if (report.status == ReportStatus.cacelled) {
-        continue;
-      }
+      if (report.status == ReportStatus.cacelled) continue;
 
       final meetingDateOnly = DateTime(
         report.scheduledDate.year,
@@ -275,23 +440,20 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
         report.scheduledDate.day,
       );
 
-      if (meetingDateOnly.isBefore(effectiveStartDate)) {
+      if (effectiveStartDate != null &&
+          meetingDateOnly.isBefore(effectiveStartDate)) {
         continue;
       }
-
-      totalValidMeetingsHeld++;
 
       final attendance = report.attendances
           .cast<AttendanceEntity?>()
           .firstWhere(
-            (a) =>
-        a != null &&
-            (a.cellMemberId == _currentMember!.id ||
-                a.cellMemberId == _currentMember!.userId),
+            (a) => a != null && candidateIds.contains(a.cellMemberId),
         orElse: () => null,
       );
 
       if (attendance != null) {
+        totalValidMeetingsHeld++;
         if (attendance.isPresent) {
           presences++;
           for (var role in attendance.rolesPerformed) {
@@ -299,8 +461,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
           }
         } else if (attendance.isJustified) {
           justifiedAbsences++;
-        } else {
-          unjustifiedAbsences++;
         }
       }
     }
@@ -309,7 +469,33 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
         ? (presences / totalValidMeetingsHeld) * 100
         : 0.0;
 
-    final availableMonths = _getAvailableMonths();
+    // Texto de período da jornada (Início -> Fim/Atual)
+    String periodRangeLabel = '';
+    if (_selectedCellId == 'all' && _cellJourneys.isNotEmpty) {
+      final firstStart = _formatShortDate(_cellJourneys.first.startDate);
+      final hasActiveCell = _currentCellId != null &&
+          _currentCellId!.isNotEmpty;
+      final endLabel = hasActiveCell
+          ? 'Atual'
+          : (_cellJourneys.last.endDate != null
+          ? _formatShortDate(_cellJourneys.last.endDate!)
+          : 'Atual');
+      periodRangeLabel = 'Período no Sistema: $firstStart até $endLabel';
+    } else if (_selectedCellId != 'all') {
+      final journey = _cellJourneys.cast<_CellHistoryJourney?>().firstWhere(
+            (j) => j != null && j.cellId == _selectedCellId,
+        orElse: () => null,
+      );
+      if (journey != null) {
+        final startStr = _formatShortDate(journey.startDate);
+        final endStr = journey.isCurrent
+            ? 'Atual'
+            : (journey.endDate != null
+            ? _formatShortDate(journey.endDate!)
+            : 'Atual');
+        periodRangeLabel = 'Período na Célula: $startStr até $endStr';
+      }
+    }
 
     final listViewContent = ListView(
       shrinkWrap: widget.isEmbedded,
@@ -320,20 +506,21 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
           onTap: widget.enableTapToAnalyze
               ? () {
             final memberMap = {
-              'userId': _currentMember?.userId, // CORRIGIDO: Usa o userId real do membro (nulo se for avulso/sem conta)
+              'userId': _currentMember?.userId,
               'id': _currentMember?.id ?? widget.currentUser.id,
               'name': memberName,
-              'cellId': _cellId ?? widget.currentUser.primaryCellId,
+              'cellId': _currentCellId ?? widget.currentUser.primaryCellId,
               'photoUrl': _memberPhotoUrl,
               'role': _currentMember?.role ?? 'membro',
             };
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => MemberAnalysisPage(
-                  memberData: memberMap,
-                  currentUser: widget.viewerUser ?? widget.currentUser,
-                ),
+                builder: (_) =>
+                    MemberAnalysisPage(
+                      memberData: memberMap,
+                      currentUser: widget.viewerUser ?? widget.currentUser,
+                    ),
               ),
             );
           }
@@ -347,13 +534,20 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
                   CircleAvatar(
                     radius: 26,
                     backgroundColor: Colors.grey.shade200,
-                    backgroundImage: (_memberPhotoUrl != null && _memberPhotoUrl!.trim().isNotEmpty)
+                    backgroundImage: (_memberPhotoUrl != null &&
+                        _memberPhotoUrl!.trim().isNotEmpty)
                         ? CachedNetworkImageProvider(_memberPhotoUrl!)
                         : null,
-                    child: (_memberPhotoUrl == null || _memberPhotoUrl!.trim().isEmpty)
+                    child: (_memberPhotoUrl == null ||
+                        _memberPhotoUrl!.trim().isEmpty)
                         ? Text(
-                      memberName.isNotEmpty ? memberName[0].toUpperCase() : 'M',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      memberName.isNotEmpty
+                          ? memberName[0].toUpperCase()
+                          : 'M',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
                     )
                         : null,
                   ),
@@ -363,23 +557,18 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              jornadaTitle,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
+                      Text(
+                        jornadaTitle,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 2),
-                      if (_cellName != null && _cellName!.isNotEmpty)
+                      if (_currentCellName != null &&
+                          _currentCellName!.isNotEmpty)
                         Text(
-                          'Célula: $_cellName',
+                          'Célula Atual: $_currentCellName',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
@@ -387,42 +576,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
                           ),
                         ),
                     ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value:
-                      availableMonths.any((m) => m['key'] == _selectedMonthKey)
-                          ? _selectedMonthKey
-                          : 'all',
-                      icon: const Icon(
-                        Icons.arrow_drop_down,
-                        color: Colors.blueAccent,
-                      ),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blueAccent,
-                      ),
-                      items: availableMonths.map((item) {
-                        return DropdownMenuItem<String>(
-                          value: item['key'],
-                          child: Text(item['label']!),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _selectedMonthKey = val);
-                        }
-                      },
-                    ),
                   ),
                 ),
               ],
@@ -434,6 +587,124 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
           jornadaSubtitle,
           style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
         ),
+        const SizedBox(height: 12),
+
+        // FILTROS DE TRAJETÓRIA (CÉLULA + PERÍODO MENSAL)
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (_cellJourneys.length > 1)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.indigo.shade200),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedCellId,
+                    icon: const Icon(
+                      Icons.account_tree_outlined,
+                      size: 16,
+                      color: Colors.indigo,
+                    ),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo,
+                    ),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: 'all',
+                        child: Text('Histórico Geral (Todas as Células)'),
+                      ),
+                      ..._cellJourneys.map((j) {
+                        final badge = j.isCurrent ? ' (Atual)' : ' (Anterior)';
+                        return DropdownMenuItem<String>(
+                          value: j.cellId,
+                          child: Text('${j.cellName}$badge'),
+                        );
+                      }),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _selectedCellId = val;
+                          _selectedMonthKey = 'all';
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: activeMonthKey,
+                  icon: const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.blueAccent,
+                  ),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueAccent,
+                  ),
+                  items: availableMonths.map((item) {
+                    return DropdownMenuItem<String>(
+                      value: item['key'],
+                      child: Text(item['label']!),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() => _selectedMonthKey = val);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        // BANNER DO PERÍODO NA TRAJETÓRIA / CÉLULA
+        if (periodRangeLabel.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.history_edu, size: 16, color: Colors.grey.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    periodRangeLabel,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         const SizedBox(height: 16),
         Row(
           children: [
@@ -539,12 +810,10 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
     );
   }
 
-  Widget _buildMetricCard(
-      String title,
+  Widget _buildMetricCard(String title,
       String value,
       IconData icon,
-      Color color,
-      ) {
+      Color color,) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(12),

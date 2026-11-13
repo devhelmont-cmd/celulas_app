@@ -1,3 +1,4 @@
+// lib/src/features/cell_reports/data/models/cell_report_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../domain/entities/cell_report_entity.dart';
@@ -17,13 +18,15 @@ class VisitorModel extends VisitorEntity {
 class AttendanceModel extends AttendanceEntity {
   const AttendanceModel({
     required String cellMemberId,
+    String? memberName,
     required bool isPresent,
     bool isJustified = false,
     String? justificationReason,
-    List<String> rolesPerformed = const [], // Tipagem explícita aqui
+    List<String> rolesPerformed = const [],
     bool isExcused = false,
   }) : super(
     cellMemberId: cellMemberId,
+    memberName: memberName,
     isPresent: isPresent,
     isJustified: isJustified,
     justificationReason: justificationReason,
@@ -34,6 +37,7 @@ class AttendanceModel extends AttendanceEntity {
   factory AttendanceModel.fromMap(Map<String, dynamic> map) {
     return AttendanceModel(
       cellMemberId: map['cellMemberId'] ?? '',
+      memberName: map['memberName'],
       isPresent: map['isPresent'] ?? false,
       isJustified: map['isJustified'] ?? false,
       justificationReason: map['justificationReason'],
@@ -45,6 +49,7 @@ class AttendanceModel extends AttendanceEntity {
   Map<String, dynamic> toMap() {
     return {
       'cellMemberId': cellMemberId,
+      if (memberName != null && memberName!.isNotEmpty) 'memberName': memberName,
       'isPresent': isPresent,
       'isJustified': isJustified,
       if (justificationReason != null)
@@ -70,7 +75,7 @@ class CellReportModel extends CellReportEntity {
     super.testimoniesAndNotes,
     required super.filledByUserId,
     required super.createdAt,
-    super.cycleKey
+    super.cycleKey,
   });
 
   factory CellReportModel.fromMap(Map<String, dynamic> map, String id) {
@@ -85,18 +90,15 @@ class CellReportModel extends CellReportEntity {
       ),
       eventType: map['eventType'],
       cancellationReason: map['cancellationReason'],
-      attendances:
-      (map['attendances'] as List<dynamic>?)
+      attendances: (map['attendances'] as List<dynamic>?)
           ?.map((e) => AttendanceModel.fromMap(e as Map<String, dynamic>))
           .toList() ??
           [],
-      visitors:
-      (map['visitors'] as List<dynamic>?)
+      visitors: (map['visitors'] as List<dynamic>?)
           ?.map((e) => VisitorModel.fromMap(e as Map<String, dynamic>))
           .toList() ??
           [],
-      conversions:
-      (map['conversions'] as List<dynamic>?)
+      conversions: (map['conversions'] as List<dynamic>?)
           ?.map((e) => VisitorModel.fromMap(e as Map<String, dynamic>))
           .toList() ??
           [],

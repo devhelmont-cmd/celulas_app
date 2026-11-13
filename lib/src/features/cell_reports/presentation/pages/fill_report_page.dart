@@ -206,10 +206,9 @@ class _FillReportPageState extends State<FillReportPage> {
                   trimmed.replaceFirst('Estudo/Tema:', '').trim();
             } else if (trimmed.startsWith('Oferta: R\$') ||
                 trimmed.startsWith('Oferta:')) {
-              _offeringValueCtrl.text =
-                  trimmed
-                      .replaceAll(RegExp(r'Oferta:\s*R\$\s*|Oferta:\s*'), '')
-                      .trim();
+              _offeringValueCtrl.text = trimmed
+                  .replaceAll(RegExp(r'Oferta:\s*R\$\s*|Oferta:\s*'), '')
+                  .trim();
             } else if (trimmed.startsWith('Testemunhos e Obs:')) {
               testimonyLines.add(
                 trimmed.replaceFirst('Testemunhos e Obs:', '').trim(),
@@ -230,15 +229,13 @@ class _FillReportPageState extends State<FillReportPage> {
           }
         }
 
-        _visitors =
-            existingReport.visitors
-                .map((v) => VisitorModel(name: v.name, phone: v.phone))
-                .toList();
+        _visitors = existingReport.visitors
+            .map((v) => VisitorModel(name: v.name, phone: v.phone))
+            .toList();
 
-        _conversions =
-            existingReport.conversions
-                .map((v) => VisitorModel(name: v.name, phone: v.phone))
-                .toList();
+        _conversions = existingReport.conversions
+            .map((v) => VisitorModel(name: v.name, phone: v.phone))
+            .toList();
       } else {
         for (var member in members) {
           final mName = member.name.trim().toLowerCase();
@@ -325,8 +322,7 @@ class _FillReportPageState extends State<FillReportPage> {
 
     showDialog(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Editar Visitante'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -368,8 +364,7 @@ class _FillReportPageState extends State<FillReportPage> {
               setState(() {
                 _visitors[index] = VisitorModel(
                   name: newName,
-                  phone:
-                  phoneCtrl.text.trim().isEmpty
+                  phone: phoneCtrl.text.trim().isEmpty
                       ? null
                       : phoneCtrl.text.trim(),
                 );
@@ -412,8 +407,7 @@ class _FillReportPageState extends State<FillReportPage> {
 
     showDialog(
       context: context,
-      builder:
-          (ctx) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Editar Conversão / Decisão'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -455,8 +449,7 @@ class _FillReportPageState extends State<FillReportPage> {
               setState(() {
                 _conversions[index] = VisitorModel(
                   name: newName,
-                  phone:
-                  phoneCtrl.text.trim().isEmpty
+                  phone: phoneCtrl.text.trim().isEmpty
                       ? null
                       : phoneCtrl.text.trim(),
                 );
@@ -494,11 +487,11 @@ class _FillReportPageState extends State<FillReportPage> {
         });
       }
 
-      final List<AttendanceModel> attendances =
-      _members.map((m) {
+      final List<AttendanceModel> attendances = _members.map((m) {
         if (_reportStatus == ReportStatus.cacelled) {
           return AttendanceModel(
             cellMemberId: m.id,
+            memberName: m.name,
             isPresent: false,
             isExcused: true,
             rolesPerformed: [],
@@ -508,6 +501,7 @@ class _FillReportPageState extends State<FillReportPage> {
         final List<String> roles = _hasRoles ? (memberRolesMap[m.id] ?? []) : [];
         return AttendanceModel(
           cellMemberId: m.id,
+          memberName: m.name,
           isPresent: isPresent,
           rolesPerformed: roles,
           isExcused: false,
@@ -534,15 +528,13 @@ class _FillReportPageState extends State<FillReportPage> {
         actualDate: DateTime.now(),
         status: _reportStatus,
         eventType: _eventType,
-        cancellationReason:
-        _reportStatus == ReportStatus.cacelled
+        cancellationReason: _reportStatus == ReportStatus.cacelled
             ? _cancellationReasonCtrl.text.trim()
             : null,
         attendances: attendances,
         visitors: _reportStatus == ReportStatus.cacelled ? [] : _visitors,
         conversions: _reportStatus == ReportStatus.cacelled ? [] : _conversions,
-        testimoniesAndNotes:
-        _reportStatus == ReportStatus.cacelled
+        testimoniesAndNotes: _reportStatus == ReportStatus.cacelled
             ? null
             : notesBuffer.toString().trim(),
         filledByUserId: widget.currentUser.id,
@@ -556,8 +548,7 @@ class _FillReportPageState extends State<FillReportPage> {
         id: widget.meeting.id,
         cellId: widget.cell.id,
         meetingDate: widget.meeting.meetingDate,
-        status:
-        _reportStatus == ReportStatus.cacelled
+        status: _reportStatus == ReportStatus.cacelled
             ? 'canceled'
             : (_eventType == 'bridge_event' ? 'bridge_event' : 'normal'),
         hasRoles: _hasRoles,
@@ -573,7 +564,8 @@ class _FillReportPageState extends State<FillReportPage> {
         finalPrayerName: _hasRoles ? _meetingRoles['Oração Final'] : null,
         snackName: _hasRoles ? _meetingRoles['Lanche'] : null,
         officialPhotoName: _hasRoles ? _meetingRoles['Foto Oficial'] : null,
-        reportFillerName: _hasRoles ? _meetingRoles['Preenchimento do Relatório'] : null,
+        reportFillerName:
+        _hasRoles ? _meetingRoles['Preenchimento do Relatório'] : null,
         isReportFilled: true,
       );
 
@@ -616,8 +608,7 @@ class _FillReportPageState extends State<FillReportPage> {
       );
       int weekNumber = ((sundayDate.day - 1) ~/ 7) + 1;
       final monthName = DateFormat('MMMM', 'pt_BR').format(sundayDate);
-      final capitalizedMonth =
-      monthName.isNotEmpty
+      final capitalizedMonth = monthName.isNotEmpty
           ? '${monthName[0].toUpperCase()}${monthName.substring(1)}'
           : '';
 
@@ -626,8 +617,7 @@ class _FillReportPageState extends State<FillReportPage> {
 
     return Scaffold(
       appBar: AppBar(title: Text('Relatório - $formattedDate')),
-      body:
-      _isLoading
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -768,7 +758,8 @@ class _FillReportPageState extends State<FillReportPage> {
                           setState(() {
                             _reportStatus = val;
                             _eventType = 'normal';
-                            _hasRoles = true; // Reunião normal sempre tem funções
+                            _hasRoles =
+                            true; // Reunião normal sempre tem funções
                           });
                         }
                       },
@@ -800,7 +791,11 @@ class _FillReportPageState extends State<FillReportPage> {
                     // Se for Evento Ponte, exibe o switch para definir se terá funções ou não
                     if (_reportStatus == ReportStatus.bridgeEvent) ...[
                       Padding(
-                        padding: const EdgeInsets.only(left: 12.0, right: 12.0, top: 4.0, bottom: 8.0),
+                        padding: const EdgeInsets.only(
+                            left: 12.0,
+                            right: 12.0,
+                            top: 4.0,
+                            bottom: 8.0),
                         child: SwitchListTile(
                           title: const Text('Definir Funções na Reunião?'),
                           subtitle: Text(
@@ -815,11 +810,15 @@ class _FillReportPageState extends State<FillReportPage> {
                               _hasRoles = val;
                               if (!_hasRoles) {
                                 // Salva o estado atual no cache e limpa os campos de funções
-                                _cachedRoles = Map<String, String?>.from(_meetingRoles);
-                                _meetingRoles.updateAll((key, value) => null);
+                                _cachedRoles = Map<String, String?>.from(
+                                    _meetingRoles);
+                                _meetingRoles
+                                    .updateAll((key, value) => null);
                               } else {
                                 // Restaura do cache caso exista com tipagem explícita
-                                _meetingRoles = Map<String, String?>.from(_cachedRoles);
+                                _meetingRoles =
+                                Map<String, String?>.from(
+                                    _cachedRoles);
                               }
                             });
                           },
@@ -899,8 +898,7 @@ class _FillReportPageState extends State<FillReportPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
                             'Frequência dos Membros',
@@ -935,15 +933,14 @@ class _FillReportPageState extends State<FillReportPage> {
                         physics:
                         const NeverScrollableScrollPhysics(),
                         itemCount: _members.length,
-                        separatorBuilder:
-                            (_, __) => const Divider(height: 8),
+                        separatorBuilder: (_, __) =>
+                        const Divider(height: 8),
                         itemBuilder: (context, index) {
                           final member = _members[index];
                           final isPresent =
                               _attendanceMap[member.id] ?? false;
 
-                          final memberRoles =
-                          _hasRoles
+                          final memberRoles = _hasRoles
                               ? _meetingRoles.entries
                               .where(
                                 (entry) =>
@@ -958,8 +955,7 @@ class _FillReportPageState extends State<FillReportPage> {
                             title: Text(
                               member.name,
                               style: TextStyle(
-                                fontWeight:
-                                isPresent
+                                fontWeight: isPresent
                                     ? FontWeight.bold
                                     : FontWeight.normal,
                               ),
@@ -975,22 +971,18 @@ class _FillReportPageState extends State<FillReportPage> {
                                   const SizedBox(height: 2),
                                   Wrap(
                                     spacing: 4,
-                                    children:
-                                    memberRoles
+                                    children: memberRoles
                                         .map(
                                           (r) => Chip(
                                         label: Text(
                                           r,
                                           style:
                                           const TextStyle(
-                                            fontSize:
-                                            10,
+                                            fontSize: 10,
                                           ),
                                         ),
-                                        backgroundColor:
-                                        Colors
-                                            .blue
-                                            .shade50,
+                                        backgroundColor: Colors
+                                            .blue.shade50,
                                         padding:
                                         EdgeInsets.zero,
                                         materialTapTargetSize:
@@ -1170,8 +1162,7 @@ class _FillReportPageState extends State<FillReportPage> {
                                       color: Colors.blue,
                                       size: 20,
                                     ),
-                                    onPressed:
-                                        () => _editVisitor(index),
+                                    onPressed: () => _editVisitor(index),
                                   ),
                                   IconButton(
                                     icon: const Icon(
@@ -1277,8 +1268,8 @@ class _FillReportPageState extends State<FillReportPage> {
                                       color: Colors.blue,
                                       size: 20,
                                     ),
-                                    onPressed:
-                                        () => _editConversion(index),
+                                    onPressed: () =>
+                                        _editConversion(index),
                                   ),
                                   IconButton(
                                     icon: const Icon(
@@ -1372,8 +1363,7 @@ class _FillReportPageState extends State<FillReportPage> {
                   ),
                 ),
                 onPressed: _isSaving ? null : _submitReport,
-                child:
-                _isSaving
+                child: _isSaving
                     ? const CircularProgressIndicator(
                   color: Colors.white,
                 )

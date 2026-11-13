@@ -1,3 +1,4 @@
+// lib/src/features/cell_reports/domain/entities/cell_report_entity.dart
 enum ReportStatus { occurred, cacelled, bridgeEvent }
 
 class CellReportEntity {
@@ -30,20 +31,22 @@ class CellReportEntity {
     this.testimoniesAndNotes,
     required this.filledByUserId,
     required this.createdAt,
-    this.cycleKey
+    this.cycleKey,
   });
 }
 
 class AttendanceEntity {
   final String cellMemberId;
+  final String? memberName; // Snapshot histórico do nome na data do relatório
   final bool isPresent;
   final bool isJustified;
   final String? justificationReason;
   final List<String> rolesPerformed;
-  final bool isExcused; // Novo campo para abono (reunião cancelada)
+  final bool isExcused; // Campo para abono (reunião cancelada)
 
   const AttendanceEntity({
     required this.cellMemberId,
+    this.memberName,
     required this.isPresent,
     this.isJustified = false,
     this.justificationReason,
