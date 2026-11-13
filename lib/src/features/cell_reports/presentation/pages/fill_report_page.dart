@@ -40,10 +40,7 @@ class _FillReportPageState extends State<FillReportPage> {
   ReportStatus _reportStatus = ReportStatus.occurred;
   String _eventType = 'normal';
 
-  // Variável para controlar se o evento/reunião possui funções ativas na tela de preenchimento
   bool _hasRoles = true;
-
-  // Backup para guardar as funções caso o usuário desmarque e queira marcar de novo
   Map<String, String?> _cachedRoles = {};
 
   late final TextEditingController _cancellationReasonCtrl;
@@ -51,10 +48,7 @@ class _FillReportPageState extends State<FillReportPage> {
   late final TextEditingController _testimoniesNotesCtrl;
   late final TextEditingController _offeringValueCtrl;
 
-  // Variável para armazenar a chave do ciclo selecionado (ex: "2026-09-06")
   late String _selectedCycleKey;
-
-  // Variável para armazenar a data representada escolhida no calendário (ex: o dia 07/09)
   late DateTime _representedDate;
 
   List<CellMemberEntity> _members = [];
@@ -162,7 +156,11 @@ class _FillReportPageState extends State<FillReportPage> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      final members = await _cellDataSource.getCellMembers(widget.cell.id);
+      // Carrega membros ativos na célula considerando a data exata da reunião
+      final members = await _cellDataSource.getCellMembersForDate(
+        widget.cell.id,
+        widget.meeting.meetingDate,
+      );
 
       for (var member in members) {
         _attendanceMap[member.id] = false;
@@ -275,10 +273,8 @@ class _FillReportPageState extends State<FillReportPage> {
         }
       }
 
-      // Preenche o cache inicial caso venha preenchido
       _cachedRoles = Map<String, String?>.from(_meetingRoles);
 
-      // Se por acaso a reunião estiver configurada para não ter funções, limpamos o mapa atual
       if (!_hasRoles) {
         _meetingRoles.updateAll((key, value) => null);
       }
@@ -624,7 +620,6 @@ class _FillReportPageState extends State<FillReportPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // CICLO SEMANAL DE REFERÊNCIA
             Card(
               elevation: 2,
               color: Colors.blue.shade50,
@@ -728,7 +723,6 @@ class _FillReportPageState extends State<FillReportPage> {
 
             const SizedBox(height: 16),
 
-            // STATUS DA REUNIÃO
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(
@@ -758,8 +752,7 @@ class _FillReportPageState extends State<FillReportPage> {
                           setState(() {
                             _reportStatus = val;
                             _eventType = 'normal';
-                            _hasRoles =
-                            true; // Reunião normal sempre tem funções
+                            _hasRoles = true;
                           });
                         }
                       },
@@ -788,7 +781,6 @@ class _FillReportPageState extends State<FillReportPage> {
                       },
                     ),
 
-                    // Se for Evento Ponte, exibe o switch para definir se terá funções ou não
                     if (_reportStatus == ReportStatus.bridgeEvent) ...[
                       Padding(
                         padding: const EdgeInsets.only(
@@ -809,13 +801,11 @@ class _FillReportPageState extends State<FillReportPage> {
                             setState(() {
                               _hasRoles = val;
                               if (!_hasRoles) {
-                                // Salva o estado atual no cache e limpa os campos de funções
                                 _cachedRoles = Map<String, String?>.from(
                                     _meetingRoles);
                                 _meetingRoles
                                     .updateAll((key, value) => null);
                               } else {
-                                // Restaura do cache caso exista com tipagem explícita
                                 _meetingRoles =
                                 Map<String, String?>.from(
                                     _cachedRoles);
@@ -886,7 +876,6 @@ class _FillReportPageState extends State<FillReportPage> {
             if (_reportStatus != ReportStatus.cacelled) ...[
               const SizedBox(height: 20),
 
-              // LISTA DE FREQUÊNCIA DOS MEMBROS
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
@@ -901,7 +890,7 @@ class _FillReportPageState extends State<FillReportPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Frequência dos Membros',
+                            'Frequência dos Membros (No Período da Reunião)',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -926,7 +915,7 @@ class _FillReportPageState extends State<FillReportPage> {
                       const Divider(height: 20),
                       _members.isEmpty
                           ? const Text(
-                        'Nenhum membro vinculado a esta célula.',
+                        'Nenhum membro ativo nesta célula na data da reunião.',
                       )
                           : ListView.separated(
                         shrinkWrap: true,
@@ -1010,7 +999,6 @@ class _FillReportPageState extends State<FillReportPage> {
                 ),
               ),
 
-              // ATRIBUIÇÃO DE FUNÇÕES DA REUNIÃO (Aparece condicionalmente se _hasRoles for verdadeiro)
               if (_hasRoles) ...[
                 const SizedBox(height: 20),
 
@@ -1072,7 +1060,6 @@ class _FillReportPageState extends State<FillReportPage> {
                               onChanged: (selectedId) {
                                 setState(() {
                                   _meetingRoles[role] = selectedId;
-                                  // Atualiza o cache sempre que o usuário alterar manualmente
                                   _cachedRoles[role] = selectedId;
                                 });
                               },
@@ -1087,7 +1074,6 @@ class _FillReportPageState extends State<FillReportPage> {
 
               const SizedBox(height: 20),
 
-              // VISITANTES
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
@@ -1189,7 +1175,6 @@ class _FillReportPageState extends State<FillReportPage> {
 
               const SizedBox(height: 20),
 
-              // DECISÕES / CONVERSÕES
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
@@ -1296,7 +1281,6 @@ class _FillReportPageState extends State<FillReportPage> {
 
               const SizedBox(height: 20),
 
-              // ESTUDO, OFERTA E TESTEMUNHOS
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(

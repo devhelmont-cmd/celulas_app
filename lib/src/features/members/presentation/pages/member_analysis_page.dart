@@ -1,5 +1,7 @@
 // lib/src/features/members/presentation/pages/member_analysis_page.dart
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/member_period_model.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -34,7 +36,14 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
   String? _cellLeaderName;
   String? _memberRole;
   bool _hasCell = false;
-  bool _hasAccount = false; // Flag para controlar se possui conta no sistema
+  bool _hasAccount = false;
+  String? _currentCellId; // Armazena o ID da célula atual para referência
+
+  List<MemberPeriodModel> _memberPeriods = [];
+  List<CellModel> _allCells = [];
+
+  bool get _isPastorOrCoordinator => widget.currentUser.isPastorOrCoordinator;
+  String get _memberId => widget.memberData['id'] ?? '';
 
   @override
   void initState() {
@@ -46,24 +55,19 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
     setState(() => _isLoading = true);
     try {
       final userId = widget.memberData['userId'] as String?;
-      final memberId = widget.memberData['id'] as String?;
+      final memberId = _memberId;
       final cellId = (widget.memberData['cellId'] ?? widget.memberData['primaryCellId']) as String?;
       _memberRole = widget.memberData['role'] as String? ?? 'membro';
 
-      // Verifica se possui userId válido ou se existe o documento na collection users
       _hasAccount = userId != null && userId.trim().isNotEmpty;
-
       Map<String, dynamic> mergedMap = Map<String, dynamic>.from(widget.memberData);
 
-      // 1. Busca os dados atualizados da coleção 'users' (se houver userId)
       if (_hasAccount) {
         final userDoc = await _firestore.collection('users').doc(userId).get();
         if (userDoc.exists && userDoc.data() != null) {
           final userData = userDoc.data()!;
           userData.forEach((key, value) {
-            if (value != null) {
-              mergedMap[key] = value;
-            }
+            if (value != null) mergedMap[key] = value;
           });
           if (userData['phone'] != null || userData['whatsapp'] != null) {
             mergedMap['phone'] = userData['phone'] ?? userData['whatsapp'];
@@ -77,14 +81,11 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
         }
       }
 
-      _targetUserEntity = UserModel.fromMap(
-        mergedMap,
-        userId ?? memberId ?? '',
-      );
-
+      _targetUserEntity = UserModel.fromMap(mergedMap, userId ?? memberId ?? '');
       final effectiveCellId = mergedMap['cellId'] ?? mergedMap['primaryCellId'] ?? _targetUserEntity?.primaryCellId;
 
-      // 2. Busca informações da célula vinculada
+      _currentCellId = effectiveCellId;
+
       if (effectiveCellId != null && effectiveCellId.trim().isNotEmpty && effectiveCellId != 'null') {
         try {
           final cell = await _cellDataSource.getCellById(effectiveCellId);
@@ -102,10 +103,207 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
         _hasCell = false;
       }
 
+      if (memberId.isNotEmpty) {
+        _memberPeriods = await _cellDataSource.getMemberPeriods(memberId);
+      }
+
+      // Carrega todas as células e ordena alfabeticamente pelo nome
+      _allCells = await _cellDataSource.getCells(currentUser: widget.currentUser);
+      _allCells.sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
+
       if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       debugPrint('Erro ao carregar análise do membro: $e');
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _showPeriodDialog({MemberPeriodModel? periodToEdit}) async {
+    // Define a célula inicial predefinida: Célula atual do membro, ou a do período a ser editado, ou a primeira da lista alfabética
+    String? selectedCellId = periodToEdit?.cellId ??
+        (_currentCellId != null && _allCells.any((c) => c.id == _currentCellId)
+            ? _currentCellId
+            : (_allCells.isNotEmpty ? _allCells.first.id : null));
+
+    DateTime startDate = periodToEdit?.startDate ?? DateTime.now();
+    DateTime? endDate = periodToEdit?.endDate;
+
+    String initialRole = periodToEdit?.role?.toLowerCase().trim() ?? 'membro';
+    if (!['membro', 'lider', 'colider', 'anfitriao'].contains(initialRole)) {
+      initialRole = 'membro';
+    }
+    String role = initialRole;
+
+    final Map<String, String> validRoles = {
+      'membro': 'Membro',
+      'lider': 'Líder',
+      'colider': 'Co-líder',
+      'anfitriao': 'Anfitrião',
+    };
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(periodToEdit == null ? 'Adicionar Período' : 'Editar Período'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<String>(
+                  value: selectedCellId,
+                  decoration: const InputDecoration(labelText: 'Célula', border: OutlineInputBorder()),
+                  items: _allCells.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name ?? ''))).toList(),
+                  onChanged: (val) => setDialogState(() => selectedCellId = val),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  title: const Text('Data de Início'),
+                  subtitle: Text(DateFormat('dd/MM/yyyy').format(startDate)),
+                  trailing: const Icon(Icons.calendar_today),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: startDate,
+                      firstDate: DateTime(2015),
+                      lastDate: DateTime(2035),
+                    );
+                    if (picked != null) setDialogState(() => startDate = picked);
+                  },
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  title: const Text('Data de Término (Opcional)'),
+                  subtitle: Text(endDate != null ? DateFormat('dd/MM/yyyy').format(endDate!) : 'Ativo / Atual'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (endDate != null)
+                        IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.red),
+                          onPressed: () => setDialogState(() => endDate = null),
+                        ),
+                      const Icon(Icons.calendar_today),
+                    ],
+                  ),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: endDate ?? DateTime.now(),
+                      firstDate: DateTime(2015),
+                      lastDate: DateTime(2035),
+                    );
+                    if (picked != null) setDialogState(() => endDate = picked);
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: role,
+                  decoration: const InputDecoration(labelText: 'Função no Período', border: OutlineInputBorder()),
+                  items: validRoles.entries
+                      .map((entry) => DropdownMenuItem(
+                    value: entry.key,
+                    child: Text(entry.value),
+                  ))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) setDialogState(() => role = val);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              onPressed: () async {
+                if (selectedCellId == null) return;
+                final cellObj = _allCells.firstWhere((c) => c.id == selectedCellId);
+
+                final newPeriod = MemberPeriodModel(
+                  id: periodToEdit?.id ?? '',
+                  cellId: selectedCellId!,
+                  cellName: cellObj.name ?? 'Célula',
+                  startDate: startDate,
+                  endDate: endDate,
+                  role: role,
+                );
+
+                Navigator.pop(ctx);
+
+                try {
+                  await _cellDataSource.saveMemberPeriod(
+                    memberId: _memberId,
+                    period: newPeriod,
+                    isPastorOrCoordinator: _isPastorOrCoordinator,
+                  );
+                  await _loadFullMemberProfile();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Período salvo com sucesso!'), backgroundColor: Colors.green),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    showDialog(
+                      context: context,
+                      builder: (c) => AlertDialog(
+                        title: const Text('Conflito ou Erro de Validação'),
+                        content: Text(e.toString().replaceAll('Exception: ', '')),
+                        actions: [
+                          ElevatedButton(onPressed: () => Navigator.pop(c), child: const Text('OK')),
+                        ],
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Salvar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeletePeriod(MemberPeriodModel period) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Excluir Período'),
+        content: Text('Deseja realmente excluir o período na célula ${period.cellName}? As funções exercidas em reuniões dentro deste intervalo serão transferidas para o líder da célula para manter a integridade.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _cellDataSource.deleteMemberPeriod(
+          memberId: _memberId,
+          periodId: period.id,
+          isPastorOrCoordinator: _isPastorOrCoordinator,
+        );
+        await _loadFullMemberProfile();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Período excluído com sucesso.'), backgroundColor: Colors.green),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao excluir período: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
     }
   }
 
@@ -123,6 +321,10 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
     final photoUrl = user?.photoUrl ?? widget.memberData['photoUrl'] as String?;
     final phone = user?.phone ?? widget.memberData['phone'] as String? ?? 'Não informado';
 
+    // Condição para exibir o MemberAnalyticsWidget:
+    // Exibe se tiver célula OU se estiver sem célula mas possuir histórico de períodos gravados (_memberPeriods.isNotEmpty)
+    final bool showAnalyticsCard = (_hasCell || _memberPeriods.isNotEmpty) && user != null;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Perfil Gerencial do Membro'),
@@ -132,7 +334,6 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // CABEÇALHO DO PERFIL
             Card(
               elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -214,8 +415,83 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
             ),
             const SizedBox(height: 16),
 
-            // SEÇÃO 1: MÉTRICAS E DESEMPENHO NAS REUNIÕES (Exibido apenas se o membro tiver célula)
-            if (_hasCell && user != null) ...[
+            // SEÇÃO DE PERÍODOS DE CÉLULAS (Exclusivo para Pastores/Coordenadores)
+            Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Histórico de Períodos em Células', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                        if (_isPastorOrCoordinator)
+                          IconButton(
+                            icon: const Icon(Icons.add_circle, color: Colors.blue),
+                            onPressed: () => _showPeriodDialog(),
+                          ),
+                      ],
+                    ),
+                    const Text('Períodos de permanência do membro nas células do sistema:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const Divider(height: 20),
+                    _memberPeriods.isEmpty
+                        ? const Text('Nenhum período cadastrado.')
+                        : ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _memberPeriods.length,
+                      separatorBuilder: (_, __) => const Divider(height: 10),
+                      itemBuilder: (context, index) {
+                        final p = _memberPeriods[index];
+                        final isActive = p.endDate == null;
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(p.cellName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text(
+                            'De ${DateFormat('dd/MM/yyyy').format(p.startDate)} até ${p.endDate != null ? DateFormat('dd/MM/yyyy').format(p.endDate!) : 'Atual'} • Função: ${p.role.toUpperCase()}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: isActive ? Colors.green.shade50 : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: isActive ? Colors.green.shade200 : Colors.grey.shade300),
+                                ),
+                                child: Text(
+                                  isActive ? 'Ativo' : 'Encerrado',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: isActive ? Colors.green.shade800 : Colors.grey.shade700),
+                                ),
+                              ),
+                              if (_isPastorOrCoordinator) ...[
+                                IconButton(
+                                  icon: const Icon(Icons.edit, size: 18, color: Colors.blue),
+                                  onPressed: () => _showPeriodDialog(periodToEdit: p),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                                  onPressed: () => _confirmDeletePeriod(p),
+                                ),
+                              ],
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // SEÇÃO DE MÉTRICAS E DESEMPENHO (Exibido se tiver célula OU se estiver sem célula mas tiver histórico)
+            if (showAnalyticsCard) ...[
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -232,7 +508,6 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
               const SizedBox(height: 16),
             ],
 
-            // SEÇÃO 2: DADOS PESSOAIS E CONTATO
             Card(
               elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -263,7 +538,6 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
             ),
             const SizedBox(height: 16),
 
-            // SEÇÃO 3: JORNADA ESPIRITUAL
             Card(
               elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -304,7 +578,6 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
             ),
             const SizedBox(height: 16),
 
-            // SEÇÃO 4: HISTÓRICO E VÍNCULOS
             Card(
               elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
