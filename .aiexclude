@@ -1,0 +1,15 @@
+text
+# Arquivos sensíveis e chaves do Firebase
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase_options.dart
+*.env
+*.jks
+*.keystore
+
+# Pastas pesadas e compiladas (economiza limite de contexto)
+build/
+.dart_tool/
+.idea/
+android/.gradle/
+ios/Pods/

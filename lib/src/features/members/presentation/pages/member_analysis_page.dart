@@ -415,6 +415,24 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
             ),
             const SizedBox(height: 16),
 
+            // SEÇÃO DE MÉTRICAS E DESEMPENHO (Exibido se tiver célula OU se estiver sem célula mas tiver histórico)
+            if (showAnalyticsCard) ...[
+              Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: MemberAnalyticsWidget(
+                    currentUser: user,
+                    viewerUser: widget.currentUser,
+                    isEmbedded: true,
+                    showAvatar: false,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // SEÇÃO DE PERÍODOS DE CÉLULAS (Exclusivo para Pastores/Coordenadores)
             Card(
               elevation: 2,
@@ -490,24 +508,6 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
             ),
             const SizedBox(height: 16),
 
-            // SEÇÃO DE MÉTRICAS E DESEMPENHO (Exibido se tiver célula OU se estiver sem célula mas tiver histórico)
-            if (showAnalyticsCard) ...[
-              Card(
-                elevation: 2,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: MemberAnalyticsWidget(
-                    currentUser: user,
-                    viewerUser: widget.currentUser,
-                    isEmbedded: true,
-                    showAvatar: false,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
             Card(
               elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -547,15 +547,44 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
+                      'Célula e Ministérios',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.teal),
+                    ),
+                    const Divider(height: 20),
+                    _buildInfoRow(Icons.groups_outlined, 'Célula Atual', _cellName),
+                    _buildInfoRow(Icons.person_outline, 'Líder da Célula', _cellLeaderName ?? 'Sem líder informado'),
+                    _buildInfoRow(Icons.perm_contact_calendar_outlined, 'Função na Célula', _memberRole?.toUpperCase() ?? 'MEMBRO'),
+                    _buildInfoRow(Icons.volunteer_activism_outlined, 'Ministérios em que Serve', user!.ministry ?? 'Não informado'),
+                    _buildInfoRow(Icons.admin_panel_settings_outlined, 'Cargos Ministeriais', user.displayRoles.join(', ') ?? 'Não informado'),
+                    /*_buildInfoRow(
+                      _hasAccount ? Icons.person_outline : Icons.person_off_outlined,
+                      'Status da Conta',
+                      _hasAccount ? 'Com conta cadastrada no sistema' : 'Membro sem conta no sistema',
+                    ),*/
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Card(
+              elevation: 1,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
                       'Jornada Espiritual & Origem',
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.purple),
                     ),
                     const Divider(height: 20),
-                    _buildInfoRow(Icons.account_balance_outlined, 'Igreja de Origem', user?.originChurch ?? 'Não informada'),
+                    _buildInfoRow(Icons.account_balance_outlined, 'Igreja de Origem', user!.originChurch ?? 'Não informada'),
                     _buildInfoRow(
                       Icons.event_available_outlined,
                       'Data de Conversão',
-                      user?.conversionDate != null ? DateFormat('dd/MM/yyyy').format(user!.conversionDate!) : 'Não informada',
+                      user?.conversionDate != null ? DateFormat('dd/MM/yyyy').format(user.conversionDate!) : 'Não informada',
                     ),
                     _buildInfoRow(
                       Icons.water_drop_outlined,
@@ -572,33 +601,6 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
                       user?.isHolySpiritBaptized == true ? 'Sim' : 'Não',
                     ),
                     _buildInfoRow(Icons.school_outlined, 'Cursos Concluídos', user?.completedCourses ?? 'Nenhum curso registrado'),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            Card(
-              elevation: 1,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Histórico de Células & Liderança',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.teal),
-                    ),
-                    const Divider(height: 20),
-                    _buildInfoRow(Icons.groups_outlined, 'Célula Atual', _cellName),
-                    _buildInfoRow(Icons.person_outline, 'Líder da Célula', _cellLeaderName ?? 'Sem líder informado'),
-                    _buildInfoRow(Icons.admin_panel_settings_outlined, 'Função na Célula', _memberRole?.toUpperCase() ?? 'MEMBRO'),
-                    _buildInfoRow(
-                      _hasAccount ? Icons.person_outline : Icons.person_off_outlined,
-                      'Status da Conta',
-                      _hasAccount ? 'Com conta cadastrada no sistema' : 'Membro sem conta no sistema',
-                    ),
                   ],
                 ),
               ),

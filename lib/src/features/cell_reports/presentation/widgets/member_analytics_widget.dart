@@ -182,51 +182,58 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
 
       // 3. Busca os períodos reais na subcoleção members/{memberId}/periods
       List<MemberPeriodEntity> loadedPeriods = [];
-      if (foundMember.id.isNotEmpty &&
-          !foundMember.id.startsWith('legacy_') &&
-          foundMember.id.length > 10) {
-        try {
-          final periodsSnapshot =
-              await FirebaseFirestore.instance
-                  .collection('members')
-                  .doc(foundMember.id)
-                  .collection('periods')
-                  .get();
+      String memberDocId = foundMember?.id ?? user.id;
 
-          loadedPeriods =
-              periodsSnapshot.docs
-                  .map((doc) => MemberPeriodModel.fromMap(doc.data(), doc.id))
-                  .toList()
-                ..sort((a, b) => a.startDate.compareTo(b.startDate));
-        } catch (e) {
-          debugPrint('Aviso ao buscar subcoleção periods: $e');
+      try {
+        // Removi a trava de length > 10 para ser mais flexível
+        if (memberDocId.isNotEmpty && !memberDocId.startsWith('legacy_')) {
+          final periodsSnapshot = await FirebaseFirestore.instance
+              .collection('members')
+              .doc(memberDocId)
+              .collection('periods')
+              .get();
+
+          loadedPeriods = periodsSnapshot.docs
+              .map((doc) => MemberPeriodModel.fromMap(doc.data(), doc.id))
+              .toList()
+            ..sort((a, b) => a.startDate.compareTo(b.startDate));
+
+          debugPrint('Analytics: Carregados ${loadedPeriods.length} períodos para o membro $memberDocId');
         }
+      } catch (e) {
+        debugPrint('Erro ao buscar períodos: $e');
       }
 
-      // 4. Busca relatórios onde o membro participou (por ID ou Nome salvo na frequência)
+      // 4. Busca relatórios baseados no histórico de períodos ou registros explícitos
       final allReportsInSystem = await _reportsRepository.getAllReports();
-      final Set<String> candidateIds = {
-        user.id,
-        if (foundMember != null) foundMember.id,
-        if (foundMember?.userId != null && foundMember!.userId!.isNotEmpty)
-          foundMember!.userId!,
-      };
-
       final List<CellReportEntity> memberReports = [];
+
       for (var report in allReportsInSystem) {
-        final hasRecord = report.attendances.any((a) {
-          if (candidateIds.contains(a.cellMemberId)) return true;
-          if (normalizedTargetName.isNotEmpty &&
-              a.memberName != null &&
-              a.memberName!.trim().toLowerCase() == normalizedTargetName) {
-            return true;
-          }
-          return false;
+        // A: O membro está na lista de presença? (Presença confirmada ou Falta registrada)
+        final hasExplicitRecord = report.attendances.any((a) {
+          final matchesId = a.cellMemberId == user.id || a.cellMemberId == memberDocId;
+          final matchesName = normalizedTargetName.isNotEmpty &&
+              a.memberName?.trim().toLowerCase() == normalizedTargetName;
+          return matchesId || matchesName;
         });
-        if (hasRecord) {
+
+        // B: A reunião ocorreu durante um período ativo do membro nesta célula?
+        // Isso é o que gera a "Falta Automática" (0/1)
+        final isWithinMemberHistory = _isDateWithinPeriods(
+            report.scheduledDate,
+            report.cellId,
+            loadedPeriods
+        );
+
+        if (hasExplicitRecord || isWithinMemberHistory) {
           memberReports.add(report);
         }
+        if (isWithinMemberHistory) {
+          print("Reunião de ${report.scheduledDate} incluída pelo histórico do período!");
+        }
       }
+
+      memberReports.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
 
       memberReports.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
 
@@ -496,17 +503,12 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
             ? _selectedMonthKey
             : 'all';
 
-    List<CellReportEntity> filteredReports = cellScopedReports;
-    if (activeMonthKey != 'all') {
-      filteredReports =
-          cellScopedReports.where((r) {
-            final cycleKey =
-                (r.cycleKey != null && r.cycleKey!.isNotEmpty)
-                    ? r.cycleKey!
-                    : PastoralCycleHelper.getCycleKeyString(r.scheduledDate);
-            return cycleKey.startsWith(activeMonthKey);
-          }).toList();
-    }
+    final filteredReports = _getReportsForSelectedCell();
+
+    int totalValidMeetingsHeld = 0;
+    int presences = 0;
+    int justifiedAbsences = 0;
+    final Map<String, int> rolesCountMap = {};
 
     final Set<String> candidateIds = {
       widget.currentUser.id,
@@ -514,58 +516,55 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
       if (_currentMember?.userId != null && _currentMember!.userId!.isNotEmpty)
         _currentMember!.userId!,
     };
-
-    int totalValidMeetingsHeld = 0;
-    int presences = 0;
-    int justifiedAbsences = 0;
-    final Map<String, int> rolesCountMap = {};
+    final normalizedTargetName = widget.currentUser.name?.trim().toLowerCase() ?? '';
 
     for (var report in filteredReports) {
       if (report.status == ReportStatus.cacelled) continue;
 
-      // Valida contra os intervalos reais de MemberPeriodEntity
-      if (_memberPeriods.isNotEmpty &&
-          !_isDateWithinPeriods(
+      // 1. Verifica se a reunião pertence ao histórico do membro (Período)
+      final bool isWithinMemberHistory = _memberPeriods.isNotEmpty &&
+          _isDateWithinPeriods(
             report.scheduledDate,
             report.cellId,
             _memberPeriods,
-          )) {
-        continue;
-      }
+          );
 
-      final normalizedTargetName =
-          widget.currentUser.name?.trim().toLowerCase() ?? '';
-
+      // 2. Busca o registro de presença (se existir)
+      // Usamos cast para evitar o erro de tipo no orElse
       final attendance = report.attendances
           .cast<AttendanceEntity?>()
           .firstWhere(
-            (a) =>
-                a != null &&
-                (candidateIds.contains(a.cellMemberId) ||
-                    (normalizedTargetName.isNotEmpty &&
-                        a.memberName != null &&
-                        a.memberName!.trim().toLowerCase() ==
-                            normalizedTargetName)),
-            orElse: () => null,
-          );
+            (a) => a != null && (
+            candidateIds.contains(a.cellMemberId) ||
+                (normalizedTargetName.isNotEmpty &&
+                    a.memberName?.trim().toLowerCase() == normalizedTargetName)
+        ),
+        orElse: () => null,
+      );
 
-      if (attendance != null) {
-        totalValidMeetingsHeld++;
-        if (attendance.isPresent) {
-          presences++;
-          for (var role in attendance.rolesPerformed) {
-            rolesCountMap[role] = (rolesCountMap[role] ?? 0) + 1;
+      // 3. LÓGICA DE CONTABILIZAÇÃO:
+      // Se ele tem um registro explícito OU se a reunião era obrigatória pelo período dele
+      if (attendance != null || isWithinMemberHistory) {
+        totalValidMeetingsHeld++; // Aqui garante o "1" do "0/1"
+
+        if (attendance != null) {
+          if (attendance.isPresent) {
+            presences++;
+            for (var role in attendance.rolesPerformed) {
+              rolesCountMap[role] = (rolesCountMap[role] ?? 0) + 1;
+            }
+          } else if (attendance.isJustified) {
+            justifiedAbsences++;
           }
-        } else if (attendance.isJustified) {
-          justifiedAbsences++;
         }
+        // Se attendance for null mas isWithinMemberHistory for true,
+        // ele entra no totalValidMeetingsHeld mas não incrementa presences (FALTA).
       }
     }
 
-    double attendanceRate =
-        totalValidMeetingsHeld > 0
-            ? (presences / totalValidMeetingsHeld) * 100
-            : 0.0;
+    double attendanceRate = totalValidMeetingsHeld > 0
+        ? (presences / totalValidMeetingsHeld) * 100
+        : 0.0;
 
     // Texto de período da jornada (Início -> Fim/Atual) baseado nos MemberPeriods
     String periodRangeLabel = '';
