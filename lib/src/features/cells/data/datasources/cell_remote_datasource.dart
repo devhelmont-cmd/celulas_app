@@ -280,6 +280,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         ? DateTime(period.endDate!.year, period.endDate!.month, period.endDate!.day)
         : null;
 
+    if (newEnd != null && newEnd.isBefore(newStart)) {
+      throw Exception('A data de término não pode ser anterior à data de início.');
+    }
+
     List<String> conflicts = [];
     for (var p in existingPeriods) {
       final pStart = DateTime(p.startDate.year, p.startDate.month, p.startDate.day);
@@ -752,18 +756,35 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     );
   }
 
+  DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
+
   Future<void> _closeActivePeriod(
       Transaction transaction,
       DocumentReference memberRef,
-      DateTime closeDate,
+      DateTime transitionDate,
       ) async {
     final periodsRef = memberRef.collection('periods');
     final activePeriodsSnap =
     await periodsRef.where('endDate', isNull: true).get();
 
+    final transDateOnly = _dateOnly(transitionDate);
+
     for (var doc in activePeriodsSnap.docs) {
+      final data = doc.data();
+      final startTs = data['startDate'] as Timestamp?;
+      DateTime targetEnd = transDateOnly;
+
+      if (startTs != null) {
+        final startOnly = _dateOnly(startTs.toDate());
+        if (transDateOnly.isAfter(startOnly)) {
+          targetEnd = transDateOnly.subtract(const Duration(days: 1));
+        } else {
+          targetEnd = startOnly;
+        }
+      }
+
       transaction.update(doc.reference, {
-        'endDate': Timestamp.fromDate(closeDate),
+        'endDate': Timestamp.fromDate(targetEnd),
       });
     }
   }
@@ -771,14 +792,31 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
   Future<void> _closeActivePeriodsBeforeBatch(
       WriteBatch batch,
       DocumentReference memberRef,
-      DateTime closeDate,
+      DateTime transitionDate,
       ) async {
     final periodsRef = memberRef.collection('periods');
     final activePeriodsSnap =
     await periodsRef.where('endDate', isNull: true).get();
 
+    final transDateOnly = _dateOnly(transitionDate);
+
     for (var doc in activePeriodsSnap.docs) {
-      batch.update(doc.reference, {'endDate': Timestamp.fromDate(closeDate)});
+      final data = doc.data();
+      final startTs = data['startDate'] as Timestamp?;
+      DateTime targetEnd = transDateOnly;
+
+      if (startTs != null) {
+        final startOnly = _dateOnly(startTs.toDate());
+        if (transDateOnly.isAfter(startOnly)) {
+          targetEnd = transDateOnly.subtract(const Duration(days: 1));
+        } else {
+          targetEnd = startOnly;
+        }
+      }
+
+      batch.update(doc.reference, {
+        'endDate': Timestamp.fromDate(targetEnd),
+      });
     }
   }
 
@@ -820,10 +858,30 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
 
   @override
   Future<void> addCellMember(CellMemberModel member) async {
-    final memberRef =
-    member.id.isEmpty
-        ? _firestore.collection('members').doc()
-        : _firestore.collection('members').doc(member.id);
+    DocumentReference memberRef;
+
+    if (member.id.isNotEmpty) {
+      memberRef = _firestore.collection('members').doc(member.id);
+    } else if (member.userId != null && member.userId!.isNotEmpty) {
+      final existingMembersQuery = await _firestore
+          .collection('members')
+          .where('userId', isEqualTo: member.userId)
+          .limit(1)
+          .get();
+      if (existingMembersQuery.docs.isNotEmpty) {
+        memberRef = existingMembersQuery.docs.first.reference;
+      } else {
+        final docByUserId =
+            await _firestore.collection('members').doc(member.userId!).get();
+        if (docByUserId.exists) {
+          memberRef = docByUserId.reference;
+        } else {
+          memberRef = _firestore.collection('members').doc();
+        }
+      }
+    } else {
+      memberRef = _firestore.collection('members').doc();
+    }
 
     final cellRef = _firestore.collection('cells').doc(member.cellId);
     final normalizedRole = member.role.toLowerCase().trim();
@@ -1438,104 +1496,112 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     final Map<String, dynamic> targetCellUpdates = {};
     bool shouldBeLeader = setAsLeader;
 
+    DocumentSnapshot<Map<String, dynamic>>? foundDocSnap;
+
     if (matchedMemberId != null && matchedMemberId.trim().isNotEmpty) {
-      final foundDoc =
-      await _firestore.collection('members').doc(matchedMemberId).get();
+      final docSnap =
+          await _firestore.collection('members').doc(matchedMemberId).get();
+      if (docSnap.exists) {
+        foundDocSnap = docSnap;
+      }
+    }
 
-      if (foundDoc.exists) {
-        final oldData = Map<String, dynamic>.from(
-          foundDoc.data() as Map<String, dynamic>,
-        );
-        final oldCellId = oldData['cellId'] as String? ?? '';
-        final oldRole = (oldData['role'] ?? '').toString().toLowerCase().trim();
+    if (foundDocSnap == null && userId.isNotEmpty) {
+      final existingMembersQuery = await _firestore
+          .collection('members')
+          .where('userId', isEqualTo: userId)
+          .limit(1)
+          .get();
 
-        if (oldRole == 'lider' || oldRole == 'leader' || oldRole == 'líder') {
-          shouldBeLeader = true;
+      if (existingMembersQuery.docs.isNotEmpty) {
+        foundDocSnap = existingMembersQuery.docs.first;
+      } else {
+        final docByUserId =
+            await _firestore.collection('members').doc(userId).get();
+        if (docByUserId.exists) {
+          foundDocSnap = docByUserId;
         }
+      }
+    }
 
-        targetMemberRef = _firestore.collection('members').doc(matchedMemberId);
+    if (foundDocSnap != null && foundDocSnap.exists) {
+      final oldData = Map<String, dynamic>.from(
+        foundDocSnap.data() as Map<String, dynamic>,
+      );
+      final oldCellId = oldData['cellId'] as String? ?? '';
+      final oldRole = (oldData['role'] ?? '').toString().toLowerCase().trim();
 
-        await _closeActivePeriodsBeforeBatch(
-          batch,
-          targetMemberRef,
-          DateTime.now(),
-        );
-        _openNewPeriodBatch(
-          batch,
-          targetMemberRef,
-          cellId,
-          cellName,
-          shouldBeLeader ? 'lider' : 'membro',
-          DateTime.now(),
-        );
+      if (oldRole == 'lider' || oldRole == 'leader' || oldRole == 'líder') {
+        shouldBeLeader = true;
+      }
 
-        memberData = oldData;
-        memberData['userId'] = userId;
-        memberData['cellId'] = cellId;
-        if (memberName.trim().isNotEmpty) {
-          memberData['name'] = memberName;
-        }
-        if (shouldBeLeader) {
-          memberData['role'] = 'lider';
-        }
+      targetMemberRef = foundDocSnap.reference;
+      final memberRefId = targetMemberRef.id;
 
-        batch.update(targetMemberRef, memberData);
+      await _closeActivePeriodsBeforeBatch(
+        batch,
+        targetMemberRef,
+        DateTime.now(),
+      );
+      _openNewPeriodBatch(
+        batch,
+        targetMemberRef,
+        cellId,
+        cellName,
+        shouldBeLeader ? 'lider' : 'membro',
+        DateTime.now(),
+      );
 
-        if (oldCellId.isNotEmpty && oldCellId != cellId) {
-          final oldCellRef = _firestore.collection('cells').doc(oldCellId);
-          final oldCellDoc = await oldCellRef.get();
-          if (oldCellDoc.exists) {
-            final cellData = oldCellDoc.data() as Map<String, dynamic>;
-            final Map<String, dynamic> oldCellUpdates = {};
-            if (cellData['leaderId'] == matchedMemberId) {
-              oldCellUpdates['leaderId'] = null;
-            }
-            if (cellData['coLeaderId'] == matchedMemberId) {
-              oldCellUpdates['coLeaderId'] = null;
-            }
-            if (cellData['hostId'] == matchedMemberId) {
-              oldCellUpdates['hostId'] = null;
-            }
-            if (oldCellUpdates.isNotEmpty) {
-              batch.update(oldCellRef, oldCellUpdates);
-            }
+      memberData = oldData;
+      memberData['userId'] = userId;
+      memberData['cellId'] = cellId;
+      if (memberName.trim().isNotEmpty) {
+        memberData['name'] = memberName;
+      }
+      if (shouldBeLeader) {
+        memberData['role'] = 'lider';
+      }
+
+      batch.set(targetMemberRef, memberData, SetOptions(merge: true));
+
+      if (oldCellId.isNotEmpty && oldCellId != cellId) {
+        final oldCellRef = _firestore.collection('cells').doc(oldCellId);
+        final oldCellDoc = await oldCellRef.get();
+        if (oldCellDoc.exists) {
+          final cellData = oldCellDoc.data() as Map<String, dynamic>;
+          final Map<String, dynamic> oldCellUpdates = {};
+          if (cellData['leaderId'] == memberRefId || cellData['leaderId'] == userId) {
+            oldCellUpdates['leaderId'] = null;
           }
-        } else {
-          if (targetCellDocSnap.exists) {
-            final cellData =
-            targetCellDocSnap.data() as Map<String, dynamic>;
-            if (cellData['leaderId'] == matchedMemberId || shouldBeLeader) {
-              targetCellUpdates['leaderId'] = userId;
-            }
-            if (cellData['coLeaderId'] == matchedMemberId) {
-              targetCellUpdates['coLeaderId'] = userId;
-            }
-            if (cellData['hostId'] == matchedMemberId) {
-              targetCellUpdates['hostId'] = userId;
-            }
+          if (cellData['coLeaderId'] == memberRefId || cellData['coLeaderId'] == userId) {
+            oldCellUpdates['coLeaderId'] = null;
+          }
+          if (cellData['hostId'] == memberRefId || cellData['hostId'] == userId) {
+            oldCellUpdates['hostId'] = null;
+          }
+          if (oldCellUpdates.isNotEmpty) {
+            batch.update(oldCellRef, oldCellUpdates);
           }
         }
       } else {
-        targetMemberRef = _firestore.collection('members').doc(matchedMemberId);
-        _openNewPeriodBatch(
-          batch,
-          targetMemberRef,
-          cellId,
-          cellName,
-          shouldBeLeader ? 'lider' : 'membro',
-          DateTime.now(),
-        );
-        memberData = {
-          'cellId': cellId,
-          'userId': userId,
-          'name': memberName,
-          'role': shouldBeLeader ? 'lider' : 'membro',
-          'joinedAt': FieldValue.serverTimestamp(),
-        };
-        batch.set(targetMemberRef, memberData);
+        if (targetCellDocSnap.exists) {
+          final cellData =
+              targetCellDocSnap.data() as Map<String, dynamic>;
+          if (cellData['leaderId'] == memberRefId || cellData['leaderId'] == userId || shouldBeLeader) {
+            targetCellUpdates['leaderId'] = userId;
+          }
+          if (cellData['coLeaderId'] == memberRefId || cellData['coLeaderId'] == userId) {
+            targetCellUpdates['coLeaderId'] = userId;
+          }
+          if (cellData['hostId'] == memberRefId || cellData['hostId'] == userId) {
+            targetCellUpdates['hostId'] = userId;
+          }
+        }
       }
     } else {
-      targetMemberRef = _firestore.collection('members').doc();
+      targetMemberRef = matchedMemberId != null && matchedMemberId.trim().isNotEmpty
+          ? _firestore.collection('members').doc(matchedMemberId)
+          : _firestore.collection('members').doc();
       _openNewPeriodBatch(
         batch,
         targetMemberRef,
@@ -2152,9 +2218,16 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         .update(request.toMap());
   }
 
+  @override
   Future<void> deleteMemberCompletely(String memberId) async {
     final batch = _firestore.batch();
     final memberRef = _firestore.collection('members').doc(memberId);
+    
+    final periodsSnap = await memberRef.collection('periods').get();
+    for (var doc in periodsSnap.docs) {
+      batch.delete(doc.reference);
+    }
+    
     batch.delete(memberRef);
     await batch.commit();
   }

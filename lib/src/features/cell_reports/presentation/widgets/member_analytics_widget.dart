@@ -235,8 +235,6 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
 
       memberReports.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
 
-      memberReports.sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
-
       // 5. Fallback para membros que ainda não têm documentos na subcoleção periods
       if (loadedPeriods.isEmpty) {
         final Map<String, List<DateTime>> datesByCell = {};

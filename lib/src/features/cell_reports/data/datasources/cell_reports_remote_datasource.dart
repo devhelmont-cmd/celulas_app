@@ -242,6 +242,30 @@ class CellReportsRemoteDataSourceImpl implements ICellReportsRemoteDataSource {
         return;
       }
     }
+
+    // 5. Se a data for posterior ao último período registrado (e não coberta anteriormente)
+    final lastPeriod = periods.last;
+    final lastEnd = lastPeriod['endDate'] != null
+        ? DateTime(lastPeriod['endDate'].year, lastPeriod['endDate'].month, lastPeriod['endDate'].day)
+        : DateTime(lastPeriod['startDate'].year, lastPeriod['startDate'].month, lastPeriod['startDate'].day);
+
+    if (targetDate.isAfter(lastEnd)) {
+      if (lastPeriod['cellId'] == cellId) {
+        // Mesma célula do último período: estende o encerramento do período anterior para targetDate
+        await periodsRef.doc(lastPeriod['id']).update({
+          'endDate': Timestamp.fromDate(targetDate),
+        });
+      } else {
+        // Célula diferente: cria um período com a data da reunião
+        await periodsRef.add({
+          'cellId': cellId,
+          'cellName': cellName,
+          'startDate': Timestamp.fromDate(targetDate),
+          'endDate': Timestamp.fromDate(targetDate),
+          'role': 'membro',
+        });
+      }
+    }
   }
 
   @override
