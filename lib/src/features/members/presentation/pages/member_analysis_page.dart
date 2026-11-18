@@ -268,11 +268,16 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
   }
 
   Future<void> _confirmDeletePeriod(MemberPeriodModel period) async {
+    final bool isCurrentPeriod = period.endDate == null;
+    final message = isCurrentPeriod
+        ? '⚠️ Este é o PERÍODO ATUAL do membro na célula ${period.cellName}. Excluir este período irá DESVINCULAR O MEMBRO da célula atual. As funções exercidas em reuniões dentro deste intervalo serão transferidas para o líder da célula. Deseja realmente continuar?'
+        : 'Deseja realmente excluir o período na célula ${period.cellName}? As funções exercidas em reuniões dentro deste intervalo serão transferidas para o líder da célula para manter a integridade.';
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Excluir Período'),
-        content: Text('Deseja realmente excluir o período na célula ${period.cellName}? As funções exercidas em reuniões dentro deste intervalo serão transferidas para o líder da célula para manter a integridade.'),
+        title: Text(isCurrentPeriod ? 'Excluir Período Atual?' : 'Excluir Período'),
+        content: Text(message),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           ElevatedButton(

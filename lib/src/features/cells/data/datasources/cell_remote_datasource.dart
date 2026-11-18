@@ -346,8 +346,62 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       throw Exception('Apenas pastores ou coordenadores podem excluir períodos de um membro.');
     }
 
-    await _firestore.collection('members').doc(memberId).collection('periods').doc(periodId).delete();
+    final memberRef = _firestore.collection('members').doc(memberId);
+    final periodRef = memberRef.collection('periods').doc(periodId);
+    final periodDoc = await periodRef.get();
+
+    if (!periodDoc.exists) return;
+    final periodData = periodDoc.data() as Map<String, dynamic>;
+    final periodCellId = periodData['cellId'] as String?;
+    final periodEndDate = periodData['endDate'] as Timestamp?;
+    final bool isCurrentPeriod = periodEndDate == null;
+
+    await periodRef.delete();
     await _enforceMemberDataIntegrity(memberId);
+
+    if (isCurrentPeriod && periodCellId != null && periodCellId.isNotEmpty) {
+      final memberDoc = await memberRef.get();
+      if (memberDoc.exists) {
+        final memberData = memberDoc.data() as Map<String, dynamic>;
+        final currentCellId = memberData['cellId'] as String?;
+        if (currentCellId == periodCellId) {
+          final userId = memberData['userId'] as String?;
+          final batch = _firestore.batch();
+          batch.update(memberRef, {'cellId': null, 'role': 'membro'});
+
+          if (userId != null && userId.isNotEmpty) {
+            final userRef = _firestore.collection('users').doc(userId);
+            batch.update(userRef, {'primaryCellId': null});
+          }
+
+          final cellRef = _firestore.collection('cells').doc(periodCellId);
+          final cellDoc = await cellRef.get();
+          if (cellDoc.exists) {
+            final cellData = cellDoc.data() as Map<String, dynamic>;
+            final Map<String, dynamic> cellUpdates = {};
+            if (cellData['leaderId'] == memberId || (userId != null && cellData['leaderId'] == userId)) {
+              cellUpdates['leaderId'] = null;
+            }
+            if (cellData['coLeaderId'] == memberId || (userId != null && cellData['coLeaderId'] == userId)) {
+              cellUpdates['coLeaderId'] = null;
+            }
+            if (cellData['hostId'] == memberId || (userId != null && cellData['hostId'] == userId)) {
+              cellUpdates['hostId'] = null;
+            }
+            if (cellUpdates.isNotEmpty) {
+              batch.update(cellRef, cellUpdates);
+              if (cellUpdates.containsKey('leaderId') && userId != null && userId.isNotEmpty) {
+                batch.update(_firestore.collection('users').doc(userId), {
+                  'roles': FieldValue.arrayRemove(['leader']),
+                });
+              }
+            }
+          }
+
+          await batch.commit();
+        }
+      }
+    }
   }
 
   Future<void> _enforceMemberDataIntegrity(String memberId) async {
