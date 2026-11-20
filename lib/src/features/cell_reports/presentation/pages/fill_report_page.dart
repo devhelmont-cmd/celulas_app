@@ -1,5 +1,6 @@
 // lib/src/features/cell_reports/presentation/pages/fill_report_page.dart
 import 'package:celulas_app/src/core/injections/injection_container.dart';
+import 'package:celulas_app/src/core/utils/gender_helper.dart';
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/data/models/cell_report_model.dart';
@@ -942,7 +943,7 @@ class _FillReportPageState extends State<FillReportPage> {
                           return CheckboxListTile(
                             contentPadding: EdgeInsets.zero,
                             title: Text(
-                              member.name,
+                              GenderHelper.formatMemberName(name: member.name, role: member.role),
                               style: TextStyle(
                                 fontWeight: isPresent
                                     ? FontWeight.bold
@@ -954,7 +955,7 @@ class _FillReportPageState extends State<FillReportPage> {
                               CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Função na Célula: ${member.role}',
+                                  'Função na Célula: ${GenderHelper.formatRole(member.role)}',
                                 ),
                                 if (memberRoles.isNotEmpty) ...[
                                   const SizedBox(height: 2),
@@ -1053,7 +1054,7 @@ class _FillReportPageState extends State<FillReportPage> {
                                 ..._members.map(
                                       (m) => DropdownMenuItem<String?>(
                                     value: m.id,
-                                    child: Text(m.name),
+                                    child: Text(GenderHelper.formatMemberName(name: m.name, role: m.role)),
                                   ),
                                 ),
                               ],

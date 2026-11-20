@@ -53,6 +53,30 @@ class _CellDetailPageState extends State<CellDetailPage>
   bool _isLeaderOfThisCell = false;
   bool _isPastorOrCoord = false;
 
+  Map<String, Map<String, dynamic>> _userProfilesMap = {};
+
+  Future<void> _loadUserProfilesForMembers(List<CellMemberEntity> members) async {
+    try {
+      final userIds = members
+          .where((m) => m.userId != null && m.userId!.trim().isNotEmpty)
+          .map((m) => m.userId!)
+          .toSet()
+          .toList();
+
+      for (var userId in userIds) {
+        if (!_userProfilesMap.containsKey(userId)) {
+          final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+          if (doc.exists && doc.data() != null) {
+            _userProfilesMap[userId] = doc.data()!;
+          }
+        }
+      }
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('Erro ao carregar perfis de usuários na célula: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +87,12 @@ class _CellDetailPageState extends State<CellDetailPage>
       initialIndex: widget.initialTabIndex,
     );
     _membersController = getIt<CellMembersController>();
+    _membersController.addListener(() {
+      if (_membersController.value is CellMemberLoadedState) {
+        final members = (_membersController.value as CellMemberLoadedState).members;
+        _loadUserProfilesForMembers(members);
+      }
+    });
     _membersController.fetchMembers(_currentCell.id);
     _loadPendingRequests();
     _loadMeetingAndPrayerRequests().then((_) {
@@ -2102,15 +2132,14 @@ class _CellDetailPageState extends State<CellDetailPage>
                 user.name!.trim().toLowerCase());
     if (isAuthor) return true;
 
-    final bool isUserLeader =
-        user.isLeader ||
+    final bool isUserLeaderOfThisCell =
         _currentCell.leaderId == user.id ||
         (_currentCell.leaderId != null &&
             user.name != null &&
             _currentCell.leaderId!.trim().toLowerCase() ==
                 user.name!.trim().toLowerCase());
 
-    if (isUserLeader) {
+    if (isUserLeaderOfThisCell) {
       List<CellMemberEntity> members = [];
       if (_membersController.value is CellMemberLoadedState) {
         members = (_membersController.value as CellMemberLoadedState).members;
@@ -2710,8 +2739,20 @@ class _CellDetailPageState extends State<CellDetailPage>
                               itemCount: members.length,
                               itemBuilder: (context, index) {
                                 final member = members[index];
-                                final formattedRole = _formatMemberRole(
+                                final uData = member.userId != null ? _userProfilesMap[member.userId] : null;
+                                final gender = uData?['gender'] as String?;
+                                final userRoles = uData?['roles'] as List<dynamic>?;
+                                final isPastor = (userRoles != null && userRoles.contains('pastor')) ||
+                                    member.role.toLowerCase().contains('pastor');
+
+                                final formattedName = GenderHelper.formatDisplayName(
+                                  name: member.name,
+                                  isPastor: isPastor,
+                                  gender: gender,
+                                );
+                                final formattedRole = GenderHelper.formatRole(
                                   member.role,
+                                  gender: gender,
                                 );
 
                                 final bool isCurrentLogUserCard =
@@ -2804,7 +2845,7 @@ class _CellDetailPageState extends State<CellDetailPage>
                                               )
                                               : null,
                                     ),
-                                    title: Text(member.name),
+                                    title: Text(formattedName),
                                     subtitle: Text(
                                       formattedRole,
                                       style: TextStyle(

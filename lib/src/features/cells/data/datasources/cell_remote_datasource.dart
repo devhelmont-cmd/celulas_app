@@ -1,4 +1,5 @@
 // lib/src/features/cells/data/datasources/cell_remote_datasource.dart
+import 'package:celulas_app/src/core/utils/gender_helper.dart';
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_join_request_model.dart';
@@ -549,6 +550,30 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     return validMembers;
   }
 
+  Future<String> _formatNameWithPastor(String name, {String? userId, String? role, Map<String, dynamic>? userData}) async {
+    bool isPastor = (role != null && role.toLowerCase().contains('pastor'));
+    String? gender = userData?['gender'] as String?;
+
+    if (userId != null && userId.trim().isNotEmpty) {
+      try {
+        final uDoc = userData ?? (await _firestore.collection('users').doc(userId).get()).data();
+        if (uDoc != null) {
+          gender ??= uDoc['gender'] as String?;
+          final roles = (uDoc['roles'] as List<dynamic>? ?? []).map((e) => e.toString()).toList();
+          if (roles.contains('pastor')) {
+            isPastor = true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    return GenderHelper.formatDisplayName(
+      name: name,
+      isPastor: isPastor,
+      gender: gender,
+    );
+  }
+
   @override
   Future<String?> getUserNameById(String userId, {String? cellId}) async {
     if (userId.trim().isEmpty) {
@@ -564,7 +589,7 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         final data = userDoc.data() as Map<String, dynamic>;
         final userName = data['name'] as String?;
         if (userName != null && userName.trim().isNotEmpty) {
-          return userName;
+          return await _formatNameWithPastor(userName, userId: userId, userData: data);
         }
       }
 
@@ -572,6 +597,7 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       if (memberDoc.exists) {
         final data = memberDoc.data() as Map<String, dynamic>;
         final memberUserId = data['userId'] as String?;
+        final role = data['role'] as String?;
 
         if (memberUserId != null && memberUserId.trim().isNotEmpty) {
           final linkedUserDoc =
@@ -580,14 +606,14 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
             final linkedData = linkedUserDoc.data() as Map<String, dynamic>;
             final linkedName = linkedData['name'] as String?;
             if (linkedName != null && linkedName.trim().isNotEmpty) {
-              return linkedName;
+              return await _formatNameWithPastor(linkedName, userId: memberUserId, role: role, userData: linkedData);
             }
           }
         }
 
         final memberName = data['name'] as String?;
         if (memberName != null && memberName.trim().isNotEmpty) {
-          return memberName;
+          return await _formatNameWithPastor(memberName, userId: memberUserId, role: role);
         }
       }
 
@@ -597,8 +623,10 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
           .get();
       for (var doc in membersByUserId.docs) {
         final memberName = doc.data()['name'] as String?;
+        final role = doc.data()['role'] as String?;
+        final mUserId = doc.data()['userId'] as String?;
         if (memberName != null && memberName.trim().isNotEmpty) {
-          return memberName;
+          return await _formatNameWithPastor(memberName, userId: mUserId, role: role);
         }
       }
 
@@ -650,18 +678,18 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
         final role = (data['role'] ?? '').toString().toLowerCase().trim();
         if (role == 'lider' || role == 'leader' || role == 'líder') {
           final name = data['name'] as String?;
-          if (name != null && name.trim().isNotEmpty) {
-            return name;
-          }
           final memberUserId = data['userId'] as String?;
+          if (name != null && name.trim().isNotEmpty) {
+            return await _formatNameWithPastor(name, userId: memberUserId, role: role);
+          }
           if (memberUserId != null && memberUserId.trim().isNotEmpty) {
             final userDoc =
             await _firestore.collection('users').doc(memberUserId).get();
             if (userDoc.exists) {
-              final userName =
-              (userDoc.data() as Map<String, dynamic>)['name'] as String?;
+              final userData = userDoc.data() as Map<String, dynamic>;
+              final userName = userData['name'] as String?;
               if (userName != null && userName.trim().isNotEmpty) {
-                return userName;
+                return await _formatNameWithPastor(userName, userId: memberUserId, role: role, userData: userData);
               }
             }
           }

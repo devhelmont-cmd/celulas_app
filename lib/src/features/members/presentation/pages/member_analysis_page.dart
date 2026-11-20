@@ -2,6 +2,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/member_period_model.dart';
+import 'package:celulas_app/src/core/utils/gender_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -322,7 +323,7 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
     }
 
     final user = _targetUserEntity;
-    final name = user?.name ?? widget.memberData['name'] ?? 'Membro sem Nome';
+    final name = user?.displayName ?? GenderHelper.formatMemberName(name: widget.memberData['name'], role: _memberRole ?? 'membro', gender: user?.gender);
     final photoUrl = user?.photoUrl ?? widget.memberData['photoUrl'] as String?;
     final phone = user?.phone ?? widget.memberData['phone'] as String? ?? 'Não informado';
 
@@ -558,7 +559,7 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
                     const Divider(height: 20),
                     _buildInfoRow(Icons.groups_outlined, 'Célula Atual', _cellName),
                     _buildInfoRow(Icons.person_outline, 'Líder da Célula', _cellLeaderName ?? 'Sem líder informado'),
-                    _buildInfoRow(Icons.perm_contact_calendar_outlined, 'Função na Célula', _memberRole?.toUpperCase() ?? 'MEMBRO'),
+                    _buildInfoRow(Icons.perm_contact_calendar_outlined, 'Função na Célula', GenderHelper.formatRole(_memberRole ?? 'membro', gender: user?.gender)),
                     _buildInfoRow(Icons.volunteer_activism_outlined, 'Ministérios em que Serve', user!.ministry ?? 'Não informado'),
                     _buildInfoRow(Icons.admin_panel_settings_outlined, 'Cargos Ministeriais', user.displayRoles.join(', ') ?? 'Não informado'),
                     /*_buildInfoRow(

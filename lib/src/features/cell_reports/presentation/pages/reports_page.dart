@@ -1,6 +1,7 @@
 // lib/src/features/cell_reports/presentation/pages/reports_page.dart
 import 'dart:async';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
+import 'package:celulas_app/src/core/utils/gender_helper.dart';
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
@@ -477,7 +478,7 @@ class _ReportsPageState extends State<ReportsPage>
           orElse: () => null,
         );
         if (leader != null && leader.name.isNotEmpty) {
-          defaultReportFiller = leader.name;
+          defaultReportFiller = GenderHelper.formatMemberName(name: leader.name, role: leader.role);
         } else {
           final coLeader = members.cast<dynamic?>().firstWhere(
                 (m) =>
@@ -489,11 +490,11 @@ class _ReportsPageState extends State<ReportsPage>
           );
           defaultReportFiller =
           coLeader?.name.isNotEmpty == true
-              ? coLeader!.name
-              : widget.currentUser.name;
+              ? GenderHelper.formatMemberName(name: coLeader!.name, role: coLeader!.role)
+              : widget.currentUser.displayName;
         }
       } catch (_) {
-        defaultReportFiller = widget.currentUser.name;
+        defaultReportFiller = widget.currentUser.displayName;
       }
 
       final meetings = _cellMeetingsMap[cell.id] ?? [];

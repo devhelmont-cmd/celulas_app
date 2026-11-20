@@ -1,5 +1,6 @@
 // lib/src/features/cell_reports/presentation/pages/view_report_page.dart
 import 'package:celulas_app/src/core/injections/injection_container.dart';
+import 'package:celulas_app/src/core/utils/gender_helper.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/data/models/cell_report_model.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
@@ -57,9 +58,10 @@ class _ViewReportPageState extends State<ViewReportPage> {
       final Map<String, String> memberMap = {};
 
       for (var m in members) {
-        memberMap[m.id] = m.name;
+        final formattedName = GenderHelper.formatMemberName(name: m.name, role: m.role);
+        memberMap[m.id] = formattedName;
         if (m.userId != null && m.userId!.isNotEmpty) {
-          memberMap[m.userId!] = m.name;
+          memberMap[m.userId!] = formattedName;
         }
       }
 

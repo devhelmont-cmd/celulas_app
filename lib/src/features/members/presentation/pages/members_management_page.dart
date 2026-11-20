@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
+import 'package:celulas_app/src/core/utils/gender_helper.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
 import 'package:celulas_app/src/features/members/presentation/pages/member_analysis_page.dart';
 
@@ -32,6 +33,7 @@ class _MembersManagementPageState extends State<MembersManagementPage>
   List<Map<String, dynamic>> _membersWithCell = [];
   List<Map<String, dynamic>> _membersWithoutCell = [];
   Map<String, String> _cellNamesMap = {};
+  Map<String, Map<String, dynamic>> _usersMap = {};
   bool _isLoading = true;
 
   @override
@@ -107,6 +109,7 @@ class _MembersManagementPageState extends State<MembersManagementPage>
           _membersWithCell = withCell;
           _membersWithoutCell = withoutCell;
           _cellNamesMap = cellMap;
+          _usersMap = usersMap;
           _isLoading = false;
         });
       }
@@ -177,6 +180,19 @@ class _MembersManagementPageState extends State<MembersManagementPage>
         itemBuilder: (context, index) {
           final member = members[index];
           final name = member['name'] ?? 'Sem Nome';
+          final userId = member['userId'] as String?;
+          final uData = (userId != null && _usersMap.containsKey(userId)) ? _usersMap[userId]! : null;
+          final gender = uData?['gender'] as String?;
+          final userRoles = uData?['roles'] as List<dynamic>?;
+          final roleStr = (member['role'] ?? 'membro').toString();
+          final isPastor = (userRoles != null && userRoles.contains('pastor')) ||
+              roleStr.toLowerCase().contains('pastor');
+
+          final formattedName = GenderHelper.formatDisplayName(
+            name: name,
+            isPastor: isPastor,
+            gender: gender,
+          );
           final photoUrl = member['photoUrl'] as String?;
           final cellId =
               (member['cellId'] ?? member['primaryCellId']) as String?;
@@ -186,7 +202,6 @@ class _MembersManagementPageState extends State<MembersManagementPage>
                   : 'Sem Célula';
 
           // Verifica se possui conta vinculada no sistema (userId válido)
-          final userId = member['userId'] as String?;
           final hasAccount = userId != null && userId.trim().isNotEmpty;
 
           return Card(
@@ -213,7 +228,7 @@ class _MembersManagementPageState extends State<MembersManagementPage>
                         : null,
               ),
               title: Text(
-                name,
+                formattedName,
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               subtitle: Column(

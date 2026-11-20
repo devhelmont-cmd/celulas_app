@@ -51,6 +51,23 @@ class GenderHelper {
     return cleanName;
   }
 
+  /// Formata o nome de um membro ou usuário com base no cargo e gênero.
+  static String formatMemberName({
+    required String? name,
+    required String role,
+    String? gender,
+    String defaultIfEmpty = 'Nome não informado',
+  }) {
+    final lowerRole = role.toLowerCase().trim();
+    final isPastor = lowerRole.contains('pastor');
+    return formatDisplayName(
+      name: name,
+      isPastor: isPastor,
+      gender: gender,
+      defaultIfEmpty: defaultIfEmpty,
+    );
+  }
+
   /// Retorna o termo apropriado para o cargo/função com base no gênero.
   static String formatRole(String roleKey, {String? gender}) {
     final normGender = normalizeGender(gender);
