@@ -9,6 +9,7 @@ import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/cell_attendance_chart_widget.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/meeting_status_chart_widget.dart';
+import 'package:celulas_app/src/features/cell_reports/presentation/widgets/active_members_attendance_chart_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -39,12 +40,14 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
   CellModel? _leaderCell;
   List<CellReportEntity> _cellReports = [];
   List<CellMeetingModel> _cellMeetings = [];
+  List<CellMemberEntity> _cellMembers = [];
 
   String _selectedMonthKey = 'all';
 
   List<Map<String, dynamic>> _chartConfigs = [
-  {'id': 'attendance', 'title': 'Evolução Temporal da Célula', 'visible': true},
-  {'id': 'status', 'title': 'Status das Reuniões da Célula', 'visible': true},
+    {'id': 'attendance', 'title': 'Evolução Temporal da Célula', 'visible': true},
+    {'id': 'status', 'title': 'Status das Reuniões da Célula', 'visible': true},
+    {'id': 'member_attendance', 'title': 'Assiduidade dos Membros da Célula', 'visible': true},
   ];
 
   @override
@@ -66,6 +69,16 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
             userDoc.data()!['leaderChartConfigs'].map((e) => Map<String, dynamic>.from(e)),
           );
           if (savedList.isNotEmpty) {
+            final savedIds = savedList.map((e) => e['id']).toSet();
+            for (var defaultConfig in [
+              {'id': 'attendance', 'title': 'Evolução Temporal da Célula', 'visible': true},
+              {'id': 'status', 'title': 'Status das Reuniões da Célula', 'visible': true},
+              {'id': 'member_attendance', 'title': 'Assiduidade dos Membros da Célula', 'visible': true},
+            ]) {
+              if (!savedIds.contains(defaultConfig['id'])) {
+                savedList.add(defaultConfig);
+              }
+            }
             _chartConfigs = savedList;
           }
         }
@@ -93,6 +106,7 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
 
       List<CellReportEntity> reports = [];
       List<CellMeetingModel> meetings = [];
+      List<CellMemberEntity> members = [];
 
       if (foundCell != null) {
         try {
@@ -101,6 +115,9 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
         try {
           meetings = await _cellDataSource.getAllMeetingsForCell(foundCell.id);
         } catch (_) {}
+        try {
+          members = await _cellDataSource.getCellMembers(foundCell.id);
+        } catch (_) {}
       }
 
       if (mounted) {
@@ -108,6 +125,7 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
           _leaderCell = foundCell;
           _cellReports = reports;
           _cellMeetings = meetings;
+          _cellMembers = members;
           _isLoading = false;
         });
       }
@@ -390,6 +408,14 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
           );
         }).toList()
             : filteredMeetings,
+      );
+    } else if (id == 'member_attendance') {
+      return ActiveMembersAttendanceChartWidget(
+        reports: _cellReports,
+        members: _cellMembers,
+        cells: _leaderCell != null ? [_leaderCell!] : [],
+        selectedMonthKey: _selectedMonthKey,
+        cellIdFilter: _leaderCell?.id,
       );
     }
     return const SizedBox.shrink();

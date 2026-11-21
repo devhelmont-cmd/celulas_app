@@ -11,6 +11,7 @@ import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entit
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/cell_attendance_chart_widget.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/cells_performance_chart_widget.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/meeting_status_chart_widget.dart';
+import 'package:celulas_app/src/features/cell_reports/presentation/widgets/active_members_attendance_chart_widget.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/leader_analytics_widget.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/member_analytics_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -44,9 +45,10 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
   String _selectedMonthKey = 'all';
 
   List<Map<String, dynamic>> _chartConfigs = [
-  {'id': 'attendance', 'title': 'Evolução Geral Temporal', 'visible': true},
-  {'id': 'status', 'title': 'Status das Reuniões', 'visible': true},
-  {'id': 'performance', 'title': 'Comparativo por Célula', 'visible': true},
+    {'id': 'attendance', 'title': 'Evolução Geral Temporal', 'visible': true},
+    {'id': 'status', 'title': 'Status das Reuniões', 'visible': true},
+    {'id': 'performance', 'title': 'Comparativo por Célula', 'visible': true},
+    {'id': 'member_attendance', 'title': 'Assiduidade dos Membros Ativos', 'visible': true},
   ];
 
   @override
@@ -68,6 +70,17 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
             userDoc.data()!['pastorChartConfigs'].map((e) => Map<String, dynamic>.from(e)),
           );
           if (savedList.isNotEmpty) {
+            final savedIds = savedList.map((e) => e['id']).toSet();
+            for (var defaultConfig in [
+              {'id': 'attendance', 'title': 'Evolução Geral Temporal', 'visible': true},
+              {'id': 'status', 'title': 'Status das Reuniões', 'visible': true},
+              {'id': 'performance', 'title': 'Comparativo por Célula', 'visible': true},
+              {'id': 'member_attendance', 'title': 'Assiduidade dos Membros Ativos', 'visible': true},
+            ]) {
+              if (!savedIds.contains(defaultConfig['id'])) {
+                savedList.add(defaultConfig);
+              }
+            }
             _chartConfigs = savedList;
           }
         }
@@ -561,6 +574,13 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
       );
     } else if (id == 'performance') {
       return CellsPerformanceChartWidget(reports: filteredReports, cells: _cells);
+    } else if (id == 'member_attendance') {
+      return ActiveMembersAttendanceChartWidget(
+        reports: _allReports,
+        members: _allMembers,
+        cells: _cells,
+        selectedMonthKey: _selectedMonthKey,
+      );
     }
     return const SizedBox.shrink();
   }
