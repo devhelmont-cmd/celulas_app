@@ -1,10 +1,12 @@
 // lib/src/features/cell_reports/presentation/widgets/cell_attendance_chart_widget.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
-import 'package:celulas_app/src/features/cell_reports/data/models/cell_report_model.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_member_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/member_period_model.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -73,6 +75,8 @@ class _CellAttendanceChartWidgetState
 
   late final ICellRemoteDataSource _cellDataSource;
   final Map<String, List<CellMemberEntity>> _cellMembersMap = {};
+  final Map<String, List<MemberPeriodModel>> _memberPeriodsMap = {};
+  final Map<String, CellMemberEntity> _allMembersMap = {};
   bool _isLoadingMembers = true;
 
   @override
@@ -82,24 +86,96 @@ class _CellAttendanceChartWidgetState
     _loadAllCellMembers();
   }
 
-  /// Carrega os membros de todas as células presentes nos relatórios para poder calcular o
-  /// ingresso efetivo e a frequência percentual no modo mensal.
+  /// Carrega todos os membros e o histórico de períodos (`collectionGroup('periods')`)
+  /// para calcular a frequência percentual exata e fiel no modo mensal.
   Future<void> _loadAllCellMembers() async {
     try {
+      final firestore = FirebaseFirestore.instance;
+
+      // 1. Carrega todos os membros do Firestore
+      final membersSnap = await firestore.collection('members').get();
+      for (var doc in membersSnap.docs) {
+        final m = CellMemberModel.fromMap(doc.data(), doc.id);
+        _allMembersMap[m.id] = m;
+        if (m.userId != null && m.userId!.isNotEmpty) {
+          _allMembersMap[m.userId!] = m;
+        }
+      }
+
+      // 2. Garante também a busca dos membros das células dos relatórios
       final cellIds = widget.reports.map((r) => r.cellId).toSet();
       for (var cellId in cellIds) {
         if (cellId.isNotEmpty) {
-          final members = await _cellDataSource.getCellMembers(cellId);
-          _cellMembersMap[cellId] = members;
+          try {
+            final members = await _cellDataSource.getCellMembers(cellId);
+            _cellMembersMap[cellId] = members;
+            for (var m in members) {
+              _allMembersMap[m.id] = m;
+              if (m.userId != null && m.userId!.isNotEmpty) {
+                _allMembersMap[m.userId!] = m;
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      // 3. Busca a coleção de períodos históricos dos membros
+      final periodsSnap = await firestore.collectionGroup('periods').get();
+      for (var doc in periodsSnap.docs) {
+        final parentMemberId = doc.reference.parent.parent?.id;
+        if (parentMemberId != null && parentMemberId.isNotEmpty) {
+          final period = MemberPeriodModel.fromMap(doc.data(), doc.id);
+          _memberPeriodsMap.putIfAbsent(parentMemberId, () => []).add(period);
         }
       }
     } catch (e) {
-      debugPrint('Erros ao carregar membros para o gráfico: $e');
+      debugPrint('Erros ao carregar membros e períodos para o gráfico: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoadingMembers = false);
       }
     }
+  }
+
+  /// Verifica se um determinado membro estava ativo na célula em uma data específica
+  bool _isMemberActiveInCellOnDate({
+    required CellMemberEntity member,
+    required String cellId,
+    required DateTime date,
+  }) {
+    final targetDate = DateTime(date.year, date.month, date.day);
+    final memberId = member.id;
+    final periods = _memberPeriodsMap[memberId] ?? [];
+
+    if (periods.isNotEmpty) {
+      for (var p in periods) {
+        if (p.cellId != cellId) continue;
+
+        final startOnly =
+            DateTime(p.startDate.year, p.startDate.month, p.startDate.day);
+        final endOnly = p.endDate != null
+            ? DateTime(p.endDate!.year, p.endDate!.month, p.endDate!.day)
+            : null;
+
+        if (!targetDate.isBefore(startOnly) &&
+            (endOnly == null || !targetDate.isAfter(endOnly))) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Se não há histórico na subcoleção 'periods', verifica joinedAt e cellId direta
+    if (member.cellId == cellId) {
+      final joinedOnly = DateTime(
+        member.joinedAt.year,
+        member.joinedAt.month,
+        member.joinedAt.day,
+      );
+      return !targetDate.isBefore(joinedOnly);
+    }
+
+    return false;
   }
 
   @override
@@ -226,6 +302,7 @@ class _CellAttendanceChartWidgetState
       }
 
       List<_ConsolidatedMonthReport> consolidatedList = [];
+      final uniqueMembers = _allMembersMap.values.toSet().toList();
 
       reportsByMonthKey.forEach((monthKey, monthReports) {
         final parts = monthKey.split('-');
@@ -234,13 +311,13 @@ class _CellAttendanceChartWidgetState
         DateTime anchorDate = DateTime(year, month, 1);
 
         final monthFullName =
-        DateFormat('MMMM \'de\' yyyy', 'pt_BR').format(anchorDate);
+            DateFormat('MMMM \'de\' yyyy', 'pt_BR').format(anchorDate);
         final capitalizedFullName = monthFullName.isNotEmpty
             ? '${monthFullName[0].toUpperCase()}${monthFullName.substring(1)}'
             : '';
 
         final monthShortName =
-        DateFormat('MMM/yy', 'pt_BR').format(anchorDate);
+            DateFormat('MMM/yy', 'pt_BR').format(anchorDate);
         final capitalizedShortName = monthShortName.isNotEmpty
             ? '${monthShortName[0].toUpperCase()}${monthShortName.substring(1).replaceAll('.', '')}'
             : '';
@@ -253,91 +330,41 @@ class _CellAttendanceChartWidgetState
         double visitorsSum = 0;
         double conversionsSum = 0;
 
-        // Agrupa os relatórios do mês por célula para avaliar o histórico dos membros
-        Map<String, List<CellReportEntity>> cellMonthReportsMap = {};
-        for (var r in monthReports) {
-          visitorsSum += r.visitors.length.toDouble();
-          conversionsSum += r.conversions.length.toDouble();
+        for (var report in monthReports) {
+          visitorsSum += report.visitors.length.toDouble();
+          conversionsSum += report.conversions.length.toDouble();
 
-          if (r.status == ReportStatus.cacelled) continue; // Descarta reuniões canceladas
-          cellMonthReportsMap.putIfAbsent(r.cellId, () => []).add(r);
-        }
+          if (report.status == ReportStatus.cacelled) continue; // Descarta reuniões canceladas
 
-        // Para cada célula com relatórios no mês
-        cellMonthReportsMap.forEach((cellId, validReports) {
-          final members = _cellMembersMap[cellId] ?? [];
+          final reportDate = report.scheduledDate;
+          final reportCellId = report.cellId;
 
-          // Calcula a data de ingresso efetiva de cada membro na célula
-          Map<String, DateTime> memberEffectiveStartDateMap = {};
-          final allCellReportsSorted = List<CellReportEntity>.from(
-              widget.reports.where((r) => r.cellId == cellId))
-            ..sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
-
-          for (var m in members) {
-            DateTime? firstPresenceDate;
-            for (var r in allCellReportsSorted) {
-              if (r.status == ReportStatus.cacelled) continue;
-              final att = r.attendances.cast<AttendanceModel?>().firstWhere(
-                    (a) => a != null && (a.cellMemberId == m.id || a.cellMemberId == m.userId),
-                orElse: () => null,
-              );
-              if (att != null && att.isPresent) {
-                firstPresenceDate = DateTime(
-                  r.scheduledDate.year,
-                  r.scheduledDate.month,
-                  r.scheduledDate.day,
-                );
-                break;
-              }
-            }
-
-            final systemJoinedDateOnly = DateTime(
-              m.joinedAt.year,
-              m.joinedAt.month,
-              m.joinedAt.day,
+          // Avalia cada membro com base no histórico de períodos na data da reunião
+          for (var member in uniqueMembers) {
+            final isActiveInCell = _isMemberActiveInCellOnDate(
+              member: member,
+              cellId: reportCellId,
+              date: reportDate,
             );
 
-            DateTime effectiveStart = systemJoinedDateOnly;
-            if (firstPresenceDate != null &&
-                firstPresenceDate.isBefore(systemJoinedDateOnly)) {
-              effectiveStart = firstPresenceDate;
-            }
+            if (!isActiveInCell) continue;
 
-            memberEffectiveStartDateMap[m.id] = effectiveStart;
-            if (m.userId != null && m.userId!.isNotEmpty) {
-              memberEffectiveStartDateMap[m.userId!] = effectiveStart;
-            }
-          }
+            totalExpectedAttendances++;
 
-          // Para cada reunião válida no mês
-          for (var report in validReports) {
-            final meetingDateOnly = DateTime(
-              report.scheduledDate.year,
-              report.scheduledDate.month,
-              report.scheduledDate.day,
-            );
-
-            // Contabiliza apenas os membros que já eram ativos na data da reunião
-            for (var m in members) {
-              final effectiveStart = memberEffectiveStartDateMap[m.id] ??
-                  memberEffectiveStartDateMap[m.userId] ??
-                  m.joinedAt;
-
-              if (!meetingDateOnly.isBefore(effectiveStart)) {
-                totalExpectedAttendances++;
-
-                final attendance = report.attendances.cast<AttendanceModel?>().firstWhere(
-                      (a) => a != null && (a.cellMemberId == m.id || a.cellMemberId == m.userId),
+            final attendance = report.attendances.cast<AttendanceEntity?>().firstWhere(
+                  (att) =>
+                      att?.cellMemberId == member.id ||
+                      (member.userId != null &&
+                          member.userId!.isNotEmpty &&
+                          att?.cellMemberId == member.userId),
                   orElse: () => null,
                 );
 
-                if (attendance != null && attendance.isPresent) {
-                  totalActualPresences++;
-                }
-              }
+            if (attendance != null && attendance.isPresent) {
+              totalActualPresences++;
             }
           }
-        });
+        }
 
         double attendanceRate = totalExpectedAttendances > 0
             ? (totalActualPresences / totalExpectedAttendances) * 100
@@ -448,17 +475,17 @@ class _CellAttendanceChartWidgetState
                   segments: [
                     const ButtonSegment(
                       value: ChartViewGrouping.cycles,
-                      label: Text('Semanas', style: TextStyle(fontSize: 11)),
-                    ),
-                    const ButtonSegment(
-                      value: ChartViewGrouping.dates,
-                      label: Text('Datas', style: TextStyle(fontSize: 11)),
+                      label: Text('Ciclos', style: TextStyle(fontSize: 11)),
                     ),
                     if (widget.selectedMonthKey == 'all')
                       const ButtonSegment(
                         value: ChartViewGrouping.months,
                         label: Text('Meses', style: TextStyle(fontSize: 11)),
                       ),
+                    const ButtonSegment(
+                      value: ChartViewGrouping.dates,
+                      label: Text('Datas', style: TextStyle(fontSize: 11)),
+                    ),
                   ],
                   selected: {_groupingMode},
                   onSelectionChanged: (Set<ChartViewGrouping> newSelection) {
@@ -466,205 +493,178 @@ class _CellAttendanceChartWidgetState
                       _groupingMode = newSelection.first;
                     });
                   },
-                  style: ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: WidgetStateProperty.all(
-                        const EdgeInsets.symmetric(horizontal: 6)),
-                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _buildLegendItem(
-                  isMonthMode ? 'Frequência Membros (%)' : 'Membros (Presenças)',
-                  Colors.blue,
-                ),
-                const SizedBox(width: 12),
-                _buildLegendItem('Visitantes', Colors.orange),
-                const SizedBox(width: 12),
-                _buildLegendItem('Conversões', Colors.green),
-              ],
-            ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             SizedBox(
-              height: 230,
+              height: 220,
               child: LineChart(
                 LineChartData(
-                  minY: 0,
-                  lineTouchData: LineTouchData(
-                    touchTooltipData: LineTouchTooltipData(
-                      getTooltipItems: (touchedSpots) {
-                        return List.generate(touchedSpots.length, (i) {
-                          final spot = touchedSpots[i];
-
-                          String headerTitle = '';
-                          if (_groupingMode == ChartViewGrouping.cycles) {
-                            if (spot.spotIndex >= 0 &&
-                                spot.spotIndex < recentCycles.length) {
-                              final cycle = recentCycles[spot.spotIndex];
-                              headerTitle = cycle.cleanLabel;
-                            }
-                          } else if (_groupingMode == ChartViewGrouping.months) {
-                            if (spot.spotIndex >= 0 &&
-                                spot.spotIndex < recentMonths.length) {
-                              final m = recentMonths[spot.spotIndex];
-                              headerTitle = m.cleanLabel;
-                            }
-                          } else {
-                            if (spot.spotIndex >= 0 &&
-                                spot.spotIndex < dateLabels.length) {
-                              headerTitle =
-                              'Data: ${dateLabels[spot.spotIndex]}';
-                            }
-                          }
-
-                          String metricText = '';
-                          if (spot.barIndex == 0) {
-                            metricText = isMonthMode
-                                ? 'Frequência Membros: ${spot.y.toStringAsFixed(0)}%'
-                                : 'Membros: ${spot.y.toInt()}';
-                          }
-                          if (spot.barIndex == 1) {
-                            metricText = 'Visitantes: ${spot.y.toInt()}';
-                          }
-                          if (spot.barIndex == 2) {
-                            metricText = 'Conversões: ${spot.y.toInt()}';
-                          }
-
-                          if (i == 0) {
-                            return LineTooltipItem(
-                              '$headerTitle\n$metricText',
-                              const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
-                              ),
-                            );
-                          } else {
-                            return LineTooltipItem(
-                              metricText,
-                              const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
-                              ),
-                            );
-                          }
-                        });
-                      },
-                    ),
-                  ),
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
                     getDrawingHorizontalLine: (value) => FlLine(
-                      color: Colors.grey.shade300,
+                      color: Colors.grey.shade200,
                       strokeWidth: 1,
                     ),
                   ),
                   titlesData: FlTitlesData(
                     rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                     topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 32,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            isMonthMode
+                                ? '${value.toInt()}%'
+                                : value.toInt().toString(),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        reservedSize: 30,
+                        reservedSize: 24,
                         getTitlesWidget: (value, meta) {
-                          if (value % 1 != 0) {
-                            return const SizedBox.shrink();
-                          }
-
                           final index = value.toInt();
-
                           if (_groupingMode == ChartViewGrouping.cycles) {
-                            if (index < 0 || index >= recentCycles.length) {
-                              return const SizedBox.shrink();
+                            if (index >= 0 && index < recentCycles.length) {
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 6.0),
+                                child: Text(
+                                  recentCycles[index].shortLabel,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              );
                             }
-
-                            final currentLabel =
-                            recentCycles[index].shortLabel.trim();
-
-                            if (index > 0) {
-                              final previousLabel =
-                              recentCycles[index - 1].shortLabel.trim();
-                              if (currentLabel == previousLabel) {
-                                return const SizedBox.shrink();
-                              }
-                            }
-
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text(
-                                recentCycles[index].shortLabel,
-                                style: const TextStyle(
-                                    fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            );
                           } else if (_groupingMode == ChartViewGrouping.months) {
-                            if (index < 0 || index >= recentMonths.length) {
-                              return const SizedBox.shrink();
+                            if (index >= 0 && index < recentMonths.length) {
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 6.0),
+                                child: Text(
+                                  recentMonths[index].shortLabel,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              );
                             }
-
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text(
-                                recentMonths[index].shortLabel,
-                                style: const TextStyle(
-                                    fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            );
                           } else {
-                            if (index < 0 || index >= dateLabels.length) {
-                              return const SizedBox.shrink();
+                            if (index >= 0 && index < dateLabels.length) {
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 6.0),
+                                child: Text(
+                                  dateLabels[index],
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              );
                             }
-
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 8.0),
-                              child: Text(
-                                dateLabels[index],
-                                style: const TextStyle(
-                                    fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            );
                           }
+                          return const Text('');
                         },
                       ),
                     ),
                   ),
                   borderData: FlBorderData(show: false),
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((spot) {
+                          String label = '';
+                          String valStr = isMonthMode
+                              ? '${spot.y.toStringAsFixed(1)}%'
+                              : spot.y.toInt().toString();
+
+                          if (spot.barIndex == 0) {
+                            label = isMonthMode
+                                ? 'Frequência Membros'
+                                : 'Membros Presentes';
+                          } else if (spot.barIndex == 1) {
+                            label = 'Visitantes';
+                          } else if (spot.barIndex == 2) {
+                            label = 'Conversões';
+                          }
+                          return LineTooltipItem(
+                            '$label: $valStr',
+                            TextStyle(
+                              color: spot.bar.color,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          );
+                        }).toList();
+                      },
+                    ),
+                  ),
                   lineBarsData: [
+                    // Linha 1: Membros (Presença)
                     LineChartBarData(
                       spots: memberSpots,
                       isCurved: true,
-                      curveSmoothness: 0.15,
-                      color: Colors.blue,
+                      color: Colors.purple,
                       barWidth: 3,
+                      isStrokeCapRound: true,
                       dotData: const FlDotData(show: true),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: Colors.purple.withValues(alpha: 0.1),
+                      ),
                     ),
+                    // Linha 2: Visitantes
                     LineChartBarData(
                       spots: visitorSpots,
                       isCurved: true,
-                      curveSmoothness: 0.15,
                       color: Colors.orange,
-                      barWidth: 3,
+                      barWidth: 2,
+                      isStrokeCapRound: true,
                       dotData: const FlDotData(show: true),
                     ),
+                    // Linha 3: Conversões
                     LineChartBarData(
                       spots: conversionSpots,
                       isCurved: true,
-                      curveSmoothness: 0.15,
                       color: Colors.green,
-                      barWidth: 3,
+                      barWidth: 2,
+                      isStrokeCapRound: true,
                       dotData: const FlDotData(show: true),
                     ),
                   ],
                 ),
               ),
+            ),
+            const SizedBox(height: 16),
+            // Legenda
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildLegendItem(
+                  isMonthMode ? 'Frequência Membros (%)' : 'Membros Presentes',
+                  Colors.purple,
+                ),
+                const SizedBox(width: 16),
+                _buildLegendItem('Visitantes', Colors.orange),
+                const SizedBox(width: 16),
+                _buildLegendItem('Conversões', Colors.green),
+              ],
             ),
           ],
         ),
@@ -676,14 +676,21 @@ class _CellAttendanceChartWidgetState
     return Row(
       children: [
         Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
         ),
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade700,
+          ),
         ),
       ],
     );
