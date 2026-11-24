@@ -434,6 +434,18 @@ class _CellAttendanceChartWidgetState
 
     final isMonthMode = _groupingMode == ChartViewGrouping.months;
 
+    int itemCount = 0;
+    if (_groupingMode == ChartViewGrouping.cycles) {
+      itemCount = recentCycles.length;
+    } else if (_groupingMode == ChartViewGrouping.months) {
+      itemCount = recentMonths.length;
+    } else {
+      itemCount = dateLabels.length;
+    }
+
+    final double minX = 0;
+    final double maxX = itemCount > 1 ? (itemCount - 1).toDouble() : 1.0;
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -501,6 +513,8 @@ class _CellAttendanceChartWidgetState
               height: 220,
               child: LineChart(
                 LineChartData(
+                  minX: minX,
+                  maxX: maxX,
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
@@ -536,8 +550,10 @@ class _CellAttendanceChartWidgetState
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
+                        interval: 1,
                         reservedSize: 24,
                         getTitlesWidget: (value, meta) {
+                          if (value % 1 != 0) return const SizedBox.shrink();
                           final index = value.toInt();
                           if (_groupingMode == ChartViewGrouping.cycles) {
                             if (index >= 0 && index < recentCycles.length) {
@@ -579,7 +595,7 @@ class _CellAttendanceChartWidgetState
                               );
                             }
                           }
-                          return const Text('');
+                          return const SizedBox.shrink();
                         },
                       ),
                     ),
