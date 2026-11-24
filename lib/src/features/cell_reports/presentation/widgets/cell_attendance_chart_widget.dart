@@ -40,6 +40,7 @@ class _ConsolidatedMonthReport {
   final String shortLabel;
   final String cleanLabel;
   final double memberAttendanceRate; // Porcentagem (0% - 100%)
+  final double totalUnexcused; // Quantidade de faltas não justificadas
   final double totalVisitors;
   final double totalConversions;
 
@@ -49,6 +50,7 @@ class _ConsolidatedMonthReport {
     required this.shortLabel,
     required this.cleanLabel,
     required this.memberAttendanceRate,
+    required this.totalUnexcused,
     required this.totalVisitors,
     required this.totalConversions,
   });
@@ -211,6 +213,7 @@ class _CellAttendanceChartWidgetState
     List<FlSpot> memberSpots = [];
     List<FlSpot> visitorSpots = [];
     List<FlSpot> conversionSpots = [];
+    List<FlSpot> unexcusedSpots = [];
 
     List<_ConsolidatedCycleReport> recentCycles = [];
     List<_ConsolidatedMonthReport> recentMonths = [];
@@ -286,7 +289,7 @@ class _CellAttendanceChartWidgetState
       }
     } else if (_groupingMode == ChartViewGrouping.months) {
       // =========================================================
-      // EXIBIÇÃO POR MESES: FREQUÊNCIA PERCENTUAL (%) PARA MEMBROS
+      // EXIBIÇÃO POR MESES: FREQUÊNCIA PERCENTUAL (%) E FALTAS NÃO JUSTIFICADAS (QTD)
       // =========================================================
       Map<String, List<CellReportEntity>> reportsByMonthKey = {};
       for (var r in activeReports) {
@@ -327,6 +330,7 @@ class _CellAttendanceChartWidgetState
 
         int totalExpectedAttendances = 0;
         int totalActualPresences = 0;
+        int totalUnexcusedAbsences = 0;
         double visitorsSum = 0;
         double conversionsSum = 0;
 
@@ -360,8 +364,15 @@ class _CellAttendanceChartWidgetState
                   orElse: () => null,
                 );
 
-            if (attendance != null && attendance.isPresent) {
-              totalActualPresences++;
+            if (attendance != null) {
+              if (attendance.isPresent) {
+                totalActualPresences++;
+              } else if (!attendance.isJustified) {
+                totalUnexcusedAbsences++;
+              }
+            } else {
+              // Membro ativo sem registro = falta não justificada
+              totalUnexcusedAbsences++;
             }
           }
         }
@@ -376,6 +387,7 @@ class _CellAttendanceChartWidgetState
           shortLabel: shortLabel,
           cleanLabel: cleanLabel,
           memberAttendanceRate: attendanceRate,
+          totalUnexcused: totalUnexcusedAbsences.toDouble(),
           totalVisitors: visitorsSum,
           totalConversions: conversionsSum,
         ));
@@ -392,6 +404,7 @@ class _CellAttendanceChartWidgetState
         memberSpots.add(FlSpot(i.toDouble(), c.memberAttendanceRate));
         visitorSpots.add(FlSpot(i.toDouble(), c.totalVisitors));
         conversionSpots.add(FlSpot(i.toDouble(), c.totalConversions));
+        unexcusedSpots.add(FlSpot(i.toDouble(), c.totalUnexcused));
       }
     } else {
       // Modo Datas Específicas
@@ -475,7 +488,7 @@ class _CellAttendanceChartWidgetState
                         _groupingMode == ChartViewGrouping.cycles
                             ? 'Consolidado geral por semanas pastorais.'
                             : (_groupingMode == ChartViewGrouping.months
-                            ? 'Frequência de membros (%) e totais de visitantes/conversões.'
+                            ? 'Frequência (%), faltas e totais de visitantes/conversões.'
                             : 'Consolidado geral por dias de reunião.'),
                         style: const TextStyle(
                             fontSize: 12, color: Colors.grey),
@@ -606,19 +619,26 @@ class _CellAttendanceChartWidgetState
                       getTooltipItems: (touchedSpots) {
                         return touchedSpots.map((spot) {
                           String label = '';
-                          String valStr = isMonthMode
-                              ? '${spot.y.toStringAsFixed(1)}%'
-                              : spot.y.toInt().toString();
+                          String valStr = '';
 
                           if (spot.barIndex == 0) {
                             label = isMonthMode
                                 ? 'Frequência Membros'
                                 : 'Membros Presentes';
+                            valStr = isMonthMode
+                                ? '${spot.y.toStringAsFixed(1)}%'
+                                : spot.y.toInt().toString();
                           } else if (spot.barIndex == 1) {
                             label = 'Visitantes';
+                            valStr = spot.y.toInt().toString();
                           } else if (spot.barIndex == 2) {
                             label = 'Conversões';
+                            valStr = spot.y.toInt().toString();
+                          } else if (spot.barIndex == 3) {
+                            label = 'Faltas Não Justificadas';
+                            valStr = spot.y.toInt().toString();
                           }
+
                           return LineTooltipItem(
                             '$label: $valStr',
                             TextStyle(
@@ -663,23 +683,37 @@ class _CellAttendanceChartWidgetState
                       isStrokeCapRound: true,
                       dotData: const FlDotData(show: true),
                     ),
+                    if (isMonthMode) ...[
+                      // Linha 4: Faltas Não Justificadas
+                      LineChartBarData(
+                        spots: unexcusedSpots,
+                        isCurved: true,
+                        color: Colors.red,
+                        barWidth: 2,
+                        isStrokeCapRound: true,
+                        dotData: const FlDotData(show: true),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
             // Legenda
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 6,
               children: [
                 _buildLegendItem(
                   isMonthMode ? 'Frequência Membros (%)' : 'Membros Presentes',
                   Colors.purple,
                 ),
-                const SizedBox(width: 16),
                 _buildLegendItem('Visitantes', Colors.orange),
-                const SizedBox(width: 16),
                 _buildLegendItem('Conversões', Colors.green),
+                if (isMonthMode) ...[
+                  _buildLegendItem('Faltas Não Justificadas', Colors.red),
+                ],
               ],
             ),
           ],
@@ -690,6 +724,7 @@ class _CellAttendanceChartWidgetState
 
   Widget _buildLegendItem(String label, Color color) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 10,
