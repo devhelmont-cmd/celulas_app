@@ -1,3 +1,5 @@
+// lib/src/features/cells/data/models/cell_model.dart
+
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -17,6 +19,12 @@ class CellModel extends CellEntity {
     required super.createdAt,
     super.futureHostDefined,
     super.customTargetMembers,
+    super.customTargetMonths,
+    super.customMinAttendancePercentage,
+    super.customMinVisitorAverage,
+    super.customMinReportRegularityPercentage,
+    super.customRequiredLeadershipRole,
+    super.customRequireHost,
   });
 
   factory CellModel.fromMap(Map<String, dynamic> map, String id) {
@@ -46,6 +54,12 @@ class CellModel extends CellEntity {
       createdAt: parsedDate,
       futureHostDefined: map['futureHostDefined'] == true || map['futureHostDefined'] == 'true',
       customTargetMembers: (map['customTargetMembers'] as num?)?.toInt(),
+      customTargetMonths: (map['customTargetMonths'] as num?)?.toInt(),
+      customMinAttendancePercentage: (map['customMinAttendancePercentage'] as num?)?.toDouble(),
+      customMinVisitorAverage: (map['customMinVisitorAverage'] as num?)?.toDouble(),
+      customMinReportRegularityPercentage: (map['customMinReportRegularityPercentage'] as num?)?.toDouble(),
+      customRequiredLeadershipRole: map['customRequiredLeadershipRole']?.toString(),
+      customRequireHost: map['customRequireHost'] as bool?,
     );
   }
 
@@ -64,6 +78,12 @@ class CellModel extends CellEntity {
       'createdAt': Timestamp.fromDate(createdAt),
       'futureHostDefined': futureHostDefined,
       'customTargetMembers': customTargetMembers,
+      'customTargetMonths': customTargetMonths,
+      'customMinAttendancePercentage': customMinAttendancePercentage,
+      'customMinVisitorAverage': customMinVisitorAverage,
+      'customMinReportRegularityPercentage': customMinReportRegularityPercentage,
+      'customRequiredLeadershipRole': customRequiredLeadershipRole,
+      'customRequireHost': customRequireHost,
     };
   }
 
@@ -83,6 +103,12 @@ class CellModel extends CellEntity {
       createdAt: entity.createdAt,
       futureHostDefined: entity.futureHostDefined,
       customTargetMembers: entity.customTargetMembers,
+      customTargetMonths: entity.customTargetMonths,
+      customMinAttendancePercentage: entity.customMinAttendancePercentage,
+      customMinVisitorAverage: entity.customMinVisitorAverage,
+      customMinReportRegularityPercentage: entity.customMinReportRegularityPercentage,
+      customRequiredLeadershipRole: entity.customRequiredLeadershipRole,
+      customRequireHost: entity.customRequireHost,
     );
   }
 }

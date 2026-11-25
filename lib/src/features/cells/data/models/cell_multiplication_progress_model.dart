@@ -1,6 +1,7 @@
 // lib/src/features/cells/data/models/cell_multiplication_progress_model.dart
 
 import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
 import 'multiplication_settings_model.dart';
@@ -9,9 +10,16 @@ class CellMultiplicationProgressModel {
   final CellModel cell;
   final MultiplicationSettingsModel settings;
 
-  // Contadores Atuais
+  // Contadores Atuais e Metas Efetivas (com overrides)
   final int currentMembersCount;
   final int effectiveTargetMembers;
+  final int effectiveTargetMonths;
+  final double effectiveMinAttendance;
+  final double effectiveMinVisitorAvg;
+  final double effectiveMinReportRegularity;
+  final String effectiveRequiredRole;
+  final bool effectiveRequireHost;
+
   final bool hasLeaderInTraining;
   final String? leaderInTrainingName;
   final bool hasCoLeader;
@@ -42,6 +50,12 @@ class CellMultiplicationProgressModel {
     required this.settings,
     required this.currentMembersCount,
     required this.effectiveTargetMembers,
+    required this.effectiveTargetMonths,
+    required this.effectiveMinAttendance,
+    required this.effectiveMinVisitorAvg,
+    required this.effectiveMinReportRegularity,
+    required this.effectiveRequiredRole,
+    required this.effectiveRequireHost,
     required this.hasLeaderInTraining,
     this.leaderInTrainingName,
     required this.hasCoLeader,
@@ -70,6 +84,7 @@ class CellMultiplicationProgressModel {
     required CellModel cell,
     required List<CellMemberEntity> members,
     required List<CellReportEntity> reports,
+    required List<CellMeetingModel> meetings,
     required MultiplicationSettingsModel settings,
   }) {
     final now = DateTime.now();
@@ -77,9 +92,17 @@ class CellMultiplicationProgressModel {
     final elapsedDays = now.difference(cell.createdAt).inDays;
     final elapsedMonths = (elapsedDays / 30.44).floor();
 
+    // Metas Efetivas (Overrides individuais da célula ou fallback para configurações globais)
+    final effectiveTargetMembers = cell.customTargetMembers ?? settings.targetMembers;
+    final effectiveTargetMonths = cell.customTargetMonths ?? settings.targetMonths;
+    final effectiveMinAttendance = cell.customMinAttendancePercentage ?? settings.minAttendancePercentage;
+    final effectiveMinVisitorAvg = cell.customMinVisitorAverage ?? settings.minVisitorAverage;
+    final effectiveMinReportRegularity = cell.customMinReportRegularityPercentage ?? settings.minReportRegularityPercentage;
+    final effectiveRequiredRole = cell.customRequiredLeadershipRole ?? settings.requiredLeadershipRole;
+    final effectiveRequireHost = cell.customRequireHost ?? settings.requireHost;
+
     // Membros atuais
     final currentMembersCount = members.length;
-    final effectiveTargetMembers = cell.customTargetMembers ?? settings.targetMembers;
 
     // Busca papéis entre os membros
     CellMemberEntity? ltMember;
@@ -104,11 +127,11 @@ class CellMultiplicationProgressModel {
     final hasCoLeader = coLeaderMember != null;
     final futureHostDefined = cell.futureHostDefined;
 
-    // Validação de liderança conforme configuração
+    // Validação de liderança conforme configuração efetiva
     bool isLeadershipTargetMet = false;
-    if (settings.requiredLeadershipRole == 'lider_treinamento') {
+    if (effectiveRequiredRole == 'lider_treinamento') {
       isLeadershipTargetMet = hasLeaderInTraining;
-    } else if (settings.requiredLeadershipRole == 'colider') {
+    } else if (effectiveRequiredRole == 'colider') {
       isLeadershipTargetMet = hasCoLeader;
     } else {
       // 'lider_treinamento_ou_colider'
@@ -117,7 +140,7 @@ class CellMultiplicationProgressModel {
 
     // Processamento dos relatórios
     final occurredReports = reports.where((r) => r.status == ReportStatus.occurred).toList();
-    final totalMeetingsHeld = reports.length; // Total de relatórios enviados (incluindo cancelados/eventos preenchidos)
+    final totalMeetingsHeld = reports.length;
 
     // Média de visitantes
     double visitorAverage = 0.0;
@@ -144,20 +167,36 @@ class CellMultiplicationProgressModel {
       attendancePercentage = (presentCount / totalAttendancesCount) * 100.0;
     }
 
-    // Regularidade nos relatórios: Se a célula possui relatórios cadastrados, considera 100% (pois todos os relatórios foram entregues)
-    double reportRegularityPercentage = reports.isNotEmpty ? 100.0 : 0.0;
+    // Regularidade rigorosa de relatórios baseada apenas nas reuniões que já aconteceram (passadas ou hoje):
+    double reportRegularityPercentage = 100.0;
+    if (meetings.isNotEmpty) {
+      final today = DateTime(now.year, now.month, now.day);
+      final pastMeetings = meetings.where((m) {
+        final meetingDay = DateTime(m.meetingDate.year, m.meetingDate.month, m.meetingDate.day);
+        return meetingDay.isBefore(today) || meetingDay.isAtSameMomentAs(today);
+      }).toList();
+
+      final expectedReports = pastMeetings.length;
+      if (expectedReports > 0) {
+        reportRegularityPercentage = ((reports.length / expectedReports) * 100.0).clamp(0.0, 100.0);
+      } else {
+        reportRegularityPercentage = 100.0;
+      }
+    } else {
+      reportRegularityPercentage = reports.isNotEmpty ? 100.0 : 0.0;
+    }
 
     // Verificação de Metas
     final isMembersTargetMet = currentMembersCount >= effectiveTargetMembers;
-    final isHostTargetMet = !settings.requireHost || futureHostDefined;
-    final isVisitorTargetMet = visitorAverage >= settings.minVisitorAverage;
-    final isAttendanceTargetMet = attendancePercentage >= settings.minAttendancePercentage;
-    final isReportTargetMet = reportRegularityPercentage >= settings.minReportRegularityPercentage;
-    final isTimeTargetMet = elapsedMonths >= settings.targetMonths;
+    final isHostTargetMet = !effectiveRequireHost || futureHostDefined;
+    final isVisitorTargetMet = visitorAverage >= effectiveMinVisitorAvg;
+    final isAttendanceTargetMet = attendancePercentage >= effectiveMinAttendance;
+    final isReportTargetMet = reportRegularityPercentage >= effectiveMinReportRegularity;
+    final isTimeTargetMet = elapsedMonths >= effectiveTargetMonths;
 
     // Cálculo do Percentual Ponderado / Pontuação de Critérios
     int totalCriteria = 6; // Membros, Liderança, Visitantes, Assiduidade, Relatórios, Tempo
-    if (settings.requireHost) totalCriteria += 1;
+    if (effectiveRequireHost) totalCriteria += 1;
 
     int metCriteriaCount = 0;
     if (isMembersTargetMet) metCriteriaCount++;
@@ -166,27 +205,27 @@ class CellMultiplicationProgressModel {
     if (isAttendanceTargetMet) metCriteriaCount++;
     if (isReportTargetMet) metCriteriaCount++;
     if (isTimeTargetMet) metCriteriaCount++;
-    if (settings.requireHost && isHostTargetMet) metCriteriaCount++;
+    if (effectiveRequireHost && isHostTargetMet) metCriteriaCount++;
 
     // Progresso contínuo em porcentagem (0% a 100%)
     double membersProg = (currentMembersCount / effectiveTargetMembers).clamp(0.0, 1.0);
     double leadershipProg = isLeadershipTargetMet ? 1.0 : 0.0;
-    double hostProg = (!settings.requireHost || futureHostDefined) ? 1.0 : 0.0;
-    double visitorProg = settings.minVisitorAverage > 0
-        ? (visitorAverage / settings.minVisitorAverage).clamp(0.0, 1.0)
+    double hostProg = (!effectiveRequireHost || futureHostDefined) ? 1.0 : 0.0;
+    double visitorProg = effectiveMinVisitorAvg > 0
+        ? (visitorAverage / effectiveMinVisitorAvg).clamp(0.0, 1.0)
         : 1.0;
-    double attendanceProg = settings.minAttendancePercentage > 0
-        ? (attendancePercentage / settings.minAttendancePercentage).clamp(0.0, 1.0)
+    double attendanceProg = effectiveMinAttendance > 0
+        ? (attendancePercentage / effectiveMinAttendance).clamp(0.0, 1.0)
         : 1.0;
-    double reportProg = settings.minReportRegularityPercentage > 0
-        ? (reportRegularityPercentage / settings.minReportRegularityPercentage).clamp(0.0, 1.0)
+    double reportProg = effectiveMinReportRegularity > 0
+        ? (reportRegularityPercentage / effectiveMinReportRegularity).clamp(0.0, 1.0)
         : 1.0;
-    double timeProg = settings.targetMonths > 0
-        ? (elapsedMonths / settings.targetMonths).clamp(0.0, 1.0)
+    double timeProg = effectiveTargetMonths > 0
+        ? (elapsedMonths / effectiveTargetMonths).clamp(0.0, 1.0)
         : 1.0;
 
     double sumProg = membersProg + leadershipProg + visitorProg + attendanceProg + reportProg + timeProg;
-    if (settings.requireHost) sumProg += hostProg;
+    if (effectiveRequireHost) sumProg += hostProg;
 
     double overallPercentage = (sumProg / totalCriteria) * 100.0;
 
@@ -195,6 +234,12 @@ class CellMultiplicationProgressModel {
       settings: settings,
       currentMembersCount: currentMembersCount,
       effectiveTargetMembers: effectiveTargetMembers,
+      effectiveTargetMonths: effectiveTargetMonths,
+      effectiveMinAttendance: effectiveMinAttendance,
+      effectiveMinVisitorAvg: effectiveMinVisitorAvg,
+      effectiveMinReportRegularity: effectiveMinReportRegularity,
+      effectiveRequiredRole: effectiveRequiredRole,
+      effectiveRequireHost: effectiveRequireHost,
       hasLeaderInTraining: hasLeaderInTraining,
       leaderInTrainingName: ltMember?.name,
       hasCoLeader: hasCoLeader,

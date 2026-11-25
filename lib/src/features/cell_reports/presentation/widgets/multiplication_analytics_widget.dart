@@ -3,6 +3,8 @@
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_multiplication_progress_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/multiplication_settings_model.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
@@ -52,10 +54,16 @@ class _MultiplicationAnalyticsWidgetState
           reports = await reportsRepo.getReportsByCell(cell.id);
         } catch (_) {}
 
+        List<CellMeetingModel> meetings = [];
+        try {
+          meetings = await dataSource.getAllMeetingsForCell(cell.id);
+        } catch (_) {}
+
         final progress = CellMultiplicationProgressModel.calculate(
           cell: cell,
           members: members,
           reports: reports.map((r) => r as dynamic).toList().cast(),
+          meetings: meetings,
           settings: settings,
         );
 
@@ -94,8 +102,122 @@ class _MultiplicationAnalyticsWidgetState
       _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Parâmetros de multiplicação atualizados com sucesso!')),
+          const SnackBar(content: Text('Parâmetros globais atualizados com sucesso!')),
         );
+      }
+    }
+  }
+
+  Future<void> _openIndividualCellGoalsDialog(CellMultiplicationProgressModel progress) async {
+    final targetMembersController = TextEditingController(
+      text: (progress.cell.customTargetMembers ?? progress.settings.targetMembers).toString(),
+    );
+    final targetMonthsController = TextEditingController(
+      text: (progress.cell.customTargetMonths ?? progress.settings.targetMonths).toString(),
+    );
+    final minAttendanceController = TextEditingController(
+      text: (progress.cell.customMinAttendancePercentage ?? progress.settings.minAttendancePercentage).toString(),
+    );
+    final minVisitorController = TextEditingController(
+      text: (progress.cell.customMinVisitorAverage ?? progress.settings.minVisitorAverage).toString(),
+    );
+    bool futureHostDefined = progress.cell.futureHostDefined;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Metas Individuais: ${progress.cell.name}'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: targetMembersController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Meta de Membros', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: targetMonthsController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Prazo Alvo (Meses)', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: minAttendanceController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Assiduidade Mínima (%)', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: minVisitorController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Média Mínima de Visitantes', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      title: const Text('Futuro Anfitrião / Local Definido'),
+                      value: futureHostDefined,
+                      onChanged: (val) => setDialogState(() => futureHostDefined = val),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
+                ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Salvar Metas')),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true) {
+      try {
+        final customMembers = int.tryParse(targetMembersController.text);
+        final customMonths = int.tryParse(targetMonthsController.text);
+        final customAttendance = double.tryParse(minAttendanceController.text);
+        final customVisitor = double.tryParse(minVisitorController.text);
+
+        final updatedCell = CellModel(
+          id: progress.cell.id,
+          name: progress.cell.name,
+          leaderId: progress.cell.leaderId,
+          coLeaderId: progress.cell.coLeaderId,
+          hostId: progress.cell.hostId,
+          address: progress.cell.address,
+          neighborhood: progress.cell.neighborhood,
+          meetingDay: progress.cell.meetingDay,
+          meetingTime: progress.cell.meetingTime,
+          category: progress.cell.category,
+          isActive: progress.cell.isActive,
+          createdAt: progress.cell.createdAt,
+          futureHostDefined: futureHostDefined,
+          customTargetMembers: customMembers,
+          customTargetMonths: customMonths,
+          customMinAttendancePercentage: customAttendance,
+          customMinVisitorAverage: customVisitor,
+        );
+
+        final dataSource = getIt<ICellRemoteDataSource>();
+        await dataSource.updateCell(updatedCell);
+        _loadData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Metas individuais atualizadas com sucesso!')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao atualizar metas: $e')),
+          );
+        }
       }
     }
   }
@@ -287,7 +409,7 @@ class _MultiplicationAnalyticsWidgetState
                 _buildCriterionRow(
                   title: 'Membros da Célula',
                   current: '${progress.currentMembersCount}',
-                  target: '${progress.settings.targetMembers}',
+                  target: '${progress.effectiveTargetMembers}',
                   isMet: progress.isMembersTargetMet,
                   icon: Icons.group,
                 ),
@@ -296,15 +418,15 @@ class _MultiplicationAnalyticsWidgetState
                   current: progress.hasLeaderInTraining
                       ? (progress.leaderInTrainingName ?? 'Definido')
                       : (progress.hasCoLeader ? (progress.coLeaderName ?? 'Co-líder') : 'Não definido'),
-                  target: progress.settings.requiredLeadershipRole == 'lider_treinamento'
+                  target: progress.effectiveRequiredRole == 'lider_treinamento'
                       ? 'Líder em Treinamento'
-                      : progress.settings.requiredLeadershipRole == 'colider'
+                      : progress.effectiveRequiredRole == 'colider'
                           ? 'Co-líder'
                           : 'LT ou Co-líder',
                   isMet: progress.isLeadershipTargetMet,
                   icon: Icons.person_outline,
                 ),
-                if (progress.settings.requireHost)
+                if (progress.effectiveRequireHost)
                   _buildCriterionRow(
                     title: 'Futuro Anfitrião / Local',
                     current: progress.futureHostDefined ? 'Definido' : 'Não definido',
@@ -315,30 +437,39 @@ class _MultiplicationAnalyticsWidgetState
                 _buildCriterionRow(
                   title: 'Média de Visitantes',
                   current: progress.visitorAverage.toStringAsFixed(1),
-                  target: '${progress.settings.minVisitorAverage}',
+                  target: '${progress.effectiveMinVisitorAvg}',
                   isMet: progress.isVisitorTargetMet,
                   icon: Icons.person_add_outlined,
                 ),
                 _buildCriterionRow(
                   title: 'Assiduidade Média',
                   current: '${progress.attendancePercentage.toStringAsFixed(1)}%',
-                  target: '${progress.settings.minAttendancePercentage}%',
+                  target: '${progress.effectiveMinAttendance}%',
                   isMet: progress.isAttendanceTargetMet,
                   icon: Icons.trending_up,
                 ),
                 _buildCriterionRow(
                   title: 'Relatórios Entregues',
                   current: '${progress.reportRegularityPercentage.toStringAsFixed(1)}%',
-                  target: '${progress.settings.minReportRegularityPercentage}%',
+                  target: '${progress.effectiveMinReportRegularity}%',
                   isMet: progress.isReportTargetMet,
                   icon: Icons.assignment_turned_in_outlined,
                 ),
                 _buildCriterionRow(
                   title: 'Tempo de Célula',
                   current: '${progress.elapsedMonths} meses',
-                  target: '${progress.settings.targetMonths} meses',
+                  target: '${progress.effectiveTargetMonths} meses',
                   isMet: progress.isTimeTargetMet,
                   icon: Icons.timer_outlined,
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.edit_note, size: 18),
+                    label: const Text('Editar Metas Individuais Desta Célula'),
+                    onPressed: () => _openIndividualCellGoalsDialog(progress),
+                  ),
                 ),
               ],
             ),

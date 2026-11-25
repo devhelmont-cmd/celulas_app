@@ -15,6 +15,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'package:celulas_app/src/features/cells/data/models/multiplication_settings_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_multiplication_progress_model.dart';
 import '../../../cells/domain/entities/cell_member_entity.dart';
 import 'member_analytics_widget.dart';
 
@@ -445,8 +447,8 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
   }
 }
 
-/// Widget contendo o botão de alternância (SegmentedButton) para o Líder
-/// entre ver o Desempenho da Célula e ver a Análise dos Membros da Célula.
+enum LeaderTab { performance, members, multiplication }
+
 class LeaderDashboardWithMembersView extends StatefulWidget {
   final UserEntity currentUser;
 
@@ -457,7 +459,7 @@ class LeaderDashboardWithMembersView extends StatefulWidget {
 }
 
 class _LeaderDashboardWithMembersViewState extends State<LeaderDashboardWithMembersView> {
-  bool _isViewingMembers = false;
+  LeaderTab _currentTab = LeaderTab.performance;
   List<CellMemberEntity> _cellMembers = [];
   bool _isLoadingMembers = true;
   String? _selectedMemberUserId;
@@ -530,33 +532,43 @@ class _LeaderDashboardWithMembersViewState extends State<LeaderDashboardWithMemb
       padding: const EdgeInsets.all(16),
       children: [
         Center(
-          child: SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment<bool>(
-                value: false,
-                icon: Icon(Icons.analytics_outlined, size: 16),
-                label: Text('Desempenho da Célula'),
-              ),
-              ButtonSegment<bool>(
-                value: true,
-                icon: Icon(Icons.people_outline, size: 16),
-                label: Text('Membros da Célula'),
-              ),
-            ],
-            selected: {_isViewingMembers},
-            onSelectionChanged: (Set<bool> newSelection) {
-              setState(() {
-                _isViewingMembers = newSelection.first;
-              });
-            },
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SegmentedButton<LeaderTab>(
+              segments: const [
+                ButtonSegment<LeaderTab>(
+                  value: LeaderTab.performance,
+                  icon: Icon(Icons.analytics_outlined, size: 16),
+                  label: Text('Desempenho da Célula'),
+                ),
+                ButtonSegment<LeaderTab>(
+                  value: LeaderTab.members,
+                  icon: Icon(Icons.people_outline, size: 16),
+                  label: Text('Membros da Célula'),
+                ),
+                ButtonSegment<LeaderTab>(
+                  value: LeaderTab.multiplication,
+                  icon: Icon(Icons.diversity_3_outlined, size: 16),
+                  label: Text('Multiplicação'),
+                ),
+              ],
+              selected: {_currentTab},
+              onSelectionChanged: (Set<LeaderTab> newSelection) {
+                setState(() {
+                  _currentTab = newSelection.first;
+                });
+              },
+            ),
           ),
         ),
         const SizedBox(height: 20),
 
-        if (!_isViewingMembers)
+        if (_currentTab == LeaderTab.performance)
           LeaderAnalyticsWidget(currentUser: widget.currentUser, isEmbedded: true)
+        else if (_currentTab == LeaderTab.members)
+          _buildCellMembersAnalyticsSection()
         else
-          _buildCellMembersAnalyticsSection(),
+          LeaderMultiplicationWidget(cell: _leaderCell!),
       ],
     );
   }
@@ -575,7 +587,6 @@ class _LeaderDashboardWithMembersViewState extends State<LeaderDashboardWithMemb
       _selectedMemberUserId = _cellMembers.first.userId ?? _cellMembers.first.id;
     }
 
-    // Busca segura para evitar erros de tipo no firstWhere/orElse
     CellMemberEntity? selectedMember;
     try {
       selectedMember = _cellMembers.firstWhere(
@@ -634,11 +645,220 @@ class _LeaderDashboardWithMembersViewState extends State<LeaderDashboardWithMemb
         MemberAnalyticsWidget(
           key: ValueKey(_selectedMemberUserId),
           currentUser: pseudoMemberUser,
-          viewerUser: widget.currentUser, // Passa o líder logado como viewer
+          viewerUser: widget.currentUser,
           isEmbedded: true,
-          enableTapToAnalyze: true, // Habilita o clique para abrir a MemberAnalysisPage
+          enableTapToAnalyze: true,
         ),
       ],
+    );
+  }
+}
+
+class LeaderMultiplicationWidget extends StatefulWidget {
+  final CellModel cell;
+
+  const LeaderMultiplicationWidget({super.key, required this.cell});
+
+  @override
+  State<LeaderMultiplicationWidget> createState() => _LeaderMultiplicationWidgetState();
+}
+
+class _LeaderMultiplicationWidgetState extends State<LeaderMultiplicationWidget> {
+  bool _isLoading = true;
+  MultiplicationSettingsModel _settings = const MultiplicationSettingsModel();
+  List<CellMemberEntity> _members = [];
+  List<CellReportEntity> _reports = [];
+  List<CellMeetingModel> _meetings = [];
+  late CellModel _currentCell;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentCell = widget.cell;
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final dataSource = getIt<ICellRemoteDataSource>();
+      final reportsRepo = getIt<ICellReportsRepository>();
+
+      final settings = await dataSource.getMultiplicationSettings();
+      final members = await dataSource.getCellMembers(_currentCell.id);
+      List<CellReportEntity> reports = [];
+      try {
+        reports = await reportsRepo.getReportsByCell(_currentCell.id);
+      } catch (_) {}
+
+      List<CellMeetingModel> meetings = [];
+      try {
+        meetings = await dataSource.getAllMeetingsForCell(_currentCell.id);
+      } catch (_) {}
+
+      if (mounted) {
+        setState(() {
+          _settings = settings;
+          _members = members;
+          _reports = reports;
+          _meetings = meetings;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _toggleFutureHost(bool value) async {
+    try {
+      final updatedCell = CellModel(
+        id: _currentCell.id,
+        name: _currentCell.name,
+        leaderId: _currentCell.leaderId,
+        coLeaderId: _currentCell.coLeaderId,
+        hostId: _currentCell.hostId,
+        address: _currentCell.address,
+        neighborhood: _currentCell.neighborhood,
+        meetingDay: _currentCell.meetingDay,
+        meetingTime: _currentCell.meetingTime,
+        category: _currentCell.category,
+        isActive: _currentCell.isActive,
+        createdAt: _currentCell.createdAt,
+        futureHostDefined: value,
+        customTargetMembers: _currentCell.customTargetMembers,
+        customTargetMonths: _currentCell.customTargetMonths,
+        customMinAttendancePercentage: _currentCell.customMinAttendancePercentage,
+        customMinVisitorAverage: _currentCell.customMinVisitorAverage,
+      );
+
+      final dataSource = getIt<ICellRemoteDataSource>();
+      await dataSource.updateCell(updatedCell);
+      setState(() {
+        _currentCell = updatedCell;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Status do futuro anfitrião atualizado com sucesso!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao atualizar: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    final progress = CellMultiplicationProgressModel.calculate(
+      cell: _currentCell,
+      members: _members,
+      reports: _reports,
+      meetings: _meetings,
+      settings: _settings,
+    );
+
+    final color = progress.isReadyForMultiplication
+        ? Colors.green
+        : progress.overallPercentage >= 70
+            ? Colors.orange
+            : Colors.red;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Progresso de Multiplicação da Célula',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    if (progress.isReadyForMultiplication)
+                      Chip(
+                        label: const Text('Apta para Multiplicar!'),
+                        backgroundColor: Colors.green.shade100,
+                        labelStyle: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Prontidão Geral: ${progress.overallPercentage.toStringAsFixed(1)}%'),
+                    Text('${progress.metCriteriaCount} / ${progress.totalCriteria} metas'),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: (progress.overallPercentage / 100.0).clamp(0.0, 1.0),
+                  backgroundColor: Colors.grey[200],
+                  color: color,
+                  minHeight: 8,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                const SizedBox(height: 16),
+                SwitchListTile(
+                  title: const Text('Futuro Anfitrião / Local Definido'),
+                  subtitle: const Text('Marque se já está definido onde ou com quem será a nova célula'),
+                  value: _currentCell.futureHostDefined,
+                  onChanged: _toggleFutureHost,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                const Divider(),
+                const SizedBox(height: 8),
+                _buildCriterionRow('Membros (${progress.currentMembersCount}/${progress.effectiveTargetMembers})', progress.isMembersTargetMet, Icons.group),
+                _buildCriterionRow('Liderança Preparada', progress.isLeadershipTargetMet, Icons.person_outline),
+                if (progress.settings.requireHost)
+                  _buildCriterionRow('Futuro Anfitrião / Local Definido', progress.isHostTargetMet, Icons.home_outlined),
+                _buildCriterionRow('Média de Visitantes (${progress.visitorAverage.toStringAsFixed(1)} / ${progress.settings.minVisitorAverage})', progress.isVisitorTargetMet, Icons.person_add_outlined),
+                _buildCriterionRow('Assiduidade (${progress.attendancePercentage.toStringAsFixed(1)}% / ${progress.settings.minAttendancePercentage}%)', progress.isAttendanceTargetMet, Icons.trending_up),
+                _buildCriterionRow('Relatórios Entregues (${progress.reportRegularityPercentage.toStringAsFixed(1)}%)', progress.isReportTargetMet, Icons.assignment_turned_in_outlined),
+                _buildCriterionRow('Tempo de Célula (${progress.elapsedMonths} / ${progress.settings.targetMonths} meses)', progress.isTimeTargetMet, Icons.timer_outlined),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCriterionRow(String title, bool isMet, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.grey[700]),
+          const SizedBox(width: 8),
+          Expanded(child: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+          Icon(
+            isMet ? Icons.check_circle : Icons.cancel_outlined,
+            size: 18,
+            color: isMet ? Colors.green : Colors.grey[400],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -891,7 +891,7 @@ class _FillReportPageState extends State<FillReportPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Frequência dos Membros (No Período da Reunião)',
+                            'Frequência dos Membros',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
