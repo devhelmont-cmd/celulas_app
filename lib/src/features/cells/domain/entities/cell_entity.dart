@@ -21,6 +21,7 @@ class CellEntity {
   final double? customMinReportRegularityPercentage;
   final String? customRequiredLeadershipRole;
   final bool? customRequireHost;
+  final DateTime? customMultiplicationStartDate;
 
   const CellEntity({
     required this.id,
@@ -43,5 +44,7 @@ class CellEntity {
     this.customMinReportRegularityPercentage,
     this.customRequiredLeadershipRole,
     this.customRequireHost,
+    this.customMultiplicationStartDate,
   });
 }
+

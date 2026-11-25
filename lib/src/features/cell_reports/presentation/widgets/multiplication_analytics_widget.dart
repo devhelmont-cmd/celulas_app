@@ -9,6 +9,7 @@ import 'package:celulas_app/src/features/cells/data/models/cell_multiplication_p
 import 'package:celulas_app/src/features/cells/data/models/multiplication_settings_model.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'multiplication_settings_dialog.dart';
 
 class MultiplicationAnalyticsWidget extends StatefulWidget {
@@ -122,12 +123,18 @@ class _MultiplicationAnalyticsWidgetState
       text: (progress.cell.customMinVisitorAverage ?? progress.settings.minVisitorAverage).toString(),
     );
     bool futureHostDefined = progress.cell.futureHostDefined;
+    DateTime? customStartDate = progress.cell.customMultiplicationStartDate;
 
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final effectiveDefaultStartDate = progress.settings.multiplicationStartDate ?? progress.cell.createdAt;
+            final defaultLabel = progress.settings.multiplicationStartDate != null
+                ? 'Herdando da Rede (${DateFormat('dd/MM/yyyy').format(progress.settings.multiplicationStartDate!)})'
+                : 'Herdando da Célula (${DateFormat('dd/MM/yyyy').format(progress.cell.createdAt)})';
+
             return AlertDialog(
               title: Text('Metas Individuais: ${progress.cell.name}'),
               content: SingleChildScrollView(
@@ -144,6 +151,45 @@ class _MultiplicationAnalyticsWidgetState
                       controller: targetMonthsController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: 'Prazo Alvo (Meses)', border: OutlineInputBorder()),
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () async {
+                        final initial = customStartDate ?? effectiveDefaultStartDate;
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: initial,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                          locale: const Locale('pt', 'BR'),
+                        );
+                        if (picked != null) {
+                          setDialogState(() => customStartDate = picked);
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Data de Início da Contagem',
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.calendar_today_outlined),
+                          suffixIcon: customStartDate != null
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 20),
+                                  onPressed: () => setDialogState(() => customStartDate = null),
+                                  tooltip: 'Limpar (Herdar data)',
+                                )
+                              : null,
+                        ),
+                        child: Text(
+                          customStartDate != null
+                              ? DateFormat('dd/MM/yyyy').format(customStartDate!)
+                              : defaultLabel,
+                          style: TextStyle(
+                            color: customStartDate != null ? Colors.black87 : Colors.grey[600],
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -184,24 +230,14 @@ class _MultiplicationAnalyticsWidgetState
         final customAttendance = double.tryParse(minAttendanceController.text);
         final customVisitor = double.tryParse(minVisitorController.text);
 
-        final updatedCell = CellModel(
-          id: progress.cell.id,
-          name: progress.cell.name,
-          leaderId: progress.cell.leaderId,
-          coLeaderId: progress.cell.coLeaderId,
-          hostId: progress.cell.hostId,
-          address: progress.cell.address,
-          neighborhood: progress.cell.neighborhood,
-          meetingDay: progress.cell.meetingDay,
-          meetingTime: progress.cell.meetingTime,
-          category: progress.cell.category,
-          isActive: progress.cell.isActive,
-          createdAt: progress.cell.createdAt,
+        final updatedCell = progress.cell.copyWith(
           futureHostDefined: futureHostDefined,
           customTargetMembers: customMembers,
           customTargetMonths: customMonths,
           customMinAttendancePercentage: customAttendance,
           customMinVisitorAverage: customVisitor,
+          customMultiplicationStartDate: customStartDate,
+          clearCustomMultiplicationStartDate: customStartDate == null,
         );
 
         final dataSource = getIt<ICellRemoteDataSource>();
@@ -457,8 +493,11 @@ class _MultiplicationAnalyticsWidgetState
                 ),
                 _buildCriterionRow(
                   title: 'Tempo de Célula',
-                  current: '${progress.elapsedMonths} meses',
+                  current: progress.isStartDateInFuture
+                      ? 'Inicia em ${DateFormat('dd/MM/yyyy').format(progress.effectiveStartDate)}'
+                      : '${progress.elapsedMonths} meses',
                   target: '${progress.effectiveTargetMonths} meses',
+                  subtitle: 'Início: ${DateFormat('dd/MM/yyyy').format(progress.effectiveStartDate)} • Meta: ${DateFormat('dd/MM/yyyy').format(progress.targetEndDate)}${progress.isCustomStartDateActive ? " (Individual)" : ""}',
                   isMet: progress.isTimeTargetMet,
                   icon: Icons.timer_outlined,
                 ),
@@ -483,32 +522,48 @@ class _MultiplicationAnalyticsWidgetState
     required String title,
     required String current,
     required String target,
+    String? subtitle,
     required bool isMet,
     required IconData icon,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: Colors.grey[700]),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+          Row(
+            children: [
+              Icon(icon, size: 18, color: Colors.grey[700]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              ),
+              Text(
+                '$current (Meta: $target)',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isMet ? Colors.green[700] : Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                isMet ? Icons.check_circle : Icons.cancel_outlined,
+                size: 18,
+                color: isMet ? Colors.green : Colors.grey[400],
+              ),
+            ],
           ),
-          Text(
-            '$current (Meta: $target)',
-            style: TextStyle(
-              fontSize: 12,
-              color: isMet ? Colors.green[700] : Colors.grey[700],
-              fontWeight: FontWeight.w500,
+          if (subtitle != null) ...[
+            const SizedBox(height: 2),
+            Padding(
+              padding: const EdgeInsets.only(left: 26.0),
+              child: Text(
+                subtitle,
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Icon(
-            isMet ? Icons.check_circle : Icons.cancel_outlined,
-            size: 18,
-            color: isMet ? Colors.green : Colors.grey[400],
-          ),
+          ],
         ],
       ),
     );

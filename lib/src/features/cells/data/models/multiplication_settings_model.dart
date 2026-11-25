@@ -1,5 +1,7 @@
 // lib/src/features/cells/data/models/multiplication_settings_model.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class MultiplicationSettingsModel {
   final int targetMonths;
   final int targetMembers;
@@ -8,6 +10,7 @@ class MultiplicationSettingsModel {
   final double minReportRegularityPercentage;
   final String requiredLeadershipRole; // 'lider_treinamento', 'colider', 'lider_treinamento_ou_colider'
   final bool requireHost;
+  final DateTime? multiplicationStartDate;
 
   const MultiplicationSettingsModel({
     this.targetMonths = 6,
@@ -17,10 +20,21 @@ class MultiplicationSettingsModel {
     this.minReportRegularityPercentage = 80.0,
     this.requiredLeadershipRole = 'lider_treinamento_ou_colider',
     this.requireHost = true,
+    this.multiplicationStartDate,
   });
 
   factory MultiplicationSettingsModel.fromMap(Map<String, dynamic>? map) {
     if (map == null) return const MultiplicationSettingsModel();
+
+    DateTime? parsedStartDate;
+    if (map['multiplicationStartDate'] != null) {
+      if (map['multiplicationStartDate'] is Timestamp) {
+        parsedStartDate = (map['multiplicationStartDate'] as Timestamp).toDate();
+      } else if (map['multiplicationStartDate'] is String) {
+        parsedStartDate = DateTime.tryParse(map['multiplicationStartDate']);
+      }
+    }
+
     return MultiplicationSettingsModel(
       targetMonths: (map['targetMonths'] as num?)?.toInt() ?? 6,
       targetMembers: (map['targetMembers'] as num?)?.toInt() ?? 15,
@@ -33,6 +47,7 @@ class MultiplicationSettingsModel {
       requiredLeadershipRole:
           (map['requiredLeadershipRole'] as String?) ?? 'lider_treinamento_ou_colider',
       requireHost: (map['requireHost'] as bool?) ?? true,
+      multiplicationStartDate: parsedStartDate,
     );
   }
 
@@ -45,6 +60,9 @@ class MultiplicationSettingsModel {
       'minReportRegularityPercentage': minReportRegularityPercentage,
       'requiredLeadershipRole': requiredLeadershipRole,
       'requireHost': requireHost,
+      'multiplicationStartDate': multiplicationStartDate != null
+          ? Timestamp.fromDate(multiplicationStartDate!)
+          : null,
     };
   }
 
@@ -56,6 +74,8 @@ class MultiplicationSettingsModel {
     double? minReportRegularityPercentage,
     String? requiredLeadershipRole,
     bool? requireHost,
+    DateTime? multiplicationStartDate,
+    bool clearMultiplicationStartDate = false,
   }) {
     return MultiplicationSettingsModel(
       targetMonths: targetMonths ?? this.targetMonths,
@@ -68,6 +88,10 @@ class MultiplicationSettingsModel {
       requiredLeadershipRole:
           requiredLeadershipRole ?? this.requiredLeadershipRole,
       requireHost: requireHost ?? this.requireHost,
+      multiplicationStartDate: clearMultiplicationStartDate
+          ? null
+          : (multiplicationStartDate ?? this.multiplicationStartDate),
     );
   }
 }
+

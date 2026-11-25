@@ -712,24 +712,8 @@ class _LeaderMultiplicationWidgetState extends State<LeaderMultiplicationWidget>
 
   Future<void> _toggleFutureHost(bool value) async {
     try {
-      final updatedCell = CellModel(
-        id: _currentCell.id,
-        name: _currentCell.name,
-        leaderId: _currentCell.leaderId,
-        coLeaderId: _currentCell.coLeaderId,
-        hostId: _currentCell.hostId,
-        address: _currentCell.address,
-        neighborhood: _currentCell.neighborhood,
-        meetingDay: _currentCell.meetingDay,
-        meetingTime: _currentCell.meetingTime,
-        category: _currentCell.category,
-        isActive: _currentCell.isActive,
-        createdAt: _currentCell.createdAt,
+      final updatedCell = _currentCell.copyWith(
         futureHostDefined: value,
-        customTargetMembers: _currentCell.customTargetMembers,
-        customTargetMonths: _currentCell.customTargetMonths,
-        customMinAttendancePercentage: _currentCell.customMinAttendancePercentage,
-        customMinVisitorAverage: _currentCell.customMinVisitorAverage,
       );
 
       final dataSource = getIt<ICellRemoteDataSource>();

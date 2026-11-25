@@ -20,6 +20,12 @@ class CellMultiplicationProgressModel {
   final String effectiveRequiredRole;
   final bool effectiveRequireHost;
 
+  // Datas e prazos de multiplicação
+  final DateTime effectiveStartDate;
+  final DateTime targetEndDate;
+  final bool isStartDateInFuture;
+  final bool isCustomStartDateActive;
+
   final bool hasLeaderInTraining;
   final String? leaderInTrainingName;
   final bool hasCoLeader;
@@ -56,6 +62,10 @@ class CellMultiplicationProgressModel {
     required this.effectiveMinReportRegularity,
     required this.effectiveRequiredRole,
     required this.effectiveRequireHost,
+    required this.effectiveStartDate,
+    required this.targetEndDate,
+    required this.isStartDateInFuture,
+    required this.isCustomStartDateActive,
     required this.hasLeaderInTraining,
     this.leaderInTrainingName,
     required this.hasCoLeader,
@@ -88,9 +98,6 @@ class CellMultiplicationProgressModel {
     required MultiplicationSettingsModel settings,
   }) {
     final now = DateTime.now();
-    // Tempo decorrido em meses
-    final elapsedDays = now.difference(cell.createdAt).inDays;
-    final elapsedMonths = (elapsedDays / 30.44).floor();
 
     // Metas Efetivas (Overrides individuais da célula ou fallback para configurações globais)
     final effectiveTargetMembers = cell.customTargetMembers ?? settings.targetMembers;
@@ -100,6 +107,29 @@ class CellMultiplicationProgressModel {
     final effectiveMinReportRegularity = cell.customMinReportRegularityPercentage ?? settings.minReportRegularityPercentage;
     final effectiveRequiredRole = cell.customRequiredLeadershipRole ?? settings.requiredLeadershipRole;
     final effectiveRequireHost = cell.customRequireHost ?? settings.requireHost;
+
+    // Determinação da Data de Início Efetiva
+    final isCustomStartDateActive = cell.customMultiplicationStartDate != null;
+    final effectiveStartDate = cell.customMultiplicationStartDate ??
+        settings.multiplicationStartDate ??
+        cell.createdAt;
+
+    // Data Limite (Meta final)
+    final targetEndDate = DateTime(
+      effectiveStartDate.year,
+      effectiveStartDate.month + effectiveTargetMonths,
+      effectiveStartDate.day,
+    );
+
+    // Tempo decorrido em meses a partir da data efetiva
+    final isStartDateInFuture = now.isBefore(effectiveStartDate);
+    int elapsedDays = 0;
+    int elapsedMonths = 0;
+
+    if (!isStartDateInFuture) {
+      elapsedDays = now.difference(effectiveStartDate).inDays;
+      elapsedMonths = (elapsedDays / 30.44).floor();
+    }
 
     // Membros atuais
     final currentMembersCount = members.length;
@@ -192,7 +222,7 @@ class CellMultiplicationProgressModel {
     final isVisitorTargetMet = visitorAverage >= effectiveMinVisitorAvg;
     final isAttendanceTargetMet = attendancePercentage >= effectiveMinAttendance;
     final isReportTargetMet = reportRegularityPercentage >= effectiveMinReportRegularity;
-    final isTimeTargetMet = elapsedMonths >= effectiveTargetMonths;
+    final isTimeTargetMet = !isStartDateInFuture && elapsedMonths >= effectiveTargetMonths;
 
     // Cálculo do Percentual Ponderado / Pontuação de Critérios
     int totalCriteria = 6; // Membros, Liderança, Visitantes, Assiduidade, Relatórios, Tempo
@@ -220,9 +250,11 @@ class CellMultiplicationProgressModel {
     double reportProg = effectiveMinReportRegularity > 0
         ? (reportRegularityPercentage / effectiveMinReportRegularity).clamp(0.0, 1.0)
         : 1.0;
-    double timeProg = effectiveTargetMonths > 0
-        ? (elapsedMonths / effectiveTargetMonths).clamp(0.0, 1.0)
-        : 1.0;
+    double timeProg = isStartDateInFuture
+        ? 0.0
+        : (effectiveTargetMonths > 0
+            ? (elapsedMonths / effectiveTargetMonths).clamp(0.0, 1.0)
+            : 1.0);
 
     double sumProg = membersProg + leadershipProg + visitorProg + attendanceProg + reportProg + timeProg;
     if (effectiveRequireHost) sumProg += hostProg;
@@ -240,6 +272,10 @@ class CellMultiplicationProgressModel {
       effectiveMinReportRegularity: effectiveMinReportRegularity,
       effectiveRequiredRole: effectiveRequiredRole,
       effectiveRequireHost: effectiveRequireHost,
+      effectiveStartDate: effectiveStartDate,
+      targetEndDate: targetEndDate,
+      isStartDateInFuture: isStartDateInFuture,
+      isCustomStartDateActive: isCustomStartDateActive,
       hasLeaderInTraining: hasLeaderInTraining,
       leaderInTrainingName: ltMember?.name,
       hasCoLeader: hasCoLeader,
@@ -263,3 +299,4 @@ class CellMultiplicationProgressModel {
     );
   }
 }
+

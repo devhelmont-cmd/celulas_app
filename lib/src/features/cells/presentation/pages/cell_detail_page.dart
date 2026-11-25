@@ -40,7 +40,7 @@ class CellDetailPage extends StatefulWidget {
 class _CellDetailPageState extends State<CellDetailPage>
     with SingleTickerProviderStateMixin {
   late final CellMembersController _membersController;
-  late CellEntity _currentCell;
+  late CellModel _currentCell;
   late TabController _tabController;
 
   List<CellJoinRequestEntity> _pendingRequests = [];
@@ -80,7 +80,9 @@ class _CellDetailPageState extends State<CellDetailPage>
   @override
   void initState() {
     super.initState();
-    _currentCell = widget.cell;
+    _currentCell = widget.cell is CellModel
+        ? widget.cell as CellModel
+        : CellModel.fromEntity(widget.cell);
     _tabController = TabController(
       length: 3,
       vsync: this,
@@ -378,19 +380,13 @@ class _CellDetailPageState extends State<CellDetailPage>
     );
 
     if (result == true) {
-      final updatedModel = CellModel(
-        id: _currentCell.id,
+      final updatedModel = _currentCell.copyWith(
         name: nameCtrl.text.trim(),
-        leaderId: _currentCell.leaderId,
-        coLeaderId: _currentCell.coLeaderId,
-        hostId: _currentCell.hostId,
         address: addressCtrl.text.trim(),
         neighborhood: neighborhoodCtrl.text.trim(),
         meetingDay: selectedDay,
         meetingTime: selectedTime,
         category: selectedCategory,
-        isActive: _currentCell.isActive,
-        createdAt: _currentCell.createdAt,
       );
 
       final dataSource = getIt<ICellRemoteDataSource>();

@@ -2,6 +2,7 @@
 
 import 'package:celulas_app/src/features/cells/data/models/multiplication_settings_model.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class MultiplicationSettingsDialog extends StatefulWidget {
   final MultiplicationSettingsModel initialSettings;
@@ -25,6 +26,7 @@ class _MultiplicationSettingsDialogState
   late TextEditingController _reportsController;
   late String _requiredRole;
   late bool _requireHost;
+  DateTime? _multiplicationStartDate;
 
   @override
   void initState() {
@@ -41,6 +43,7 @@ class _MultiplicationSettingsDialogState
         text: widget.initialSettings.minReportRegularityPercentage.toString());
     _requiredRole = widget.initialSettings.requiredLeadershipRole;
     _requireHost = widget.initialSettings.requireHost;
+    _multiplicationStartDate = widget.initialSettings.multiplicationStartDate;
   }
 
   @override
@@ -51,6 +54,20 @@ class _MultiplicationSettingsDialogState
     _visitorController.dispose();
     _reportsController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickStartDate() async {
+    final initial = _multiplicationStartDate ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      locale: const Locale('pt', 'BR'),
+    );
+    if (picked != null) {
+      setState(() => _multiplicationStartDate = picked);
+    }
   }
 
   void _save() {
@@ -68,6 +85,7 @@ class _MultiplicationSettingsDialogState
       minReportRegularityPercentage: reports,
       requiredLeadershipRole: _requiredRole,
       requireHost: _requireHost,
+      multiplicationStartDate: _multiplicationStartDate,
     );
 
     Navigator.of(context).pop(updated);
@@ -94,6 +112,35 @@ class _MultiplicationSettingsDialogState
                 labelText: 'Prazo Alvo (Meses)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.timer_outlined),
+              ),
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: _pickStartDate,
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'Data de Início da Contagem (Global)',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.calendar_today_outlined),
+                  suffixIcon: _multiplicationStartDate != null
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 20),
+                          onPressed: () => setState(() => _multiplicationStartDate = null),
+                          tooltip: 'Limpar (Usar data de criação da célula)',
+                        )
+                      : null,
+                ),
+                child: Text(
+                  _multiplicationStartDate != null
+                      ? DateFormat('dd/MM/yyyy').format(_multiplicationStartDate!)
+                      : 'Padrão (Data de criação de cada célula)',
+                  style: TextStyle(
+                    color: _multiplicationStartDate != null
+                        ? Colors.black87
+                        : Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -184,3 +231,4 @@ class _MultiplicationSettingsDialogState
     );
   }
 }
+
