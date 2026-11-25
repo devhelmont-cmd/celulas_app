@@ -11,6 +11,8 @@ class CellEntity {
   final String category;
   final bool isActive;
   final DateTime createdAt;
+  final bool futureHostDefined;
+  final int? customTargetMembers;
 
   const CellEntity({
     required this.id,
@@ -25,5 +27,7 @@ class CellEntity {
     required this.category,
     this.isActive = true,
     required this.createdAt,
+    this.futureHostDefined = false,
+    this.customTargetMembers,
   });
 }

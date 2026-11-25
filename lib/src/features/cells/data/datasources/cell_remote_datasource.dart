@@ -7,6 +7,7 @@ import 'package:celulas_app/src/features/cells/data/models/cell_member_model.dar
 import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/member_period_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/multiplication_settings_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/prayer_request_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/unlinked_user_or_member_model.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
@@ -164,6 +165,11 @@ abstract class ICellRemoteDataSource {
   Future<void> updatePrayerRequest(PrayerRequestModel request);
 
   Future<void> deleteMemberCompletely(String memberId);
+
+  // Configurações de Multiplicação
+  Future<MultiplicationSettingsModel> getMultiplicationSettings();
+
+  Future<void> saveMultiplicationSettings(MultiplicationSettingsModel settings);
 }
 
 class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
@@ -2312,5 +2318,26 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
     
     batch.delete(memberRef);
     await batch.commit();
+  }
+
+  @override
+  Future<MultiplicationSettingsModel> getMultiplicationSettings() async {
+    try {
+      final doc = await _firestore.collection('multiplication_settings').doc('default').get();
+      if (doc.exists && doc.data() != null) {
+        return MultiplicationSettingsModel.fromMap(doc.data()!);
+      }
+    } catch (e) {
+      debugPrint('Erro ao carregar multiplication_settings: $e');
+    }
+    return const MultiplicationSettingsModel();
+  }
+
+  @override
+  Future<void> saveMultiplicationSettings(MultiplicationSettingsModel settings) async {
+    await _firestore
+        .collection('multiplication_settings')
+        .doc('default')
+        .set(settings.toMap(), SetOptions(merge: true));
   }
 }

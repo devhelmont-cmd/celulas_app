@@ -111,6 +111,12 @@ class GenderHelper {
         if (normGender == 'feminino') return 'Co-líder';
         return 'Co-líder';
 
+      case 'lider_treinamento':
+      case 'líder em treinamento':
+      case 'lider em treinamento':
+      case 'lt':
+        return 'Líder em Treinamento';
+
       case 'membro':
       case 'membra':
       case 'member':

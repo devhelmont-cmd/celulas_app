@@ -14,6 +14,10 @@ import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.da
 import 'package:celulas_app/src/features/cells/data/models/prayer_request_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/unlinked_user_or_member_model.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/pages/reports_page.dart';
+import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
+import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
+import 'package:celulas_app/src/features/cells/data/models/multiplication_settings_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_multiplication_progress_model.dart';
 
 import '../../../../core/utils/gender_helper.dart';
 import '../../../members/presentation/pages/member_analysis_page.dart';
@@ -747,12 +751,14 @@ class _CellDetailPageState extends State<CellDetailPage>
               'membro': 'Membro',
               'anfitriao': 'Anfitrião',
               'colider': 'Co-líder',
+              'lider_treinamento': 'Líder em Treinamento',
               'lider': 'Líder',
             }
             : {
               'membro': 'Membro',
               'anfitriao': 'Anfitrião',
               'colider': 'Co-líder',
+              'lider_treinamento': 'Líder em Treinamento',
             };
 
     final result = await showDialog<bool>(
@@ -877,6 +883,7 @@ class _CellDetailPageState extends State<CellDetailPage>
   Future<void> _bindSelfToCell() async {
     final roleOptions = {
       'lider': 'Líder',
+      'lider_treinamento': 'Líder em Treinamento',
       'colider': 'Co-líder',
       'anfitriao': 'Anfitrião',
       'membro': 'Membro',
@@ -1302,12 +1309,14 @@ class _CellDetailPageState extends State<CellDetailPage>
         _isPastorOrCoord
             ? {
               'lider': 'Líder',
+              'lider_treinamento': 'Líder em Treinamento',
               'colider': 'Co-líder',
               'anfitriao': 'Anfitrião',
               'membro': 'Membro',
             }
             : {
               'colider': 'Co-líder',
+              'lider_treinamento': 'Líder em Treinamento',
               'anfitriao': 'Anfitrião',
               'membro': 'Membro',
             };
@@ -2390,6 +2399,8 @@ class _CellDetailPageState extends State<CellDetailPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _buildMultiplicationProgressCard(CellModel.fromEntity(cell), _isPastorOrCoord || isUserLeaderOfThisCell),
+          const SizedBox(height: 12),
           Card(
             elevation: 2,
             shape: RoundedRectangleBorder(
@@ -3390,5 +3401,215 @@ class _CellDetailPageState extends State<CellDetailPage>
         ],
       ),
     );
+  }
+
+  Widget _buildMultiplicationProgressCard(CellModel cell, bool canEdit) {
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait([
+        getIt<ICellRemoteDataSource>().getMultiplicationSettings(),
+        getIt<ICellRemoteDataSource>().getCellMembers(cell.id),
+        getIt<ICellReportsRepository>().getReportsByCell(cell.id).catchError((e) => <CellReportEntity>[], test: (_) => true),
+      ]),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        final settings = snapshot.data![0] as MultiplicationSettingsModel;
+        final members = snapshot.data![1] as List<CellMemberEntity>;
+        final reports = snapshot.data![2] as List<dynamic>;
+
+        final progress = CellMultiplicationProgressModel.calculate(
+          cell: cell,
+          members: members,
+          reports: reports.cast(),
+          settings: settings,
+        );
+
+        final color = progress.isReadyForMultiplication
+            ? Colors.green
+            : progress.overallPercentage >= 70
+                ? Colors.orange
+                : Colors.red;
+
+        return Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.trending_up, color: Colors.blue),
+                        SizedBox(width: 8),
+                        Text(
+                          'Progresso de Multiplicação',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      ],
+                    ),
+                    if (canEdit)
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        tooltip: 'Editar Metas Individuais',
+                        onPressed: () => _showEditCellMultiplicationGoalsDialog(cell),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Prontidão Geral: ${progress.overallPercentage.toStringAsFixed(1)}%'),
+                    if (progress.isReadyForMultiplication)
+                      Chip(
+                        label: const Text('Apta para Multiplicar!'),
+                        backgroundColor: Colors.green.shade100,
+                        labelStyle: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                      )
+                    else
+                      Text('${progress.metCriteriaCount} / ${progress.totalCriteria} metas'),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: (progress.overallPercentage / 100.0).clamp(0.0, 1.0),
+                  backgroundColor: Colors.grey[200],
+                  color: color,
+                  minHeight: 8,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                const SizedBox(height: 16),
+                _buildGoalCheckRow('Membros (${progress.currentMembersCount}/${progress.effectiveTargetMembers})', progress.isMembersTargetMet),
+                _buildGoalCheckRow('Liderança Preparada (${progress.settings.requiredLeadershipRole == 'lider_treinamento' ? 'Líder em Treinamento' : 'Co-líder / LT'})', progress.isLeadershipTargetMet),
+                if (progress.settings.requireHost)
+                  _buildGoalCheckRow('Futuro Anfitrião / Local Definido', progress.isHostTargetMet),
+                _buildGoalCheckRow('Média de Visitantes (${progress.visitorAverage.toStringAsFixed(1)} / ${progress.settings.minVisitorAverage})', progress.isVisitorTargetMet),
+                _buildGoalCheckRow('Assiduidade (${progress.attendancePercentage.toStringAsFixed(1)}% / ${progress.settings.minAttendancePercentage}%)', progress.isAttendanceTargetMet),
+                _buildGoalCheckRow('Relatórios Entregues (${progress.reportRegularityPercentage.toStringAsFixed(1)}%)', progress.isReportTargetMet),
+                _buildGoalCheckRow('Tempo de Célula (${progress.elapsedMonths} / ${progress.settings.targetMonths} meses)', progress.isTimeTargetMet),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGoalCheckRow(String title, bool isMet) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Icon(
+            isMet ? Icons.check_circle : Icons.cancel_outlined,
+            size: 16,
+            color: isMet ? Colors.green : Colors.grey[400],
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(title, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showEditCellMultiplicationGoalsDialog(CellModel cell) async {
+    final targetMembersController = TextEditingController(
+      text: (cell.customTargetMembers ?? 15).toString(),
+    );
+    bool futureHostDefined = cell.futureHostDefined;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Metas Individuais de Multiplicação'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: targetMembersController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Meta de Membros Customizada',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    title: const Text('Futuro Anfitrião / Local Definido'),
+                    subtitle: const Text('Marque se já está definido onde ou com quem será a nova célula'),
+                    value: futureHostDefined,
+                    onChanged: (val) => setDialogState(() => futureHostDefined = val),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Salvar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true) {
+      try {
+        final customMembers = int.tryParse(targetMembersController.text);
+        final updatedModel = CellModel(
+          id: cell.id,
+          name: cell.name,
+          leaderId: cell.leaderId,
+          coLeaderId: cell.coLeaderId,
+          hostId: cell.hostId,
+          address: cell.address,
+          neighborhood: cell.neighborhood,
+          meetingDay: cell.meetingDay,
+          meetingTime: cell.meetingTime,
+          category: cell.category,
+          isActive: cell.isActive,
+          createdAt: cell.createdAt,
+          futureHostDefined: futureHostDefined,
+          customTargetMembers: customMembers,
+        );
+
+        final dataSource = getIt<ICellRemoteDataSource>();
+        await dataSource.updateCell(updatedModel);
+        await _refreshCell();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Metas individuais atualizadas com sucesso!')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao atualizar metas: $e')),
+          );
+        }
+      }
+    }
   }
 }

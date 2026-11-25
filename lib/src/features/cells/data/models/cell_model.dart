@@ -15,6 +15,8 @@ class CellModel extends CellEntity {
     required super.category,
     super.isActive,
     required super.createdAt,
+    super.futureHostDefined,
+    super.customTargetMembers,
   });
 
   factory CellModel.fromMap(Map<String, dynamic> map, String id) {
@@ -42,6 +44,8 @@ class CellModel extends CellEntity {
           ? true
           : (map['isActive'] == true || map['isActive'] == 'true'),
       createdAt: parsedDate,
+      futureHostDefined: map['futureHostDefined'] == true || map['futureHostDefined'] == 'true',
+      customTargetMembers: (map['customTargetMembers'] as num?)?.toInt(),
     );
   }
 
@@ -58,6 +62,8 @@ class CellModel extends CellEntity {
       'category': category,
       'isActive': isActive,
       'createdAt': Timestamp.fromDate(createdAt),
+      'futureHostDefined': futureHostDefined,
+      'customTargetMembers': customTargetMembers,
     };
   }
 
@@ -75,6 +81,8 @@ class CellModel extends CellEntity {
       category: entity.category,
       isActive: entity.isActive,
       createdAt: entity.createdAt,
+      futureHostDefined: entity.futureHostDefined,
+      customTargetMembers: entity.customTargetMembers,
     );
   }
 }

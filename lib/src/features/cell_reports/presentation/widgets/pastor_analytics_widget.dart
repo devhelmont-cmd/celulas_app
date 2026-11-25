@@ -14,12 +14,13 @@ import 'package:celulas_app/src/features/cell_reports/presentation/widgets/meeti
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/active_members_attendance_chart_widget.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/leader_analytics_widget.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/member_analytics_widget.dart';
+import 'package:celulas_app/src/features/cell_reports/presentation/widgets/multiplication_analytics_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-enum PastorViewMode { general, cell, member }
+enum PastorViewMode { general, cell, member, multiplication }
 
 class PastorAnalyticsWidget extends StatefulWidget {
   const PastorAnalyticsWidget({super.key});
@@ -271,6 +272,11 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
                   label: Text('Por Membro'),
                   icon: Icon(Icons.person_outline, size: 16),
                 ),
+                ButtonSegment(
+                  value: PastorViewMode.multiplication,
+                  label: Text('Multiplicação'),
+                  icon: Icon(Icons.diversity_3_outlined, size: 16),
+                ),
               ],
               selected: {_viewMode},
               onSelectionChanged: (Set<PastorViewMode> newSelection) {
@@ -287,8 +293,10 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
             _buildGeneralDashboard()
           else if (_viewMode == PastorViewMode.cell)
             _buildCellSelectionDashboard()
+          else if (_viewMode == PastorViewMode.member)
+            _buildMemberSelectionDashboard()
           else
-            _buildMemberSelectionDashboard(),
+            const MultiplicationAnalyticsWidget(),
         ],
       ),
     );
