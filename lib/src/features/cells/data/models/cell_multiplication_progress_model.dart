@@ -98,21 +98,22 @@ class CellMultiplicationProgressModel {
     required MultiplicationSettingsModel settings,
   }) {
     final now = DateTime.now();
+    final useGlobal = cell.useGlobalGoals;
 
-    // Metas Efetivas (Overrides individuais da célula ou fallback para configurações globais)
-    final effectiveTargetMembers = cell.customTargetMembers ?? settings.targetMembers;
-    final effectiveTargetMonths = cell.customTargetMonths ?? settings.targetMonths;
-    final effectiveMinAttendance = cell.customMinAttendancePercentage ?? settings.minAttendancePercentage;
-    final effectiveMinVisitorAvg = cell.customMinVisitorAverage ?? settings.minVisitorAverage;
-    final effectiveMinReportRegularity = cell.customMinReportRegularityPercentage ?? settings.minReportRegularityPercentage;
-    final effectiveRequiredRole = cell.customRequiredLeadershipRole ?? settings.requiredLeadershipRole;
-    final effectiveRequireHost = cell.customRequireHost ?? settings.requireHost;
+    // Metas Efetivas (Globais ou Individuais conforme cell.useGlobalGoals)
+    final effectiveTargetMembers = useGlobal ? settings.targetMembers : (cell.customTargetMembers ?? settings.targetMembers);
+    final effectiveTargetMonths = useGlobal ? settings.targetMonths : (cell.customTargetMonths ?? settings.targetMonths);
+    final effectiveMinAttendance = useGlobal ? settings.minAttendancePercentage : (cell.customMinAttendancePercentage ?? settings.minAttendancePercentage);
+    final effectiveMinVisitorAvg = useGlobal ? settings.minVisitorAverage : (cell.customMinVisitorAverage ?? settings.minVisitorAverage);
+    final effectiveMinReportRegularity = useGlobal ? settings.minReportRegularityPercentage : (cell.customMinReportRegularityPercentage ?? settings.minReportRegularityPercentage);
+    final effectiveRequiredRole = useGlobal ? settings.requiredLeadershipRole : (cell.customRequiredLeadershipRole ?? settings.requiredLeadershipRole);
+    final effectiveRequireHost = useGlobal ? settings.requireHost : (cell.customRequireHost ?? settings.requireHost);
 
     // Determinação da Data de Início Efetiva
-    final isCustomStartDateActive = cell.customMultiplicationStartDate != null;
-    final effectiveStartDate = cell.customMultiplicationStartDate ??
-        settings.multiplicationStartDate ??
-        cell.createdAt;
+    final isCustomStartDateActive = !useGlobal && cell.customMultiplicationStartDate != null;
+    final effectiveStartDate = useGlobal
+        ? (settings.multiplicationStartDate ?? cell.createdAt)
+        : (cell.customMultiplicationStartDate ?? settings.multiplicationStartDate ?? cell.createdAt);
 
     // Data Limite (Meta final)
     final targetEndDate = DateTime(

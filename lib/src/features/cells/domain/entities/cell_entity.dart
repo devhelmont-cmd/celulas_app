@@ -14,6 +14,7 @@ class CellEntity {
   final bool isActive;
   final DateTime createdAt;
   final bool futureHostDefined;
+  final bool useGlobalGoals;
   final int? customTargetMembers;
   final int? customTargetMonths;
   final double? customMinAttendancePercentage;
@@ -37,6 +38,7 @@ class CellEntity {
     this.isActive = true,
     required this.createdAt,
     this.futureHostDefined = false,
+    this.useGlobalGoals = true,
     this.customTargetMembers,
     this.customTargetMonths,
     this.customMinAttendancePercentage,

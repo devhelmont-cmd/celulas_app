@@ -4,7 +4,6 @@ import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
-import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_multiplication_progress_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/multiplication_settings_model.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_member_entity.dart';
@@ -110,6 +109,7 @@ class _MultiplicationAnalyticsWidgetState
   }
 
   Future<void> _openIndividualCellGoalsDialog(CellMultiplicationProgressModel progress) async {
+    bool useGlobalGoals = progress.cell.useGlobalGoals;
     final targetMembersController = TextEditingController(
       text: (progress.cell.customTargetMembers ?? progress.settings.targetMembers).toString(),
     );
@@ -136,11 +136,76 @@ class _MultiplicationAnalyticsWidgetState
                 : 'Herdando da Célula (${DateFormat('dd/MM/yyyy').format(progress.cell.createdAt)})';
 
             return AlertDialog(
-              title: Text('Metas Individuais: ${progress.cell.name}'),
+              title: Text('Metas da Célula: ${progress.cell.name}'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Card(
+                      elevation: 0,
+                      color: useGlobalGoals ? Colors.blue.shade50 : Colors.orange.shade50,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: SwitchListTile(
+                          title: const Text('Usar Metas Globais (Rede)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          subtitle: Text(
+                            useGlobalGoals ? 'Ativo: Segue os parâmetros globais' : 'Inativo: Usando metas individuais personalizadas',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          value: useGlobalGoals,
+                          onChanged: (val) => setDialogState(() => useGlobalGoals = val),
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          useGlobalGoals ? 'Valores Globais Atuais (Referência)' : 'Configuração Individual',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey[700]),
+                        ),
+                        if (!useGlobalGoals)
+                          TextButton.icon(
+                            icon: const Icon(Icons.restore, size: 16, color: Colors.red),
+                            label: const Text('Redefinir / Limpar', style: TextStyle(fontSize: 12, color: Colors.red)),
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (warnCtx) => AlertDialog(
+                                  title: const Text('Redefinir Metas Individuais'),
+                                  content: const Text('Atenção: Isso irá limpar e redefinir as metas individuais desta célula para os valores padrão globais. Deseja continuar?'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(warnCtx), child: const Text('Cancelar')),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                      onPressed: () {
+                                        Navigator.pop(warnCtx);
+                                        setDialogState(() {
+                                          useGlobalGoals = true;
+                                          customStartDate = null;
+                                          targetMembersController.text = progress.settings.targetMembers.toString();
+                                          targetMonthsController.text = progress.settings.targetMonths.toString();
+                                          minAttendanceController.text = progress.settings.minAttendancePercentage.toString();
+                                          minVisitorController.text = progress.settings.minVisitorAverage.toString();
+                                        });
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Metas individuais redefinidas e limpas com sucesso!')),
+                                        );
+                                      },
+                                      child: const Text('Sim, Redefinir'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     TextField(
                       controller: targetMembersController,
                       keyboardType: TextInputType.number,
@@ -231,6 +296,7 @@ class _MultiplicationAnalyticsWidgetState
         final customVisitor = double.tryParse(minVisitorController.text);
 
         final updatedCell = progress.cell.copyWith(
+          useGlobalGoals: useGlobalGoals,
           futureHostDefined: futureHostDefined,
           customTargetMembers: customMembers,
           customTargetMonths: customMonths,
@@ -245,7 +311,7 @@ class _MultiplicationAnalyticsWidgetState
         _loadData();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Metas individuais atualizadas com sucesso!')),
+            const SnackBar(content: Text('Configuração de metas atualizada com sucesso!')),
           );
         }
       } catch (e) {
