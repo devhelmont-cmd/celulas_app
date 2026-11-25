@@ -260,26 +260,32 @@ class _CellDetailPageState extends State<CellDetailPage>
     if (lower == 'host' || lower == 'anfitriao' || lower == 'anfitrião') {
       return 'anfitriao';
     }
+    if (lower == 'lider_treinamento' ||
+        lower == 'líder em treinamento' ||
+        lower == 'lider em treinamento' ||
+        lower == 'lt') {
+      return 'lider_treinamento';
+    }
     return 'membro';
   }
 
-  int _getRoleWeight(String role) {
-    final lower = role.toLowerCase().trim();
-    switch (lower) {
+  int _getMemberWeight(CellMemberEntity m) {
+    final norm = _normalizeRole(m.role);
+    final isHost = _currentCell.hostId == m.id ||
+        (m.userId != null && m.userId!.isNotEmpty && _currentCell.hostId == m.userId);
+
+    switch (norm) {
       case 'lider':
-      case 'leader':
-      case 'líder':
         return 1;
       case 'colider':
-      case 'co-leader':
-      case 'co-líder':
         return 2;
       case 'anfitriao':
-      case 'host':
-      case 'anfitrião':
         return 3;
-      default:
+      case 'lider_treinamento':
         return 4;
+      default:
+        if (isHost) return 3;
+        return 5;
     }
   }
 
@@ -1299,21 +1305,17 @@ class _CellDetailPageState extends State<CellDetailPage>
   }
 
   Future<void> _showRoleChangeDialog(CellMemberEntity member) async {
-    //final isPastorOrCoord = widget.currentUser?.isPastorOrCoordinator ?? false;
-
     final Map<String, String> roleOptions =
         _isPastorOrCoord
             ? {
               'lider': 'Líder',
-              'lider_treinamento': 'Líder em Treinamento',
               'colider': 'Co-líder',
-              'anfitriao': 'Anfitrião',
+              'lider_treinamento': 'Líder em Treinamento',
               'membro': 'Membro',
             }
             : {
               'colider': 'Co-líder',
               'lider_treinamento': 'Líder em Treinamento',
-              'anfitriao': 'Anfitrião',
               'membro': 'Membro',
             };
 
@@ -1322,27 +1324,42 @@ class _CellDetailPageState extends State<CellDetailPage>
       currentSelection = 'membro';
     }
 
-    final newRole = await showDialog<String>(
+    bool initialIsHost = (_currentCell.hostId == member.id ||
+        (member.userId != null && member.userId!.isNotEmpty && _currentCell.hostId == member.userId) ||
+        currentSelection == 'anfitriao');
+
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) {
         String tempSelection = currentSelection;
+        bool tempIsHost = initialIsHost;
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
               title: Text('Alterar Função de ${member.name}'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
-                children:
-                    roleOptions.entries.map((entry) {
-                      return RadioListTile<String>(
-                        title: Text(entry.value),
-                        value: entry.key,
-                        groupValue: tempSelection,
-                        onChanged: (val) {
-                          setState(() => tempSelection = val!);
-                        },
-                      );
-                    }).toList(),
+                children: [
+                  ...roleOptions.entries.map((entry) {
+                    return RadioListTile<String>(
+                      title: Text(entry.value),
+                      value: entry.key,
+                      groupValue: tempSelection,
+                      onChanged: (val) {
+                        setState(() => tempSelection = val!);
+                      },
+                    );
+                  }).toList(),
+                  const Divider(),
+                  SwitchListTile(
+                    title: const Text('Anfitrião da Célula'),
+                    subtitle: const Text('Recebe a célula no seu local'),
+                    value: tempIsHost,
+                    onChanged: (val) {
+                      setState(() => tempIsHost = val);
+                    },
+                  ),
+                ],
               ),
               actions: [
                 TextButton(
@@ -1350,7 +1367,10 @@ class _CellDetailPageState extends State<CellDetailPage>
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx, tempSelection),
+                  onPressed: () => Navigator.pop(ctx, {
+                    'role': tempSelection,
+                    'isHost': tempIsHost,
+                  }),
                   child: const Text('Salvar'),
                 ),
               ],
@@ -1360,8 +1380,15 @@ class _CellDetailPageState extends State<CellDetailPage>
       },
     );
 
-    if (newRole != null && newRole != currentSelection) {
-      if (_membersController.value is CellMemberLoadedState) {
+    if (result != null) {
+      final String newRole = result['role'] as String;
+      final bool newIsHost = result['isHost'] as bool;
+      final bool roleChanged = newRole != currentSelection;
+      final bool hostChanged = newIsHost != initialIsHost;
+
+      if (!roleChanged && !hostChanged) return;
+
+      if (_membersController.value is CellMemberLoadedState && roleChanged) {
         final currentMembers =
             (_membersController.value as CellMemberLoadedState).members;
 
@@ -1391,7 +1418,7 @@ class _CellDetailPageState extends State<CellDetailPage>
           if (confirmLeaderless != true) return;
         }
 
-        if (newRole != 'membro') {
+        if (newRole == 'lider' || newRole == 'colider') {
           final existingOccupant = currentMembers
               .cast<CellMemberEntity>()
               .firstWhere(
@@ -1442,6 +1469,7 @@ class _CellDetailPageState extends State<CellDetailPage>
           memberId: member.id,
           userId: member.userId ?? '',
           newRole: newRole,
+          setAsHost: newIsHost,
         );
         await _refreshCell();
         if (!mounted) return;
@@ -2728,8 +2756,8 @@ class _CellDetailPageState extends State<CellDetailPage>
                               if (isUserA && !isUserB) return -1;
                               if (!isUserA && isUserB) return 1;
 
-                              final int weightA = _getRoleWeight(a.role);
-                              final int weightB = _getRoleWeight(b.role);
+                              final int weightA = _getMemberWeight(a);
+                              final int weightB = _getMemberWeight(b);
 
                               if (weightA != weightB) {
                                 return weightA.compareTo(weightB);
@@ -2755,10 +2783,27 @@ class _CellDetailPageState extends State<CellDetailPage>
                                   isPastor: isPastor,
                                   gender: gender,
                                 );
-                                final formattedRole = GenderHelper.formatRole(
+
+                                final isHost = _currentCell.hostId == member.id ||
+                                    (member.userId != null && member.userId!.isNotEmpty && _currentCell.hostId == member.userId);
+
+                                String formattedRole = GenderHelper.formatRole(
                                   member.role,
                                   gender: gender,
                                 );
+
+                                if (isHost) {
+                                  final norm = _normalizeRole(member.role);
+                                  if (norm == 'lider') {
+                                    formattedRole = 'Líder / Anfitrião';
+                                  } else if (norm == 'colider') {
+                                    formattedRole = 'Co-líder / Anfitrião';
+                                  } else if (norm == 'lider_treinamento') {
+                                    formattedRole = 'Líder em Treinamento / Anfitrião';
+                                  } else {
+                                    formattedRole = 'Anfitrião';
+                                  }
+                                }
 
                                 final bool isCurrentLogUserCard =
                                     user != null &&

@@ -117,6 +117,7 @@ abstract class ICellRemoteDataSource {
     required String memberId,
     required String userId,
     required String newRole,
+    bool? setAsHost,
   });
 
   Future<void> transferMember({
@@ -1767,11 +1768,13 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
   }
 
   @override
+  @override
   Future<void> changeMemberRole({
     required String cellId,
     required String memberId,
     required String userId,
     required String newRole,
+    bool? setAsHost,
   }) async {
     try {
       final cellRef = _firestore.collection('cells').doc(cellId);
@@ -1796,23 +1799,32 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
       final Map<String, dynamic> cellUpdates = {};
       final actualId = userId.isNotEmpty ? userId : memberId;
 
-      if (currentRole == 'lider' ||
-          currentRole == 'leader' ||
-          currentRole == 'líder') {
+      // Se a função anterior era líder e o novo cargo não é líder, limpa o líder da célula
+      if ((currentRole == 'lider' || currentRole == 'leader' || currentRole == 'líder') &&
+          (normalizedNewRole != 'lider' && normalizedNewRole != 'leader')) {
         cellUpdates['leaderId'] = null;
         if (userRef != null) {
           batch.set(userRef, {
             'roles': FieldValue.arrayRemove(['leader']),
           }, SetOptions(merge: true));
         }
-      } else if (currentRole == 'colider' ||
-          currentRole == 'co-leader' ||
-          currentRole == 'co-líder') {
+      }
+
+      // Se a função anterior era co-líder e o novo cargo não é co-líder, limpa o co-líder da célula
+      if ((currentRole == 'colider' || currentRole == 'co-leader' || currentRole == 'co-líder') &&
+          (normalizedNewRole != 'colider' && normalizedNewRole != 'co-leader')) {
         cellUpdates['coLeaderId'] = null;
-      } else if (currentRole == 'anfitriao' ||
-          currentRole == 'host' ||
-          currentRole == 'anfitrião') {
-        cellUpdates['hostId'] = null;
+      }
+
+      // Trata a definição do Anfitrião da Célula (hostId)
+      if (setAsHost == true || normalizedNewRole == 'anfitriao' || normalizedNewRole == 'host') {
+        cellUpdates['hostId'] = actualId;
+      } else if (setAsHost == false) {
+        final cellDoc = await cellRef.get();
+        final currentHostId = cellDoc.data()?['hostId'] as String?;
+        if (currentHostId == actualId || currentHostId == memberId || currentHostId == userId) {
+          cellUpdates['hostId'] = null;
+        }
       }
 
       final membersSnapshot =
@@ -1856,17 +1868,6 @@ class CellRemoteDataSourceImpl implements ICellRemoteDataSource {
             if (role == 'colider' ||
                 role == 'co-leader' ||
                 role == 'co-líder') {
-              batch.update(doc.reference, {'role': 'membro'});
-            }
-          }
-        }
-      } else if (normalizedNewRole == 'anfitriao' ||
-          normalizedNewRole == 'host') {
-        cellUpdates['hostId'] = actualId;
-        for (var doc in membersSnapshot.docs) {
-          if (doc.id != memberId) {
-            final role = (doc.data()['role'] ?? '').toString().toLowerCase();
-            if (role == 'anfitriao' || role == 'host' || role == 'anfitrião') {
               batch.update(doc.reference, {'role': 'membro'});
             }
           }
