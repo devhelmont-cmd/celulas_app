@@ -164,10 +164,14 @@ class _MultiplicationAnalyticsWidgetState
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          useGlobalGoals ? 'Valores Globais Atuais (Referência)' : 'Configuração Individual',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey[700]),
+                        Expanded(
+                          child: Text(
+                            useGlobalGoals ? 'Valores Globais Atuais (Referência)' : 'Configuração Individual',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey[700]),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         if (!useGlobalGoals)
                           TextButton.icon(
                             icon: const Icon(Icons.restore, size: 16, color: Colors.red),

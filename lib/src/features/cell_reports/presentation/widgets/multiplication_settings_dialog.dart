@@ -186,6 +186,7 @@ class _MultiplicationSettingsDialogState
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               value: _requiredRole,
+              isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Cargo de Liderança Exigido',
                 border: OutlineInputBorder(),
@@ -193,15 +194,24 @@ class _MultiplicationSettingsDialogState
               items: const [
                 DropdownMenuItem(
                   value: 'lider_treinamento_ou_colider',
-                  child: Text('Líder em Treinamento ou Co-líder'),
+                  child: Text(
+                    'Líder em Treinamento ou Co-líder',
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 DropdownMenuItem(
                   value: 'lider_treinamento',
-                  child: Text('Apenas Líder em Treinamento'),
+                  child: Text(
+                    'Apenas Líder em Treinamento',
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 DropdownMenuItem(
                   value: 'colider',
-                  child: Text('Apenas Co-líder'),
+                  child: Text(
+                    'Apenas Co-líder',
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
               onChanged: (val) {
