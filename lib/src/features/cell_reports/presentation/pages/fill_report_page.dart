@@ -54,6 +54,7 @@ class _FillReportPageState extends State<FillReportPage> {
 
   List<CellMemberEntity> _members = [];
   Map<String, bool> _attendanceMap = {};
+  Map<String, String?> _justificationMap = {};
 
   Map<String, String?> _meetingRoles = {
     'Oração Inicial': null,
@@ -221,6 +222,9 @@ class _FillReportPageState extends State<FillReportPage> {
 
         for (var att in existingReport.attendances) {
           _attendanceMap[att.cellMemberId] = att.isPresent;
+          if (!att.isPresent && (att.isJustified || att.justificationReason != null)) {
+            _justificationMap[att.cellMemberId] = att.justificationReason;
+          }
           for (var role in att.rolesPerformed) {
             if (_meetingRoles.containsKey(role)) {
               _meetingRoles[role] = att.cellMemberId;
@@ -460,6 +464,69 @@ class _FillReportPageState extends State<FillReportPage> {
     );
   }
 
+  void _showJustifyMemberDialog(CellMemberEntity member) {
+    final controller = TextEditingController(
+      text: _justificationMap[member.id] ?? '',
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Justificar Falta de ${member.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Informe o motivo comunicado previamente pelo membro:',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Ex: Trabalho, viagem, saúde...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          if (_justificationMap.containsKey(member.id) &&
+              _justificationMap[member.id] != null &&
+              _justificationMap[member.id]!.isNotEmpty)
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _justificationMap.remove(member.id);
+                });
+                Navigator.pop(ctx);
+              },
+              child: const Text('Remover Justificativa', style: TextStyle(color: Colors.red)),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final text = controller.text.trim();
+              setState(() {
+                if (text.isNotEmpty) {
+                  _justificationMap[member.id] = text;
+                } else {
+                  _justificationMap.remove(member.id);
+                }
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('Salvar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submitReport() async {
     if (_reportStatus == ReportStatus.cacelled &&
         _cancellationReasonCtrl.text.trim().isEmpty) {
@@ -496,10 +563,23 @@ class _FillReportPageState extends State<FillReportPage> {
         }
         final isPresent = _attendanceMap[m.id] ?? false;
         final List<String> roles = _hasRoles ? (memberRolesMap[m.id] ?? []) : [];
+        final hasJustification = !isPresent &&
+            _justificationMap.containsKey(m.id) &&
+            _justificationMap[m.id] != null &&
+            _justificationMap[m.id]!.trim().isNotEmpty;
+
         return AttendanceModel(
           cellMemberId: m.id,
           memberName: m.name,
           isPresent: isPresent,
+          isJustified: hasJustification,
+          justificationReason:
+              hasJustification ? _justificationMap[m.id]!.trim() : null,
+          justificationStatus:
+              hasJustification ? 'justified_approved' : 'none',
+          justifiedByUserId:
+              hasJustification ? widget.currentUser.id : null,
+          justifiedAt: hasJustification ? DateTime.now() : null,
           rolesPerformed: roles,
           isExcused: false,
         );
@@ -940,6 +1020,11 @@ class _FillReportPageState extends State<FillReportPage> {
                               .toList()
                               : [];
 
+                          final justificationText = _justificationMap[member.id];
+                          final hasJustification = !isPresent &&
+                              justificationText != null &&
+                              justificationText.trim().isNotEmpty;
+
                           return CheckboxListTile(
                             contentPadding: EdgeInsets.zero,
                             title: Text(
@@ -983,13 +1068,91 @@ class _FillReportPageState extends State<FillReportPage> {
                                         .toList(),
                                   ),
                                 ],
+                                if (!isPresent) ...[
+                                  const SizedBox(height: 6),
+                                  if (hasJustification) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.shade50,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: Colors.orange.shade300,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.bookmark_added_outlined,
+                                            size: 14,
+                                            color: Colors.orange.shade900,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              'Justificada: "${justificationText!.trim()}"',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.orange.shade900,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          InkWell(
+                                            onTap: () =>
+                                                _showJustifyMemberDialog(member),
+                                            child: Icon(
+                                              Icons.edit,
+                                              size: 14,
+                                              color: Colors.orange.shade900,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ] else ...[
+                                    InkWell(
+                                      onTap: () =>
+                                          _showJustifyMemberDialog(member),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.edit_note,
+                                            size: 14,
+                                            color: Colors.amber.shade900,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            'Justificar Falta Prévia',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.amber.shade900,
+                                              decoration: TextDecoration.underline,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ],
                             ),
                             value: isPresent,
                             onChanged: (val) {
                               setState(() {
-                                _attendanceMap[member.id] =
-                                    val ?? false;
+                                final newIsPresent = val ?? false;
+                                _attendanceMap[member.id] = newIsPresent;
+                                if (newIsPresent) {
+                                  _justificationMap.remove(member.id);
+                                }
                               });
                             },
                           );
