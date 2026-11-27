@@ -13,6 +13,8 @@ import 'package:celulas_app/src/features/cells/data/models/cell_member_model.dar
 import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/prayer_request_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/unlinked_user_or_member_model.dart';
+import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
+import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/pages/reports_page.dart';
 
 import '../../../../core/utils/gender_helper.dart';
@@ -54,6 +56,34 @@ class _CellDetailPageState extends State<CellDetailPage>
   bool _isPastorOrCoord = false;
 
   Map<String, Map<String, dynamic>> _userProfilesMap = {};
+  List<CellReportEntity>? _cellReportsCache;
+
+  Future<bool> _hasPendingJustification(CellMemberEntity member) async {
+    try {
+      if (_cellReportsCache == null) {
+        final repo = getIt<ICellReportsRepository>();
+        _cellReportsCache = await repo.getReportsByCell(_currentCell.id);
+      }
+      final normName = member.name.trim().toLowerCase();
+      final mUserId = member.userId;
+      final mId = member.id;
+
+      for (var r in _cellReportsCache!) {
+        for (var att in r.attendances) {
+          if (att.isPendingApproval) {
+            final matches = att.cellMemberId == mId ||
+                (mUserId != null && att.cellMemberId == mUserId) ||
+                (normName.isNotEmpty &&
+                    att.memberName?.trim().toLowerCase() == normName);
+            if (matches) return true;
+          }
+        }
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
 
   Future<void> _loadUserProfilesForMembers(List<CellMemberEntity> members) async {
     try {
@@ -2892,15 +2922,61 @@ class _CellDetailPageState extends State<CellDetailPage>
                                               : null,
                                     ),
                                     title: Text(formattedName),
-                                    subtitle: Text(
-                                      formattedRole,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color:
-                                            formattedRole == 'Líder'
+                                    subtitle: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          formattedRole,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            color: formattedRole == 'Líder'
                                                 ? Colors.blue.shade700
                                                 : Colors.grey.shade700,
-                                      ),
+                                          ),
+                                        ),
+                                        FutureBuilder<bool>(
+                                          future: _hasPendingJustification(member),
+                                          builder: (context, pendingSnap) {
+                                            if (pendingSnap.data != true) {
+                                              return const SizedBox.shrink();
+                                            }
+                                            return Container(
+                                              margin: const EdgeInsets.only(top: 4),
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.amber.shade100,
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color: Colors.amber.shade300,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.verified_user,
+                                                    size: 12,
+                                                    color: Colors.amber.shade900,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    'Justificativa Pendente',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Colors.amber.shade900,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ],
                                     ),
                                     trailing:
                                         canEditMember

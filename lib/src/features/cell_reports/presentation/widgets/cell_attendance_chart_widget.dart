@@ -367,7 +367,7 @@ class _CellAttendanceChartWidgetState
             if (attendance != null) {
               if (attendance.isPresent) {
                 totalActualPresences++;
-              } else if (!attendance.isJustified) {
+              } else if (!attendance.isJustificationApproved) {
                 totalUnexcusedAbsences++;
               }
             } else {

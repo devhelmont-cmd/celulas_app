@@ -169,8 +169,8 @@ class CellMultiplicationProgressModel {
       isLeadershipTargetMet = hasLeaderInTraining || hasCoLeader;
     }
 
-    // Processamento dos relatórios
-    final occurredReports = reports.where((r) => r.status == ReportStatus.occurred).toList();
+    // Processamento dos relatórios (Considera reuniões normais e eventos ponte, excluindo apenas reuniões canceladas)
+    final occurredReports = reports.where((r) => r.status != ReportStatus.cacelled).toList();
     final totalMeetingsHeld = reports.length;
 
     // Média de visitantes
@@ -189,7 +189,9 @@ class CellMultiplicationProgressModel {
       for (var att in report.attendances) {
         if (!att.isExcused) {
           totalAttendancesCount++;
-          if (att.isPresent) presentCount++;
+          // Exclusivamente para o cálculo de assiduidade na multiplicação de célula:
+          // Faltas justificadas validadas contam como presença
+          if (att.isPresent || att.isJustificationApproved) presentCount++;
         }
       }
     }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
+import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
+import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
+import 'package:celulas_app/src/features/cell_reports/presentation/widgets/member_absence_justification_dialog.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/prayer_request_model.dart';
@@ -17,6 +20,92 @@ class MemberDashboardWidget extends StatelessWidget {
     final targetDate = meeting.meetingDate;
     final expiry = DateTime(targetDate.year, targetDate.month, targetDate.day + 1);
     return DateTime.now().isAfter(expiry);
+  }
+
+  Future<int> _getPendingAbsencesCount(String cellId) async {
+    try {
+      final repo = getIt<ICellReportsRepository>();
+      final cellDataSource = getIt<ICellRemoteDataSource>();
+      final reports = await repo.getAllReports();
+
+      String? cellMemberId;
+      List<dynamic> loadedPeriods = [];
+      try {
+        final allMembers = await cellDataSource.getAllMembers();
+        final norm = user.name?.trim().toLowerCase() ?? '';
+        for (var m in allMembers) {
+          final mUserId = m['userId']?.toString() ?? '';
+          final mId = m['id']?.toString() ?? '';
+          final mName = m['name']?.toString() ?? '';
+          if ((mUserId.isNotEmpty && mUserId == user.id) ||
+              mId == user.id ||
+              (norm.isNotEmpty && mName.trim().toLowerCase() == norm)) {
+            cellMemberId = mId;
+            break;
+          }
+        }
+        if (cellMemberId != null && cellMemberId.isNotEmpty) {
+          loadedPeriods = await cellDataSource.getMemberPeriods(cellMemberId);
+        }
+      } catch (_) {}
+
+      final candidateIds = {user.id, if (cellMemberId != null) cellMemberId};
+      final normName = user.name?.trim().toLowerCase() ?? '';
+      int count = 0;
+
+      for (var r in reports) {
+        if (r.status == ReportStatus.cacelled) continue;
+
+        AttendanceEntity? att = r.attendances
+            .cast<AttendanceEntity?>()
+            .firstWhere(
+              (a) => a != null && (
+              candidateIds.contains(a.cellMemberId) ||
+                  (normName.isNotEmpty &&
+                      a.memberName?.trim().toLowerCase() == normName)
+          ),
+          orElse: () => null,
+        );
+
+        bool isWithinHistory = false;
+        if (loadedPeriods.isNotEmpty) {
+          final targetDate = DateTime(r.scheduledDate.year, r.scheduledDate.month, r.scheduledDate.day);
+          for (final p in loadedPeriods) {
+            final start = DateTime(p.startDate.year, p.startDate.month, p.startDate.day);
+            final end = p.endDate != null ? DateTime(p.endDate!.year, p.endDate!.month, p.endDate!.day) : null;
+            if (!targetDate.isBefore(start) && (end == null || !targetDate.isAfter(end))) {
+              if (p.cellId == r.cellId) {
+                isWithinHistory = true;
+                break;
+              }
+            }
+          }
+        }
+
+        if (att == null && isWithinHistory) {
+          att = AttendanceEntity(
+            cellMemberId: cellMemberId ?? user.id,
+            isPresent: false,
+          );
+        }
+
+        if (att == null || att.isExcused) continue;
+        if (att.isPresent &&
+            att.justificationStatus != 'presence_claim_pending' &&
+            att.justificationStatus != 'presence_claimed_approved') {
+          continue;
+        }
+
+        if (att.justificationStatus == 'none' ||
+            att.justificationStatus == 'justification_rejected' ||
+            att.justificationStatus == 'presence_claim_rejected') {
+          count++;
+        }
+      }
+      return count;
+    } catch (_) {
+      return 0;
+    }
   }
 
   Future<void> _showAddPrayerDialog(BuildContext context, String cellId) async {
@@ -381,6 +470,71 @@ class MemberDashboardWidget extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
+                FutureBuilder<int>(
+                  future: _getPendingAbsencesCount(cell.id),
+                  builder: (context, pendingSnapshot) {
+                    final pendingCount = pendingSnapshot.data ?? 0;
+                    if (pendingCount == 0) return const SizedBox.shrink();
+
+                    return Card(
+                      color: Colors.amber.shade50,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.amber.shade400),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.event_busy,
+                              color: Colors.amber,
+                              size: 32,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Faltas sem Justificativa ($pendingCount)',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                      color: Colors.brown,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Você tem $pendingCount falta(s) pendente(s) de justificativa ou ciência.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.brown.shade800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.amber.shade700,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () =>
+                                  MemberAbsenceJustificationDialog.show(
+                                context,
+                                currentUser: user,
+                                cellId: cell.id,
+                              ),
+                              child: const Text('Resolver'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
                 Text(
                   'Interações',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -401,12 +555,10 @@ class MemberDashboardWidget extends StatelessWidget {
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'A justificativa de faltas estará disponível em breve.',
-                              ),
-                            ),
+                          MemberAbsenceJustificationDialog.show(
+                            context,
+                            currentUser: user,
+                            cellId: cell.id,
                           );
                         },
                         icon: const Icon(Icons.event_busy_outlined),

@@ -18,7 +18,17 @@ abstract class ICellReportsRepository {
   /// Salva ou atualiza um relatório semanal / evento ponte
   Future<void> saveReport(CellReportEntity report);
 
-  /// Permite ao membro justificar uma falta posteriormente
+  /// Permite ao membro ou líder atualizar a justificativa / status de presença em uma falta
+  Future<void> updateAttendanceJustification({
+    required String reportId,
+    required String cellMemberId,
+    required String justificationStatus,
+    String? justificationReason,
+    bool? isPresent,
+    String? justifiedByUserId,
+  });
+
+  /// Permite ao membro justificar uma falta posteriormente (Legado / Suporte)
   Future<void> justifyAbsence({
     required String reportId,
     required String cellMemberId,

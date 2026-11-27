@@ -1,12 +1,12 @@
-// lib/src/features/members/presentation/pages/members_management_page.dart
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'package:celulas_app/src/core/injections/injection_container.dart';
-import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
-import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/core/utils/gender_helper.dart';
+import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
+import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
+import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
 import 'package:celulas_app/src/features/members/presentation/pages/member_analysis_page.dart';
 
@@ -34,6 +34,7 @@ class _MembersManagementPageState extends State<MembersManagementPage>
   List<Map<String, dynamic>> _membersWithoutCell = [];
   Map<String, String> _cellNamesMap = {};
   Map<String, Map<String, dynamic>> _usersMap = {};
+  Set<String> _pendingMemberIds = {};
   bool _isLoading = true;
 
   @override
@@ -54,11 +55,28 @@ class _MembersManagementPageState extends State<MembersManagementPage>
         _dataSource.getAllMembers(),
         _dataSource.getCells(currentUser: widget.currentUser),
         _firestore.collection('users').get(),
+        getIt<ICellReportsRepository>().getAllReports(),
       ]);
 
       final rawMembers = results[0] as List<Map<String, dynamic>>;
       final allCells = results[1] as List<CellModel>;
       final usersSnap = results[2] as QuerySnapshot<Map<String, dynamic>>;
+      final allReports = results[3] as List<dynamic>;
+
+      final pendingIds = <String>{};
+      for (var r in allReports) {
+        final attendances = (r as dynamic).attendances as List<dynamic>;
+        for (var att in attendances) {
+          if ((att as dynamic).isPendingApproval == true) {
+            final mId = att.cellMemberId as String;
+            final mName = att.memberName as String?;
+            pendingIds.add(mId);
+            if (mName != null && mName.trim().isNotEmpty) {
+              pendingIds.add(mName.trim().toLowerCase());
+            }
+          }
+        }
+      }
 
       // Mapeia dados dos usuários por ID para enriquecimento rápido
       final usersMap = <String, Map<String, dynamic>>{};
@@ -78,7 +96,6 @@ class _MembersManagementPageState extends State<MembersManagementPage>
         final mergedMember = Map<String, dynamic>.from(member);
         final userId = mergedMember['userId'] as String?;
 
-        // Enriquece foto e telefone se o usuário possuir perfil em 'users'
         if (userId != null && usersMap.containsKey(userId)) {
           final uData = usersMap[userId]!;
           if ((mergedMember['photoUrl'] == null ||
@@ -110,6 +127,7 @@ class _MembersManagementPageState extends State<MembersManagementPage>
           _membersWithoutCell = withoutCell;
           _cellNamesMap = cellMap;
           _usersMap = usersMap;
+          _pendingMemberIds = pendingIds;
           _isLoading = false;
         });
       }
@@ -284,6 +302,41 @@ class _MembersManagementPageState extends State<MembersManagementPage>
                       ),
                     ],
                   ),
+                  if (_pendingMemberIds.contains(member['id']) ||
+                      (userId != null && _pendingMemberIds.contains(userId)) ||
+                      _pendingMemberIds.contains(name.trim().toLowerCase())) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.verified_user,
+                            size: 12,
+                            color: Colors.amber.shade900,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Justificativa Pendente',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.amber.shade900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
               trailing: const Icon(Icons.chevron_right, color: Colors.grey),

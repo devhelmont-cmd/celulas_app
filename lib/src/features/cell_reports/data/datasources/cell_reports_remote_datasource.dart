@@ -15,6 +15,15 @@ abstract class ICellReportsRemoteDataSource {
 
   Future<void> saveReport(CellReportModel report);
 
+  Future<void> updateAttendanceJustification({
+    required String reportId,
+    required String cellMemberId,
+    required String justificationStatus,
+    String? justificationReason,
+    bool? isPresent,
+    String? justifiedByUserId,
+  });
+
   Future<void> justifyAbsence({
     required String reportId,
     required String cellMemberId,
@@ -269,10 +278,13 @@ class CellReportsRemoteDataSourceImpl implements ICellReportsRemoteDataSource {
   }
 
   @override
-  Future<void> justifyAbsence({
+  Future<void> updateAttendanceJustification({
     required String reportId,
     required String cellMemberId,
-    required String justification,
+    required String justificationStatus,
+    String? justificationReason,
+    bool? isPresent,
+    String? justifiedByUserId,
   }) async {
     final docRef = _firestore.collection('reports').doc(reportId);
 
@@ -283,29 +295,74 @@ class CellReportsRemoteDataSourceImpl implements ICellReportsRemoteDataSource {
       final data = snapshot.data()!;
       final report = CellReportModel.fromMap(data, snapshot.id);
 
-      final updatedAttendances =
-      report.attendances.map((attendance) {
+      bool found = false;
+      final updatedAttendances = report.attendances.map((attendance) {
         if (attendance.cellMemberId == cellMemberId) {
+          found = true;
+          final bool isApprovedJustification =
+              justificationStatus == 'justified_approved';
+          final bool isPresenceApproved =
+              justificationStatus == 'presence_claimed_approved';
+
+          final bool newIsPresent = isPresenceApproved;
+          final bool newIsJustified = isApprovedJustification;
+
           return AttendanceModel(
             cellMemberId: attendance.cellMemberId,
             memberName: attendance.memberName,
-            isPresent: attendance.isPresent,
-            isJustified: true,
-            justificationReason: justification,
+            isPresent: newIsPresent,
+            isJustified: newIsJustified,
+            justificationReason:
+                justificationReason ?? attendance.justificationReason,
             rolesPerformed: attendance.rolesPerformed,
             isExcused: attendance.isExcused,
+            justificationStatus: justificationStatus,
+            justifiedByUserId: justifiedByUserId ?? attendance.justifiedByUserId,
+            justifiedAt: DateTime.now(),
           );
         }
         return attendance;
       }).toList();
 
+      if (!found) {
+        final bool isApprovedJustification =
+            justificationStatus == 'justified_approved';
+        final bool isPresenceApproved =
+            justificationStatus == 'presence_claimed_approved';
+
+        updatedAttendances.add(
+          AttendanceModel(
+            cellMemberId: cellMemberId,
+            isPresent: isPresenceApproved ? true : (isPresent ?? false),
+            isJustified: isApprovedJustification ||
+                (justificationStatus == 'justification_pending'),
+            justificationReason: justificationReason,
+            justificationStatus: justificationStatus,
+            justifiedByUserId: justifiedByUserId,
+            justifiedAt: DateTime.now(),
+          ),
+        );
+      }
+
       transaction.update(docRef, {
         'attendances':
-        updatedAttendances
-            .map((e) => (e as AttendanceModel).toMap())
-            .toList(),
+            updatedAttendances.map((e) => (e as AttendanceModel).toMap()).toList(),
       });
     });
+  }
+
+  @override
+  Future<void> justifyAbsence({
+    required String reportId,
+    required String cellMemberId,
+    required String justification,
+  }) async {
+    await updateAttendanceJustification(
+      reportId: reportId,
+      cellMemberId: cellMemberId,
+      justificationStatus: 'justification_pending',
+      justificationReason: justification,
+    );
   }
 
   @override

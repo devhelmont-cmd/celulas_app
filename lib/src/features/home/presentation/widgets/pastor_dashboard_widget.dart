@@ -1,8 +1,8 @@
-// lib/src/features/home/presentation/widgets/pastor_dashboard_widget.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
+import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/members/presentation/pages/members_management_page.dart';
 
@@ -12,6 +12,7 @@ class PastorNotifications {
   final int pendingReportsCount;
   final int pendingRolesCount;
   final int unlinkedMembersCount;
+  final int pendingJustificationsCount;
 
   PastorNotifications({
     required this.pendingJoinRequestsCount,
@@ -19,6 +20,7 @@ class PastorNotifications {
     required this.pendingReportsCount,
     required this.pendingRolesCount,
     required this.unlinkedMembersCount,
+    required this.pendingJustificationsCount,
   });
 }
 
@@ -125,6 +127,17 @@ class PastorDashboardWidget extends StatelessWidget {
       if (cellHasPendingRoles) pendingRolesCount++;
     }
 
+    int pendingJustificationsCount = 0;
+    try {
+      final reportsRepo = getIt<ICellReportsRepository>();
+      final allReports = await reportsRepo.getAllReports();
+      for (var r in allReports) {
+        for (var att in r.attendances) {
+          if (att.isPendingApproval) pendingJustificationsCount++;
+        }
+      }
+    } catch (_) {}
+
     return {
       'cells': cellsSnapshot.docs.length,
       'members': membersSnapshot.docs.length,
@@ -134,6 +147,7 @@ class PastorDashboardWidget extends StatelessWidget {
         pendingReportsCount: pendingReportsCount,
         pendingRolesCount: pendingRolesCount,
         unlinkedMembersCount: unlinkedMembersCount,
+        pendingJustificationsCount: pendingJustificationsCount,
       ),
     };
   }
@@ -290,6 +304,36 @@ class PastorDashboardWidget extends StatelessWidget {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     onNavigateTab?.call(1);
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            if (notifications.pendingJustificationsCount > 0) ...[
+              Card(
+                color: Colors.amber.shade50,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.amber.shade300),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.verified_user, color: Colors.amber),
+                  title: Text(
+                    '${notifications.pendingJustificationsCount} Justificativa(s) de Falta Pendente(s)',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text('Solicitações de falta ou presença aguardando validação.'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => MembersManagementPage(
+                          currentUser: currentUser,
+                        ),
+                      ),
+                    );
                   },
                 ),
               ),

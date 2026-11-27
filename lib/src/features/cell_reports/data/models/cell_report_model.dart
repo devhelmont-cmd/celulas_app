@@ -24,25 +24,43 @@ class AttendanceModel extends AttendanceEntity {
     String? justificationReason,
     List<String> rolesPerformed = const [],
     bool isExcused = false,
+    String justificationStatus = 'none',
+    String? justifiedByUserId,
+    DateTime? justifiedAt,
   }) : super(
-    cellMemberId: cellMemberId,
-    memberName: memberName,
-    isPresent: isPresent,
-    isJustified: isJustified,
-    justificationReason: justificationReason,
-    rolesPerformed: rolesPerformed,
-    isExcused: isExcused,
-  );
+          cellMemberId: cellMemberId,
+          memberName: memberName,
+          isPresent: isPresent,
+          isJustified: isJustified,
+          justificationReason: justificationReason,
+          rolesPerformed: rolesPerformed,
+          isExcused: isExcused,
+          justificationStatus: justificationStatus,
+          justifiedByUserId: justifiedByUserId,
+          justifiedAt: justifiedAt,
+        );
 
   factory AttendanceModel.fromMap(Map<String, dynamic> map) {
+    // Garante fallback se isJustified estava true em modelos antigos sem justificationStatus explicitado
+    String effectiveStatus = map['justificationStatus'] ?? 'none';
+    final bool legacyIsJustified = map['isJustified'] ?? false;
+    if (effectiveStatus == 'none' && legacyIsJustified) {
+      effectiveStatus = 'justified_approved';
+    }
+
     return AttendanceModel(
       cellMemberId: map['cellMemberId'] ?? '',
       memberName: map['memberName'],
       isPresent: map['isPresent'] ?? false,
-      isJustified: map['isJustified'] ?? false,
+      isJustified: legacyIsJustified || effectiveStatus == 'justified_approved',
       justificationReason: map['justificationReason'],
       rolesPerformed: List<String>.from(map['rolesPerformed'] ?? []),
       isExcused: map['isExcused'] ?? false,
+      justificationStatus: effectiveStatus,
+      justifiedByUserId: map['justifiedByUserId'],
+      justifiedAt: map['justifiedAt'] != null
+          ? (map['justifiedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -56,6 +74,9 @@ class AttendanceModel extends AttendanceEntity {
         'justificationReason': justificationReason,
       'rolesPerformed': rolesPerformed,
       'isExcused': isExcused,
+      'justificationStatus': justificationStatus,
+      if (justifiedByUserId != null) 'justifiedByUserId': justifiedByUserId,
+      if (justifiedAt != null) 'justifiedAt': Timestamp.fromDate(justifiedAt!),
     };
   }
 }

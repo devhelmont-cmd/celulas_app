@@ -14,6 +14,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'member_absence_justification_dialog.dart';
 import '../../../members/presentation/pages/member_analysis_page.dart';
 
 class MemberAnalyticsWidget extends StatefulWidget {
@@ -551,7 +552,7 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
             for (var role in attendance.rolesPerformed) {
               rolesCountMap[role] = (rolesCountMap[role] ?? 0) + 1;
             }
-          } else if (attendance.isJustified) {
+          } else if (attendance.isJustificationApproved) {
             justifiedAbsences++;
           }
         }
@@ -838,6 +839,27 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
             ),
           ],
         ),
+        if (widget.viewerUser == null ||
+            widget.viewerUser!.id == widget.currentUser.id) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onPressed: () {
+                MemberAbsenceJustificationDialog.show(
+                  context,
+                  currentUser: widget.currentUser,
+                  cellId: _currentCellId,
+                );
+              },
+              icon: const Icon(Icons.event_busy_outlined),
+              label: const Text('Gerenciar Faltas e Justificativas'),
+            ),
+          ),
+        ],
         const SizedBox(height: 20),
         Card(
           elevation: 2,

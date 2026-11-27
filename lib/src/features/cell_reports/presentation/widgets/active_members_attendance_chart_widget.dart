@@ -259,7 +259,7 @@ class _ActiveMembersAttendanceChartWidgetState
           if (attendance.isPresent) {
             totalPresences++;
             stats.presences++;
-          } else if (attendance.isJustified) {
+          } else if (attendance.isJustificationApproved) {
             totalJustified++;
             stats.justified++;
           } else {

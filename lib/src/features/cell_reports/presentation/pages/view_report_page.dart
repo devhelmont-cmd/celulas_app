@@ -668,8 +668,14 @@ class _ViewReportPageState extends State<ViewReportPage> {
                     Icon(
                       att.isPresent
                           ? Icons.check_circle
-                          : Icons.cancel_outlined,
-                      color: att.isPresent ? Colors.green : Colors.red,
+                          : (att.isJustificationApproved || att.isJustified)
+                              ? Icons.bookmark_added_outlined
+                              : Icons.cancel_outlined,
+                      color: att.isPresent
+                          ? Colors.green
+                          : (att.isJustificationApproved || att.isJustified)
+                              ? Colors.orange
+                              : Colors.red,
                       size: 20,
                     ),
                     const SizedBox(width: 10),
@@ -688,6 +694,18 @@ class _ViewReportPageState extends State<ViewReportPage> {
                                   : Colors.grey.shade700,
                             ),
                           ),
+                          if (att.justificationReason != null &&
+                              att.justificationReason!.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Justificativa: "${att.justificationReason}"',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontStyle: FontStyle.italic,
+                                color: Colors.orange.shade800,
+                              ),
+                            ),
+                          ],
                           if (att.rolesPerformed.isNotEmpty) ...[
                             const SizedBox(height: 4),
                             Wrap(
@@ -696,16 +714,16 @@ class _ViewReportPageState extends State<ViewReportPage> {
                               children: att.rolesPerformed
                                   .map(
                                     (role) => Chip(
-                                  label: Text(
-                                    role,
-                                    style: const TextStyle(fontSize: 10),
-                                  ),
-                                  backgroundColor: Colors.blue.shade50,
-                                  padding: EdgeInsets.zero,
-                                  materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                                ),
-                              )
+                                      label: Text(
+                                        role,
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                      backgroundColor: Colors.blue.shade50,
+                                      padding: EdgeInsets.zero,
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                  )
                                   .toList(),
                             ),
                           ],

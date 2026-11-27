@@ -1,17 +1,18 @@
-// lib/src/features/members/presentation/pages/member_analysis_page.dart
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
-import 'package:celulas_app/src/features/cells/data/models/member_period_model.dart';
-import 'package:celulas_app/src/core/utils/gender_helper.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'package:celulas_app/src/core/injections/injection_container.dart';
+import 'package:celulas_app/src/core/utils/gender_helper.dart';
 import 'package:celulas_app/src/features/auth/data/models/user_model.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
+import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
+import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/member_analytics_widget.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
+import 'package:celulas_app/src/features/cells/data/models/member_period_model.dart';
 
 class MemberAnalysisPage extends StatefulWidget {
   final Map<String, dynamic> memberData;
@@ -42,6 +43,7 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
 
   List<MemberPeriodModel> _memberPeriods = [];
   List<CellModel> _allCells = [];
+  int _analyticsRefreshKey = 0;
 
   bool get _isPastorOrCoordinator => widget.currentUser.isPastorOrCoordinator;
   String get _memberId => widget.memberData['id'] ?? '';
@@ -421,7 +423,7 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
             ),
             const SizedBox(height: 16),
 
-            // SEÇÃO DE MÉTRICAS E DESEMPENHO (Exibido se tiver célula OU se estiver sem célula mas tiver histórico)
+            // SEÇÃO DE MÉTRICAS E DESEMPENHO
             if (showAnalyticsCard) ...[
               Card(
                 elevation: 2,
@@ -429,6 +431,7 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: MemberAnalyticsWidget(
+                    key: ValueKey(_analyticsRefreshKey),
                     currentUser: user,
                     viewerUser: widget.currentUser,
                     isEmbedded: true,
@@ -436,6 +439,8 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+              _buildJustificationManagementCard(),
               const SizedBox(height: 16),
             ],
 
@@ -642,4 +647,508 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
       ),
     );
   }
+
+  Future<void> _updateAttendanceStatus(
+      String reportId, String cellMemberId, String newStatus) async {
+    try {
+      final repo = getIt<ICellReportsRepository>();
+      await repo.updateAttendanceJustification(
+        reportId: reportId,
+        cellMemberId: cellMemberId,
+        justificationStatus: newStatus,
+        justifiedByUserId: widget.currentUser.id,
+      );
+      if (mounted) {
+        setState(() {
+          _analyticsRefreshKey++;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Status da falta atualizado com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao atualizar status: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _updateAttendanceStatusWithReason(
+      String reportId, String cellMemberId, String newStatus, String reason) async {
+    try {
+      final repo = getIt<ICellReportsRepository>();
+      await repo.updateAttendanceJustification(
+        reportId: reportId,
+        cellMemberId: cellMemberId,
+        justificationStatus: newStatus,
+        justificationReason: reason,
+        justifiedByUserId: widget.currentUser.id,
+      );
+      if (mounted) {
+        setState(() {
+          _analyticsRefreshKey++;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Falta justificada e aprovada com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao justificar falta: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _showDirectJustifyDialog(BuildContext context, _AbsenceRecord record) {
+    final controller = TextEditingController(
+      text: record.attendance.justificationReason ?? '',
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Justificar Falta pelo Membro'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Digite o motivo da justificativa...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                Navigator.pop(ctx);
+                await _updateAttendanceStatusWithReason(
+                  record.reportId,
+                  record.cellMemberId,
+                  'justified_approved',
+                  text,
+                );
+              }
+            },
+            child: const Text('Salvar e Aprovar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSelectAbsenceToJustifyDialog(
+      BuildContext context, List<_AbsenceRecord> allPastAbsences) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Selecionar Falta para Justificar'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: allPastAbsences.isEmpty
+              ? const Text('Nenhuma falta registrada para este membro.')
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: allPastAbsences.length,
+                  itemBuilder: (context, index) {
+                    final abs = allPastAbsences[index];
+                    final dateStr = DateFormat('dd/MM/yyyy').format(abs.scheduledDate);
+                    return ListTile(
+                      title: Text('Reunião em $dateStr'),
+                      subtitle: Text(abs.attendance.justificationReason ?? 'Sem justificativa prévia'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _showDirectJustifyDialog(context, abs);
+                      },
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Fechar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showManagerEditStatusDialog(BuildContext context, _AbsenceRecord item) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Alterar Status da Falta'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _updateAttendanceStatus(item.reportId, item.cellMemberId, 'justified_approved');
+              },
+              icon: const Icon(Icons.verified),
+              label: const Text('Aprovar Justificativa'),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.teal,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _updateAttendanceStatus(item.reportId, item.cellMemberId, 'presence_claimed_approved');
+              },
+              icon: const Icon(Icons.check_circle),
+              label: const Text('Confirmar Presença'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _updateAttendanceStatus(item.reportId, item.cellMemberId, 'acknowledged');
+              },
+              icon: const Icon(Icons.visibility_off),
+              label: const Text('Registrar Ciência (Falta)'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _updateAttendanceStatus(item.reportId, item.cellMemberId, 'justification_rejected');
+              },
+              icon: const Icon(Icons.close),
+              label: const Text('Rejeitar Solicitação'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(foregroundColor: Colors.amber.shade800),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _updateAttendanceStatus(item.reportId, item.cellMemberId, 'justification_pending');
+              },
+              icon: const Icon(Icons.hourglass_top),
+              label: const Text('Colocar como Aguardando Aprovação'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Fechar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJustificationManagementCard() {
+    final repo = getIt<ICellReportsRepository>();
+    final targetUser = _targetUserEntity;
+    final userId = targetUser?.id ?? widget.memberData['userId'] as String?;
+    final memberId = _memberId;
+    final normName = targetUser?.name?.trim().toLowerCase() ??
+        (widget.memberData['name'] as String?)?.trim().toLowerCase() ??
+        '';
+
+    return FutureBuilder<List<CellReportEntity>>(
+      future: repo.getAllReports(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        final reports = snapshot.data ?? [];
+        List<_AbsenceRecord> memberAbsences = [];
+        List<_AbsenceRecord> allPastAbsences = [];
+
+        for (var report in reports) {
+          if (report.status == ReportStatus.cacelled) continue;
+
+          for (var att in report.attendances) {
+            if (att.isExcused) continue;
+
+            final matches = (userId != null && att.cellMemberId == userId) ||
+                att.cellMemberId == memberId ||
+                (normName.isNotEmpty &&
+                    att.memberName?.trim().toLowerCase() == normName);
+
+            if (!matches) continue;
+
+            if (!att.isPresent ||
+                att.isPendingApproval ||
+                att.isJustified ||
+                att.justificationStatus == 'presence_claimed_approved') {
+              final record = _AbsenceRecord(
+                reportId: report.id,
+                cellMemberId: att.cellMemberId,
+                scheduledDate: report.scheduledDate,
+                attendance: att,
+              );
+              if (!att.isPresent) {
+                allPastAbsences.add(record);
+              }
+
+              if (att.isPendingApproval ||
+                  att.isJustified ||
+                  att.justificationStatus != 'none') {
+                memberAbsences.add(record);
+              }
+            }
+          }
+        }
+
+        memberAbsences.sort((a, b) => b.scheduledDate.compareTo(a.scheduledDate));
+        allPastAbsences.sort((a, b) => b.scheduledDate.compareTo(a.scheduledDate));
+
+        return Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.verified_user, color: Colors.orange, size: 20),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Aprovação e Gerenciamento de Faltas',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.brown,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => _showSelectAbsenceToJustifyDialog(
+                        context,
+                        allPastAbsences,
+                      ),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Justificar Pelo Membro'),
+                    ),
+                  ],
+                ),
+                const Divider(height: 16),
+                if (memberAbsences.isEmpty) ...[
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                    child: Center(
+                      child: Text(
+                        'Nenhuma solicitação de justificativa ou presença pendente.',
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  ...memberAbsences.map((item) {
+                    final att = item.attendance;
+                    final formattedDate =
+                        DateFormat('dd/MM/yyyy').format(item.scheduledDate);
+
+                    String statusText = 'Falta Não Justificada';
+                    Color statusColor = Colors.red;
+
+                    if (att.justificationStatus == 'presence_claimed_approved') {
+                      statusText =
+                          'Presença Confirmada (Sinalização Aceita)';
+                      statusColor = Colors.green.shade700;
+                    } else if (att.justificationStatus ==
+                        'presence_claim_pending') {
+                      statusText = 'Sinalizou Presença na Reunião';
+                      statusColor = Colors.blue.shade800;
+                    } else if (att.justificationStatus ==
+                        'justification_pending') {
+                      statusText =
+                          'Solicitou Justificativa: "${att.justificationReason ?? ""}"';
+                      statusColor = Colors.amber.shade800;
+                    } else if (att.justificationStatus ==
+                            'justified_approved' ||
+                        att.isJustificationApproved) {
+                      statusText = 'Falta Justificada (Aprovada)';
+                      statusColor = Colors.green.shade700;
+                    } else if (att.justificationStatus == 'acknowledged') {
+                      statusText = 'Membro deu ciência';
+                      statusColor = Colors.grey.shade700;
+                    } else if (att.justificationStatus ==
+                            'justification_rejected' ||
+                        att.justificationStatus ==
+                            'presence_claim_rejected') {
+                      statusText = 'Solicitação Rejeitada';
+                      statusColor = Colors.red.shade700;
+                    }
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      color: statusColor.withOpacity(0.05),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(color: statusColor.withOpacity(0.3)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade700),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Reunião em $formattedDate',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
+                                  tooltip: 'Alterar status',
+                                  onPressed: () => _showManagerEditStatusDialog(context, item),
+                                  constraints: const BoxConstraints(),
+                                  padding: EdgeInsets.zero,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: statusColor.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                statusText,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: statusColor,
+                                ),
+                              ),
+                            ),
+                            if (att.isPendingApproval) ...[
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  if (att.justificationStatus ==
+                                      'presence_claim_pending') ...[
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        onPressed: () => _updateAttendanceStatus(
+                                          item.reportId,
+                                          item.cellMemberId,
+                                          'presence_claimed_approved',
+                                        ),
+                                        icon: const Icon(Icons.check, size: 16),
+                                        label: const Text('Aprovar Presença'),
+                                      ),
+                                    ),
+                                  ] else ...[
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        onPressed: () => _updateAttendanceStatus(
+                                          item.reportId,
+                                          item.cellMemberId,
+                                          'justified_approved',
+                                        ),
+                                        icon: const Icon(Icons.check, size: 16),
+                                        label: const Text('Aprovar'),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                      ),
+                                      onPressed: () => _updateAttendanceStatus(
+                                        item.reportId,
+                                        item.cellMemberId,
+                                        att.justificationStatus ==
+                                                'presence_claim_pending'
+                                            ? 'presence_claim_rejected'
+                                            : 'justification_rejected',
+                                      ),
+                                      icon: const Icon(Icons.close, size: 16),
+                                      label: const Text('Rejeitar'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AbsenceRecord {
+  final String reportId;
+  final String cellMemberId;
+  final DateTime scheduledDate;
+  final AttendanceEntity attendance;
+
+  _AbsenceRecord({
+    required this.reportId,
+    required this.cellMemberId,
+    required this.scheduledDate,
+    required this.attendance,
+  });
 }

@@ -57,6 +57,25 @@ class CellReportsRepositoryImpl implements ICellReportsRepository {
   }
 
   @override
+  Future<void> updateAttendanceJustification({
+    required String reportId,
+    required String cellMemberId,
+    required String justificationStatus,
+    String? justificationReason,
+    bool? isPresent,
+    String? justifiedByUserId,
+  }) async {
+    await _dataSource.updateAttendanceJustification(
+      reportId: reportId,
+      cellMemberId: cellMemberId,
+      justificationStatus: justificationStatus,
+      justificationReason: justificationReason,
+      isPresent: isPresent,
+      justifiedByUserId: justifiedByUserId,
+    );
+  }
+
+  @override
   Future<void> justifyAbsence({
     required String reportId,
     required String cellMemberId,
