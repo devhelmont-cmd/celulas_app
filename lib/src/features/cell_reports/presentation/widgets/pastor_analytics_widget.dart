@@ -257,8 +257,8 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
         padding: const EdgeInsets.all(16),
         children: [
           // Seletor de Modo de Visão (Geral, Célula, Membro)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
+          HorizontalScrollMenu(
+            storageKey: 'pastor_view_mode_menu',
             child: SegmentedButton<PastorViewMode>(
               segments: const [
                 ButtonSegment(
@@ -625,6 +625,113 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class HorizontalScrollMenu extends StatefulWidget {
+  final Widget child;
+  final String? storageKey;
+  const HorizontalScrollMenu({super.key, required this.child, this.storageKey});
+
+  @override
+  State<HorizontalScrollMenu> createState() => _HorizontalScrollMenuState();
+}
+
+class _HorizontalScrollMenuState extends State<HorizontalScrollMenu> {
+  late final ScrollController _scrollController;
+  bool _showLeftIndicator = false;
+  bool _showRightIndicator = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_updateIndicators);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateIndicators());
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _updateIndicators() {
+    if (!mounted) return;
+    if (!_scrollController.hasClients) return;
+
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final currentScroll = _scrollController.offset;
+
+    final showLeft = currentScroll > 2.0;
+    final showRight = currentScroll < maxScroll - 2.0;
+
+    if (showLeft != _showLeftIndicator || showRight != _showRightIndicator) {
+      setState(() {
+        _showLeftIndicator = showLeft;
+        _showRightIndicator = showRight;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (_showLeftIndicator) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Icon(
+              Icons.chevron_left,
+              size: 18,
+              color: Colors.blueAccent.withOpacity(0.7),
+            ),
+          ),
+        ],
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              _updateIndicators();
+              return false;
+            },
+            child: ShaderMask(
+              shaderCallback: (Rect bounds) {
+                return LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    _showLeftIndicator ? Colors.transparent : Colors.white,
+                    Colors.white,
+                    Colors.white,
+                    _showRightIndicator ? Colors.transparent : Colors.white,
+                  ],
+                  stops: const [0.0, 0.08, 0.92, 1.0],
+                ).createShader(bounds);
+              },
+              blendMode: BlendMode.dstIn,
+              child: SingleChildScrollView(
+                key: widget.storageKey != null ? PageStorageKey<String>(widget.storageKey!) : null,
+                controller: _scrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: widget.child,
+              ),
+            ),
+          ),
+        ),
+        if (_showRightIndicator) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: Colors.blueAccent.withOpacity(0.7),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
