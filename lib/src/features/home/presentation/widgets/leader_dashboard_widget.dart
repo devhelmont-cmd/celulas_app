@@ -112,25 +112,27 @@ class LeaderDashboardWidget extends StatelessWidget {
             final bool hasAnyPendingReport = meetings.any((m) => m.isExpired && !m.isReportFilled);
             final bool areRolesPending = _hasUnassignedRoles(latestMeeting);
 
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 1. Aviso de Solicitação de Entrada
                 if (!user.isPastorOrCoordinator && pendingRequestsCount > 0) ...[
                   Card(
-                    color: Colors.blue.shade50,
+                    color: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.blue.shade200),
+                      side: BorderSide(color: isDark ? Colors.blue.shade700 : Colors.blue.shade200),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.person_add,
-                            color: Colors.blue,
+                            color: isDark ? Colors.blue.shade300 : Colors.blue,
                             size: 32,
                           ),
                           const SizedBox(width: 12),
@@ -140,11 +142,17 @@ class LeaderDashboardWidget extends StatelessWidget {
                               children: [
                                 Text(
                                   '$pendingRequestsCount Solicitação(ões) de Entrada',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.blue.shade200 : Colors.black87,
+                                  ),
                                 ),
                                 Text(
                                   'Usuários aguardando aprovação para entrar na célula.',
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? Colors.blue.shade300 : Colors.black54,
+                                  ),
                                 ),
                               ],
                             ),
@@ -177,19 +185,19 @@ class LeaderDashboardWidget extends StatelessWidget {
                 // 1.5. Aviso de Justificativa / Presença Pendente de Aprovação
                 if (pendingJustificationsCount > 0) ...[
                   Card(
-                    color: Colors.amber.shade50,
+                    color: isDark ? Colors.amber.shade900.withOpacity(0.3) : Colors.amber.shade50,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: Colors.amber.shade300),
+                      side: BorderSide(color: isDark ? Colors.amber.shade700 : Colors.amber.shade300),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.verified_user,
-                            color: Colors.amber,
+                            color: isDark ? Colors.amber.shade300 : Colors.amber,
                             size: 32,
                           ),
                           const SizedBox(width: 12),
@@ -199,10 +207,10 @@ class LeaderDashboardWidget extends StatelessWidget {
                               children: [
                                 Text(
                                   'Justificativas Pendentes ($pendingJustificationsCount)',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 14,
-                                    color: Colors.brown,
+                                    color: isDark ? Colors.amber.shade200 : Colors.brown,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -210,7 +218,7 @@ class LeaderDashboardWidget extends StatelessWidget {
                                   'Membros enviaram justificativa ou sinalizaram presença aguardando sua validação.',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.brown.shade800,
+                                    color: isDark ? Colors.amber.shade300 : Colors.brown.shade800,
                                   ),
                                 ),
                               ],
@@ -244,15 +252,19 @@ class LeaderDashboardWidget extends StatelessWidget {
                 // 2. Relatório(s) Pendente(s)
                 if (hasAnyPendingReport) ...[
                   Card(
-                    color: Colors.amber.shade100,
+                    color: isDark ? Colors.amber.shade900.withOpacity(0.3) : Colors.amber.shade100,
                     elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: isDark ? Colors.amber.shade700 : Colors.amber.shade300),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.warning_amber_rounded,
-                            color: Colors.amber,
+                            color: isDark ? Colors.amber.shade300 : Colors.amber.shade800,
                             size: 32,
                           ),
                           const SizedBox(width: 12),
@@ -260,13 +272,19 @@ class LeaderDashboardWidget extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'Relatório(s) Pendente(s)',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.amber.shade200 : Colors.black87,
+                                  ),
                                 ),
                                 Text(
                                   cell.name ?? 'Minha Célula',
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? Colors.amber.shade300 : Colors.black54,
+                                  ),
                                 ),
                               ],
                             ),
@@ -296,15 +314,19 @@ class LeaderDashboardWidget extends StatelessWidget {
                 // 3. Atribuição de Funções Pendente
                 if (areRolesPending) ...[
                   Card(
-                    color: Colors.orange.shade100,
+                    color: isDark ? Colors.orange.shade900.withOpacity(0.3) : Colors.orange.shade100,
                     elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: isDark ? Colors.orange.shade700 : Colors.orange.shade300),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.assignment_ind_outlined,
-                            color: Colors.deepOrange,
+                            color: isDark ? Colors.orange.shade300 : Colors.deepOrange,
                             size: 32,
                           ),
                           const SizedBox(width: 12),
@@ -312,13 +334,19 @@ class LeaderDashboardWidget extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'Atribuição de Funções Pendente',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.orange.shade200 : Colors.black87,
+                                  ),
                                 ),
                                 Text(
                                   'Defina os responsáveis pela próxima reunião',
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? Colors.orange.shade300 : Colors.black54,
+                                  ),
                                 ),
                               ],
                             ),

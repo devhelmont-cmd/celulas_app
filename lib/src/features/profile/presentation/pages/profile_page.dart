@@ -221,17 +221,19 @@ class _ProfilePageState extends State<ProfilePage> {
                   alignment: WrapAlignment.center,
                   children:
                       user.displayRoles.map((roleStr) {
+                        final isDark = Theme.of(context).brightness == Brightness.dark;
                         return Chip(
                           label: Text(
                             roleStr,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.purple.shade200 : Colors.purple.shade900,
                             ),
                           ),
                           visualDensity: VisualDensity.compact,
-                          backgroundColor: Colors.purple.shade50,
-                          side: BorderSide(color: Colors.purple.shade200),
+                          backgroundColor: isDark ? Colors.purple.shade900.withOpacity(0.3) : Colors.purple.shade50,
+                          side: BorderSide(color: isDark ? Colors.purple.shade700 : Colors.purple.shade200),
                         );
                       }).toList(),
                 ),
@@ -283,9 +285,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     'Preencha seus dados para ajudar seu líder a cuidar de você.',
-                    style: TextStyle(fontSize: 12, color: Colors.black87),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface),
                   ),
                   const SizedBox(height: 10),
                   Align(
@@ -548,7 +550,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   hasValue ? value : 'Não informado',
                   style: TextStyle(
                     fontSize: 14,
-                    color: hasValue ? Colors.black87 : Colors.grey.shade400,
+                    color: hasValue ? Theme.of(context).colorScheme.onSurface : Colors.grey.shade400,
                     fontStyle: hasValue ? FontStyle.normal : FontStyle.italic,
                   ),
                 ),
@@ -585,9 +587,9 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: Colors.black87,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w500,
                   ),
                 ),

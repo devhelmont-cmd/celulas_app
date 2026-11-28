@@ -559,8 +559,8 @@ class _ViewReportPageState extends State<ViewReportPage> {
                   Expanded(
                     child: RichText(
                       text: TextSpan(
-                        style: const TextStyle(
-                            color: Colors.black87, fontSize: 13),
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface, fontSize: 13),
                         children: [
                           const TextSpan(
                             text: 'Tema / Estudo: ',
@@ -584,7 +584,7 @@ class _ViewReportPageState extends State<ViewReportPage> {
                   RichText(
                     text: TextSpan(
                       style:
-                      const TextStyle(color: Colors.black87, fontSize: 13),
+                      TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 13),
                       children: [
                         const TextSpan(
                           text: 'Oferta: ',
@@ -619,9 +619,9 @@ class _ViewReportPageState extends State<ViewReportPage> {
                         const SizedBox(height: 4),
                         Text(
                           _testimoniesAndNotes!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
-                            color: Colors.black87,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                       ],
@@ -690,8 +690,8 @@ class _ViewReportPageState extends State<ViewReportPage> {
                                   ? FontWeight.bold
                                   : FontWeight.normal,
                               color: att.isPresent
-                                  ? Colors.black87
-                                  : Colors.grey.shade700,
+                                  ? Theme.of(context).colorScheme.onSurface
+                                  : Colors.grey.shade400,
                             ),
                           ),
                           if (att.justificationReason != null &&

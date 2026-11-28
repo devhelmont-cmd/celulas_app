@@ -155,10 +155,10 @@ class _CellMultiplicationRankingChartWidgetState
                           Expanded(
                             child: Text(
                               '${index + 1}. ${progress.cell.name}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.black87,
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                           ),

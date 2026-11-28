@@ -639,7 +639,7 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.onSurface),
                 ),
               ],
             ),

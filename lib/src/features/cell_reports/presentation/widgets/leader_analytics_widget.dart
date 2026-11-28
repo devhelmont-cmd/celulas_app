@@ -327,35 +327,41 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
                   tooltip: 'Personalizar Gráficos',
                   onPressed: _showCustomizeDialog,
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: availableMonths.any((m) => m['key'] == _selectedMonthKey)
-                          ? _selectedMonthKey
-                          : 'all',
-                      icon: const Icon(Icons.arrow_drop_down, color: Colors.blueAccent),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blueAccent,
+                Builder(
+                  builder: (context) {
+                    final isDark = Theme.of(context).brightness == Brightness.dark;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: isDark ? Colors.blue.shade700 : Colors.blue.shade200),
                       ),
-                      items: availableMonths.map((item) {
-                        return DropdownMenuItem<String>(
-                          value: item['key'],
-                          child: Text(item['label']!),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        if (val != null) setState(() => _selectedMonthKey = val);
-                      },
-                    ),
-                  ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: availableMonths.any((m) => m['key'] == _selectedMonthKey)
+                              ? _selectedMonthKey
+                              : 'all',
+                          dropdownColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          icon: const Icon(Icons.arrow_drop_down, color: Colors.blueAccent),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.blue.shade200 : Colors.blueAccent,
+                          ),
+                          items: availableMonths.map((item) {
+                            return DropdownMenuItem<String>(
+                              value: item['key'],
+                              child: Text(item['label']!, style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => _selectedMonthKey = val);
+                          },
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

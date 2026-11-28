@@ -114,7 +114,9 @@ class _CellsListPageState extends State<CellsListPage>
           ],
         ),
       )
-          : null,
+          : AppBar(
+              title: const Text('Células'),
+            ),
       floatingActionButton: canCreateCell
           ? FloatingActionButton.extended(
         onPressed: () async {
@@ -251,10 +253,10 @@ class _CellsListPageState extends State<CellsListPage>
                             builder: (context, snapshot) {
                               if (snapshot.connectionState ==
                                   ConnectionState.waiting) {
-                                return const Text(
+                                return Text(
                                   'Líder: Carregando...',
                                   style: TextStyle(
-                                    color: Colors.black87,
+                                    color: Theme.of(context).colorScheme.onSurface,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 );
@@ -263,8 +265,8 @@ class _CellsListPageState extends State<CellsListPage>
                                   snapshot.data ?? 'Sem líder definido';
                               return Text(
                                 'Líder: $leaderName',
-                                style: const TextStyle(
-                                  color: Colors.black87,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurface,
                                   fontWeight: FontWeight.w500,
                                 ),
                               );

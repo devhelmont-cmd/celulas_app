@@ -2488,11 +2488,11 @@ class _CellDetailPageState extends State<CellDetailPage>
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState ==
                                     ConnectionState.waiting) {
-                                  return const Text(
+                                  return Text(
                                     'Líder: Carregando...',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
+                                      color: Theme.of(context).colorScheme.onSurface,
                                     ),
                                   );
                                 }
@@ -2500,9 +2500,9 @@ class _CellDetailPageState extends State<CellDetailPage>
                                     snapshot.data ?? 'Sem líder definido';
                                 return Text(
                                   'Líder: $leaderName',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
+                                    color: Theme.of(context).colorScheme.onSurface,
                                   ),
                                 );
                               },

@@ -574,9 +574,9 @@ class _CellAttendanceChartWidgetState
                                 padding: const EdgeInsets.only(top: 6.0),
                                 child: Text(
                                   recentCycles[index].shortLabel,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 10,
-                                    color: Colors.black87,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               );
@@ -587,9 +587,9 @@ class _CellAttendanceChartWidgetState
                                 padding: const EdgeInsets.only(top: 6.0),
                                 child: Text(
                                   recentMonths[index].shortLabel,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 10,
-                                    color: Colors.black87,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               );
@@ -600,9 +600,9 @@ class _CellAttendanceChartWidgetState
                                 padding: const EdgeInsets.only(top: 6.0),
                                 child: Text(
                                   dateLabels[index],
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 10,
-                                    color: Colors.black87,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                               );

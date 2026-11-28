@@ -331,6 +331,7 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
     int totalVisitors = filteredReports.fold(0, (sum, r) => sum + r.visitors.length);
     int totalConversions = filteredReports.fold(0, (sum, r) => sum + r.conversions.length);
     final availableMonths = _getAvailableMonths();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,25 +366,26 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
+                    color: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.blue.shade200),
+                    border: Border.all(color: isDark ? Colors.blue.shade700 : Colors.blue.shade200),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: availableMonths.any((m) => m['key'] == _selectedMonthKey)
                           ? _selectedMonthKey
                           : 'all',
+                      dropdownColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       icon: const Icon(Icons.arrow_drop_down, color: Colors.blueAccent),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: Colors.blueAccent,
+                        color: isDark ? Colors.blue.shade200 : Colors.blueAccent,
                       ),
                       items: availableMonths.map((item) {
                         return DropdownMenuItem<String>(
                           value: item['key'],
-                          child: Text(item['label']!),
+                          child: Text(item['label']!, style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
                         );
                       }).toList(),
                       onChanged: (val) {
@@ -434,6 +436,8 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
       roles: [UserRole.leader],
     );
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -445,18 +449,20 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDark ? Theme.of(context).colorScheme.surfaceContainerHighest : Colors.white,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: isDark ? Theme.of(context).colorScheme.outline : Colors.grey.shade300),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _cells.any((c) => c.id == _selectedCellId) ? _selectedCellId : _cells.first.id,
+                    dropdownColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                     isExpanded: true,
+                    style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
                     items: _cells.map((cell) {
                       return DropdownMenuItem<String>(
                         value: cell.id,
-                        child: Text(cell.name, style: const TextStyle(fontSize: 14)),
+                        child: Text(cell.name, style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface)),
                       );
                     }).toList(),
                     onChanged: (val) {
@@ -504,6 +510,8 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
       roles: [],
     );
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -515,19 +523,21 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDark ? Theme.of(context).colorScheme.surfaceContainerHighest : Colors.white,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: isDark ? Theme.of(context).colorScheme.outline : Colors.grey.shade300),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _selectedMemberUserId,
+                    dropdownColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                     isExpanded: true,
+                    style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface),
                     items: _allMembers.map((member) {
                       final mId = member.userId ?? member.id;
                       return DropdownMenuItem<String>(
                         value: mId,
-                        child: Text(member.name, style: const TextStyle(fontSize: 14)),
+                        child: Text(member.name, style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface)),
                       );
                     }).toList(),
                     onChanged: (val) {

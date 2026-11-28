@@ -634,7 +634,7 @@ class _ReportsPageState extends State<ReportsPage>
         user.isMember && !user.isLeader && !user.isPastorOrCoordinator;
     if (isPureMember) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Dashboard da Célula')),
+        appBar: AppBar(title: const Text('Meu Acompanhamento')),
         body: MemberAnalyticsWidget(currentUser: user),
       );
     }
@@ -982,15 +982,19 @@ class _ReportsPageState extends State<ReportsPage>
 
         // PADRONIZAÇÃO DE CORES E TIPOS SOLICITADA:
         // - Normais: Verde claro
-        // - Evento Ponte: Azul claro
-        // - Cancelada: Vermelho claro
-        // - Remarcada: Roxo claro
-        // - Pendente de relatório: Laranja claro
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        // PADRONIZAÇÃO DE CORES E TIPOS SOLICITADA:
+        // - Normais: Verde
+        // - Evento Ponte: Azul
+        // - Cancelada: Vermelho
+        // - Remarcada: Roxo
+        // - Pendente de relatório: Laranja
         String meetingTypeDesc = "Reunião Normal";
         String statusBadgeText = "Normal";
-        Color cardBgColor = Colors.green.shade50;
-        Color cardBorderColor = Colors.green.shade200;
-        Color typeTextColor = Colors.green.shade900;
+        Color cardBgColor = isDark ? Colors.green.shade900.withOpacity(0.3) : Colors.green.shade50;
+        Color cardBorderColor = isDark ? Colors.green.shade700 : Colors.green.shade200;
+        Color typeTextColor = isDark ? Colors.green.shade300 : Colors.green.shade900;
         IconData typeIcon = Icons.event;
 
         final meetingDateKey =
@@ -998,48 +1002,48 @@ class _ReportsPageState extends State<ReportsPage>
         final studyTopic = topicsMap[meetingDateKey];
 
         if (isPastMeeting && !isFilled) {
-          // Pendente de relatório -> Laranja claro
+          // Pendente de relatório -> Laranja
           meetingTypeDesc = studyTopic != null && studyTopic.isNotEmpty ? "Tema: $studyTopic" : "Reunião Normal";
           statusBadgeText = "Pendente";
-          cardBgColor = Colors.orange.shade50;
-          cardBorderColor = Colors.orange.shade200;
-          typeTextColor = Colors.deepOrange.shade800;
+          cardBgColor = isDark ? Colors.orange.shade900.withOpacity(0.3) : Colors.orange.shade50;
+          cardBorderColor = isDark ? Colors.orange.shade700 : Colors.orange.shade200;
+          typeTextColor = isDark ? Colors.orange.shade300 : Colors.deepOrange.shade800;
           typeIcon = Icons.warning_amber_rounded;
         } else if (meeting.status == 'bridge_event') {
-          // Evento Ponte -> Azul claro
+          // Evento Ponte -> Azul
           final eventTitle =
           (studyTopic != null && studyTopic.isNotEmpty)
               ? studyTopic
               : (meeting.eventName ?? 'Especial');
           meetingTypeDesc = "Evento Ponte: $eventTitle";
           statusBadgeText = "Evento Ponte";
-          cardBgColor = Colors.blue.shade50;
-          cardBorderColor = Colors.blue.shade200;
-          typeTextColor = Colors.blue.shade900;
+          cardBgColor = isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50;
+          cardBorderColor = isDark ? Colors.blue.shade700 : Colors.blue.shade200;
+          typeTextColor = isDark ? Colors.blue.shade300 : Colors.blue.shade900;
           typeIcon = Icons.star;
         } else if (meeting.status == 'canceled') {
-          // Cancelada -> Vermelho claro
+          // Cancelada -> Vermelho
           meetingTypeDesc = "Reunião Cancelada";
           statusBadgeText = "Cancelada";
-          cardBgColor = Colors.red.shade50;
-          cardBorderColor = Colors.red.shade200;
-          typeTextColor = Colors.red.shade900;
+          cardBgColor = isDark ? Colors.red.shade900.withOpacity(0.3) : Colors.red.shade50;
+          cardBorderColor = isDark ? Colors.red.shade700 : Colors.red.shade200;
+          typeTextColor = isDark ? Colors.red.shade300 : Colors.red.shade900;
           typeIcon = Icons.cancel;
         } else if (meeting.status == 'rescheduled') {
-          // Remarcada -> Roxo claro
+          // Remarcada -> Roxo
           meetingTypeDesc = "Reunião Remarcada";
           statusBadgeText = "Remarcada";
-          cardBgColor = Colors.purple.shade50;
-          cardBorderColor = Colors.purple.shade200;
-          typeTextColor = Colors.purple.shade900;
+          cardBgColor = isDark ? Colors.purple.shade900.withOpacity(0.3) : Colors.purple.shade50;
+          cardBorderColor = isDark ? Colors.purple.shade700 : Colors.purple.shade200;
+          typeTextColor = isDark ? Colors.purple.shade300 : Colors.purple.shade900;
           typeIcon = Icons.edit_calendar;
         } else {
-          // Normal (mesmo se houver tema, unificado como Normal) -> Verde claro
+          // Normal -> Verde
           meetingTypeDesc = studyTopic != null && studyTopic.isNotEmpty ? "Tema: $studyTopic" : "Reunião Normal";
           statusBadgeText = "Normal";
-          cardBgColor = Colors.green.shade50;
-          cardBorderColor = Colors.green.shade200;
-          typeTextColor = Colors.green.shade900;
+          cardBgColor = isDark ? Colors.green.shade900.withOpacity(0.3) : Colors.green.shade50;
+          cardBorderColor = isDark ? Colors.green.shade700 : Colors.green.shade200;
+          typeTextColor = isDark ? Colors.green.shade300 : Colors.green.shade900;
           typeIcon = Icons.today;
         }
 
@@ -1093,10 +1097,10 @@ class _ReportsPageState extends State<ReportsPage>
                         Expanded(
                           child: Text(
                             'Reunião em $dateFormatted',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
-                              color: Colors.black87,
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ),

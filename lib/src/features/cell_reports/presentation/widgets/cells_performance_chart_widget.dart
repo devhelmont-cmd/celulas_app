@@ -69,6 +69,8 @@ class CellsPerformanceChartWidget extends StatelessWidget {
                 final count = reportsCountByCell[cell.id] ?? 0;
                 final double progress = (count / maxReports).clamp(0.0, 1.0);
 
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: Column(
@@ -80,17 +82,17 @@ class CellsPerformanceChartWidget extends StatelessWidget {
                           Expanded(
                             child: Text(
                               cell.name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.black87,
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
                           ),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.purple.shade50,
+                              color: isDark ? Colors.purple.shade900.withOpacity(0.3) : Colors.purple.shade50,
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -98,7 +100,7 @@ class CellsPerformanceChartWidget extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.purple.shade700,
+                                color: isDark ? Colors.purple.shade300 : Colors.purple.shade700,
                               ),
                             ),
                           ),

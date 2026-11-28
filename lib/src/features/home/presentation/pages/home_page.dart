@@ -10,6 +10,7 @@ import 'package:celulas_app/src/features/cell_reports/presentation/pages/reports
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/domain/entities/cell_entity.dart';
 import 'package:celulas_app/src/features/cells/presentation/pages/cells_list_page.dart';
+import 'package:celulas_app/src/features/members/presentation/pages/members_management_page.dart';
 import 'package:celulas_app/src/features/home/presentation/widgets/leader_dashboard_widget.dart';
 import 'package:celulas_app/src/features/home/presentation/widgets/member_dashboard_widget.dart';
 import 'package:celulas_app/src/features/home/presentation/widgets/pastor_dashboard_widget.dart';
@@ -17,6 +18,7 @@ import 'package:celulas_app/src/features/profile/presentation/pages/fill_profile
 import 'package:celulas_app/src/features/profile/presentation/pages/profile_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/utils/gender_helper.dart';
 
@@ -31,6 +33,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
+  int _cellsInitialTabIndex = 0;
+  DateTime? _lastPressedAt;
   late final ICellRemoteDataSource _cellDataSource;
   late UserEntity _currentUser;
 
@@ -75,55 +79,76 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: _currentIndex == 0
-          ? AppBar(
-              title: const Text('Células App'),
-              actions: [
-                IconButton(
-                  onPressed: () async {
-                    await getIt<AuthController>().signOut();
-                    if (context.mounted) {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const LoginPage()),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.logout),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final now = DateTime.now();
+        if (_lastPressedAt == null ||
+            now.difference(_lastPressedAt!) > const Duration(seconds: 2)) {
+          _lastPressedAt = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Pressione novamente para sair do aplicativo'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        appBar: _currentIndex == 0
+            ? AppBar(
+                title: const Text('Células App'),
+                actions: [
+                  IconButton(
+                    onPressed: () async {
+                      await getIt<AuthController>().signOut();
+                      if (context.mounted) {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(builder: (_) => const LoginPage()),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.logout),
+                  ),
+                ],
+              )
+            : null,
+        body: IndexedStack(
+          index: _currentIndex,
+          children: [
+            _buildHomeTab(context),
+            _isLoadingCells
+                ? const Center(child: CircularProgressIndicator())
+                : CellsListPage(
+                  key: ValueKey('cells_list_tab_$_cellsInitialTabIndex'),
+                  cells: _cells,
+                  onRefresh: _loadUserData,
+                  currentUser: _currentUser,
+                  initialTabIndex: _cellsInitialTabIndex,
                 ),
-              ],
-            )
-          : null,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          _buildHomeTab(context),
-          _isLoadingCells
-              ? const Center(child: CircularProgressIndicator())
-              : CellsListPage(
-                cells: _cells,
-                onRefresh: _loadUserData,
-                currentUser: _currentUser,
-              ),
-          ReportsPage(currentUser: _currentUser),
-          ProfilePage(user: _currentUser, onProfileUpdated: _loadUserData),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Theme.of(context).colorScheme.primary,
-        unselectedItemColor: Colors.grey,
-        onTap: (index) => setState(() => _currentIndex = index),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Início'),
-          BottomNavigationBarItem(icon: Icon(Icons.groups), label: 'Células'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.description),
-            label: 'Relatórios',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
-        ],
+            ReportsPage(currentUser: _currentUser),
+            ProfilePage(user: _currentUser, onProfileUpdated: _loadUserData),
+          ],
+        ),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: Theme.of(context).colorScheme.primary,
+          unselectedItemColor: Colors.grey,
+          onTap: (index) => setState(() => _currentIndex = index),
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Início'),
+            BottomNavigationBarItem(icon: Icon(Icons.groups), label: 'Células'),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.description),
+              label: 'Relatórios',
+            ),
+            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
+          ],
+        ),
       ),
     );
   }
@@ -247,8 +272,11 @@ class _HomePageState extends State<HomePage> {
         if (_currentUser.isPastorOrCoordinator) ...[
           PastorDashboardWidget(
             currentUser: _currentUser,
-            onNavigateTab: (index, {bool selectPastoralView = false}) {
+            onNavigateTab: (index, {int? cellTabInitialIndex, bool selectPastoralView = false}) {
               setState(() {
+                if (cellTabInitialIndex != null) {
+                  _cellsInitialTabIndex = cellTabInitialIndex;
+                }
                 _currentIndex = index;
               });
             },
@@ -261,7 +289,10 @@ class _HomePageState extends State<HomePage> {
           LeaderDashboardWidget(
             user: _currentUser,
             onNavigateToReports: () => setState(() => _currentIndex = 2),
-            onNavigateToCells: () => setState(() => _currentIndex = 1),
+            onNavigateToCells: () => setState(() {
+              _cellsInitialTabIndex = 0;
+              _currentIndex = 1;
+            }),
           ),
           const SizedBox(height: 20),
         ],

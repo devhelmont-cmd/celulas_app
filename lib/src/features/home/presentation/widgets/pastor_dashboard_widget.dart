@@ -26,7 +26,7 @@ class PastorNotifications {
 
 class PastorDashboardWidget extends StatelessWidget {
   final UserEntity currentUser; // <--- Adicionado para resolver o erro do widget.currentUser
-  final Function(int tabIndex, {bool selectPastoralView})? onNavigateTab;
+  final Function(int tabIndex, {int? cellTabInitialIndex, bool selectPastoralView})? onNavigateTab;
 
   const PastorDashboardWidget({
     super.key,
@@ -167,6 +167,8 @@ class PastorDashboardWidget extends StatelessWidget {
         notifications = snapshot.data!['notifications'] as PastorNotifications?;
       }
 
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -181,71 +183,81 @@ class PastorDashboardWidget extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.groups, size: 28, color: Colors.purple),
-                      const SizedBox(height: 8),
-                      snapshot.connectionState == ConnectionState.waiting
-                          ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                          : Text(
-                        '$cellsCount',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                child: InkWell(
+                  onTap: () => onNavigateTab?.call(1, cellTabInitialIndex: 0),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.purple.shade900.withOpacity(0.3) : Colors.purple.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.groups, size: 28, color: isDark ? Colors.purple.shade300 : Colors.purple),
+                        const SizedBox(height: 8),
+                        snapshot.connectionState == ConnectionState.waiting
+                            ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                            : Text(
+                          '$cellsCount',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.purple.shade200 : Colors.black87,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Células',
-                        style: TextStyle(color: Colors.black54),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          'Células',
+                          style: TextStyle(color: isDark ? Colors.purple.shade300 : Colors.black54),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.person, size: 28, color: Colors.blue),
-                      const SizedBox(height: 8),
-                      snapshot.connectionState == ConnectionState.waiting
-                          ? const SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                          : Text(
-                        '$membersCount',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                child: InkWell(
+                  onTap: () => onNavigateTab?.call(1, cellTabInitialIndex: 1),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.person, size: 28, color: isDark ? Colors.blue.shade300 : Colors.blue),
+                        const SizedBox(height: 8),
+                        snapshot.connectionState == ConnectionState.waiting
+                            ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                            : Text(
+                          '$membersCount',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.blue.shade200 : Colors.black87,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Membros',
-                        style: TextStyle(color: Colors.black54),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          'Membros',
+                          style: TextStyle(color: isDark ? Colors.blue.shade300 : Colors.black54),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -257,25 +269,33 @@ class PastorDashboardWidget extends StatelessWidget {
           if (notifications != null) ...[
             if (notifications.unlinkedMembersCount > 0) ...[
               Card(
-                color: Colors.purple.shade50,
+                color: isDark ? Colors.purple.shade900.withOpacity(0.3) : Colors.purple.shade50,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.purple.shade200),
+                  side: BorderSide(color: isDark ? Colors.purple.shade700 : Colors.purple.shade200),
                 ),
                 child: ListTile(
-                  leading: const Icon(Icons.person_off, color: Colors.purple),
+                  leading: Icon(Icons.person_off, color: isDark ? Colors.purple.shade300 : Colors.purple),
                   title: Text(
                     '${notifications.unlinkedMembersCount} Pessoa(s) sem Célula',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.purple.shade200 : Colors.black87,
+                    ),
                   ),
-                  subtitle: const Text('Membros ou usuários cadastrados aguardando vínculo.'),
-                  trailing: const Icon(Icons.chevron_right),
+                  subtitle: Text(
+                    'Membros ou usuários cadastrados aguardando vínculo.',
+                    style: TextStyle(
+                      color: isDark ? Colors.purple.shade300 : Colors.black54,
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: isDark ? Colors.purple.shade300 : Colors.grey),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => MembersManagementPage(
-                          currentUser: currentUser, // <--- Passando o currentUser corretamente
+                          currentUser: currentUser,
                           initialFilterWithoutCell: true,
                         ),
                       ),
@@ -288,20 +308,28 @@ class PastorDashboardWidget extends StatelessWidget {
 
             if (notifications.pendingJoinRequestsCount > 0) ...[
               Card(
-                color: Colors.blue.shade50,
+                color: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.blue.shade200),
+                  side: BorderSide(color: isDark ? Colors.blue.shade700 : Colors.blue.shade200),
                 ),
                 child: ListTile(
-                  leading: const Icon(Icons.person_add, color: Colors.blue),
+                  leading: Icon(Icons.person_add, color: isDark ? Colors.blue.shade300 : Colors.blue),
                   title: Text(
                     '${notifications.pendingJoinRequestsCount} Solicitação(ões) de Entrada',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.blue.shade200 : Colors.black87,
+                    ),
                   ),
-                  subtitle: const Text('Usuários aguardando aprovação para entrar na célula.'),
-                  trailing: const Icon(Icons.chevron_right),
+                  subtitle: Text(
+                    'Usuários aguardando aprovação para entrar na célula.',
+                    style: TextStyle(
+                      color: isDark ? Colors.blue.shade300 : Colors.black54,
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: isDark ? Colors.blue.shade300 : Colors.grey),
                   onTap: () {
                     onNavigateTab?.call(1);
                   },
@@ -312,20 +340,28 @@ class PastorDashboardWidget extends StatelessWidget {
 
             if (notifications.pendingJustificationsCount > 0) ...[
               Card(
-                color: Colors.amber.shade50,
+                color: isDark ? Colors.amber.shade900.withOpacity(0.3) : Colors.amber.shade50,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.amber.shade300),
+                  side: BorderSide(color: isDark ? Colors.amber.shade700 : Colors.amber.shade300),
                 ),
                 child: ListTile(
-                  leading: const Icon(Icons.verified_user, color: Colors.amber),
+                  leading: Icon(Icons.verified_user, color: isDark ? Colors.amber.shade300 : Colors.amber),
                   title: Text(
                     '${notifications.pendingJustificationsCount} Justificativa(s) de Falta Pendente(s)',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.amber.shade200 : Colors.brown,
+                    ),
                   ),
-                  subtitle: const Text('Solicitações de falta ou presença aguardando validação.'),
-                  trailing: const Icon(Icons.chevron_right),
+                  subtitle: Text(
+                    'Solicitações de falta ou presença aguardando validação.',
+                    style: TextStyle(
+                      color: isDark ? Colors.amber.shade300 : Colors.brown.shade800,
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: isDark ? Colors.amber.shade300 : Colors.grey),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -342,20 +378,28 @@ class PastorDashboardWidget extends StatelessWidget {
 
             if (notifications.pendingDeletionRequestsCount > 0) ...[
               Card(
-                color: Colors.red.shade50,
+                color: isDark ? Colors.red.shade900.withOpacity(0.3) : Colors.red.shade50,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.red.shade200),
+                  side: BorderSide(color: isDark ? Colors.red.shade700 : Colors.red.shade200),
                 ),
                 child: ListTile(
-                  leading: const Icon(Icons.delete_sweep, color: Colors.red),
+                  leading: Icon(Icons.delete_sweep, color: isDark ? Colors.red.shade300 : Colors.red),
                   title: Text(
                     '${notifications.pendingDeletionRequestsCount} Solicitação(ões) de Exclusão',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.red.shade200 : Colors.black87,
+                    ),
                   ),
-                  subtitle: const Text('Líderes solicitaram a exclusão de relatórios ou reuniões.'),
-                  trailing: const Icon(Icons.chevron_right),
+                  subtitle: Text(
+                    'Líderes solicitaram a exclusão de relatórios ou reuniões.',
+                    style: TextStyle(
+                      color: isDark ? Colors.red.shade300 : Colors.black54,
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: isDark ? Colors.red.shade300 : Colors.grey),
                   onTap: () {
                     onNavigateTab?.call(2, selectPastoralView: true);
                   },
@@ -366,20 +410,28 @@ class PastorDashboardWidget extends StatelessWidget {
 
             if (notifications.pendingReportsCount > 0) ...[
               Card(
-                color: Colors.amber.shade50,
+                color: isDark ? Colors.amber.shade900.withOpacity(0.3) : Colors.amber.shade50,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.amber.shade300),
+                  side: BorderSide(color: isDark ? Colors.amber.shade700 : Colors.amber.shade300),
                 ),
                 child: ListTile(
-                  leading: const Icon(Icons.warning_amber_rounded, color: Colors.amber),
+                  leading: Icon(Icons.warning_amber_rounded, color: isDark ? Colors.amber.shade300 : Colors.amber),
                   title: Text(
                     '${notifications.pendingReportsCount} Célula(s) com Relatórios Pendentes',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.amber.shade200 : Colors.black87,
+                    ),
                   ),
-                  subtitle: const Text('Reuniões que já aconteceram e ainda não foram preenchidas.'),
-                  trailing: const Icon(Icons.chevron_right),
+                  subtitle: Text(
+                    'Reuniões que já aconteceram e ainda não foram preenchidas.',
+                    style: TextStyle(
+                      color: isDark ? Colors.amber.shade300 : Colors.black54,
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: isDark ? Colors.amber.shade300 : Colors.grey),
                   onTap: () {
                     onNavigateTab?.call(2, selectPastoralView: true);
                   },
@@ -390,20 +442,28 @@ class PastorDashboardWidget extends StatelessWidget {
 
             if (notifications.pendingRolesCount > 0) ...[
               Card(
-                color: Colors.orange.shade50,
+                color: isDark ? Colors.orange.shade900.withOpacity(0.3) : Colors.orange.shade50,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.orange.shade200),
+                  side: BorderSide(color: isDark ? Colors.orange.shade700 : Colors.orange.shade200),
                 ),
                 child: ListTile(
-                  leading: const Icon(Icons.assignment_ind_outlined, color: Colors.deepOrange),
+                  leading: Icon(Icons.assignment_ind_outlined, color: isDark ? Colors.orange.shade300 : Colors.deepOrange),
                   title: Text(
                     '${notifications.pendingRolesCount} Célula(s) sem Atribuição de Funções',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.orange.shade200 : Colors.black87,
+                    ),
                   ),
-                  subtitle: const Text('Responsáveis pelas próximas reuniões pendentes.'),
-                  trailing: const Icon(Icons.chevron_right),
+                  subtitle: Text(
+                    'Responsáveis pelas próximas reuniões pendentes.',
+                    style: TextStyle(
+                      color: isDark ? Colors.orange.shade300 : Colors.black54,
+                    ),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: isDark ? Colors.orange.shade300 : Colors.grey),
                   onTap: () {
                     onNavigateTab?.call(1);
                   },
@@ -417,19 +477,25 @@ class PastorDashboardWidget extends StatelessWidget {
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.grey.shade300),
+              side: BorderSide(color: isDark ? Colors.grey.shade700 : Colors.grey.shade300),
             ),
             child: ListTile(
-              leading: const Icon(Icons.bar_chart, color: Colors.deepPurple),
-              title: const Text(
+              leading: Icon(Icons.bar_chart, color: isDark ? Colors.deepPurple.shade300 : Colors.deepPurple),
+              title: Text(
                 'Relatório de Crescimento Geral',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
               ),
-              subtitle: const Text(
+              subtitle: Text(
                 'Acompanhar frequência e multiplicadores',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {},
+              trailing: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              onTap: () => onNavigateTab?.call(2),
             ),
           ),
         ],
