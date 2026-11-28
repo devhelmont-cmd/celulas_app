@@ -1,6 +1,7 @@
 // lib/src/features/cell_reports/presentation/widgets/pastor_analytics_widget.dart
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
+import 'package:celulas_app/src/core/utils/string_utils.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
@@ -15,6 +16,7 @@ import 'package:celulas_app/src/features/cell_reports/presentation/widgets/activ
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/leader_analytics_widget.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/member_analytics_widget.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/widgets/multiplication_analytics_widget.dart';
+import 'package:celulas_app/src/features/cell_reports/presentation/widgets/cell_multiplication_ranking_chart_widget.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -50,6 +52,7 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
     {'id': 'status', 'title': 'Status das Reuniões', 'visible': true},
     {'id': 'performance', 'title': 'Comparativo por Célula', 'visible': true},
     {'id': 'member_attendance', 'title': 'Assiduidade dos Membros Ativos', 'visible': true},
+    {'id': 'multiplication_ranking', 'title': 'Progresso de Multiplicação', 'visible': true},
   ];
 
   @override
@@ -77,6 +80,7 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
               {'id': 'status', 'title': 'Status das Reuniões', 'visible': true},
               {'id': 'performance', 'title': 'Comparativo por Célula', 'visible': true},
               {'id': 'member_attendance', 'title': 'Assiduidade dos Membros Ativos', 'visible': true},
+              {'id': 'multiplication_ranking', 'title': 'Progresso de Multiplicação', 'visible': true},
             ]) {
               if (!savedIds.contains(defaultConfig['id'])) {
                 savedList.add(defaultConfig);
@@ -91,7 +95,7 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
       final cells = await _cellDataSource.getCells();
 
       // Ordenação alfabética das células
-      cells.sort((a, b) => a.name.compareTo(b.name));
+      cells.sort((a, b) => a.name.compareToNormalized(b.name));
 
       List<CellMeetingModel> meetings = [];
       List<CellMemberEntity> members = [];
@@ -109,7 +113,7 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
       }
 
       // Ordenação alfabética dos membros
-      members.sort((a, b) => a.name.compareTo(b.name));
+      members.sort((a, b) => a.name.compareToNormalized(b.name));
 
       if (mounted) {
         setState(() {
@@ -588,6 +592,13 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
         members: _allMembers,
         cells: _cells,
         selectedMonthKey: _selectedMonthKey,
+      );
+    } else if (id == 'multiplication_ranking') {
+      return CellMultiplicationRankingChartWidget(
+        cells: _cells,
+        allReports: _allReports,
+        allMeetings: _allMeetings,
+        allMembers: _allMembers,
       );
     }
     return const SizedBox.shrink();

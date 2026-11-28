@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/core/utils/gender_helper.dart';
+import 'package:celulas_app/src/core/utils/string_utils.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
@@ -166,13 +167,14 @@ class _MembersManagementPageState extends State<MembersManagementPage>
 
   List<Map<String, dynamic>> _filterMembers(List<Map<String, dynamic>> members) {
     if (_searchQuery.isEmpty) return members;
+    final normalizedQuery = _searchQuery.normalizeSearch();
     return members.where((member) {
-      final name = (member['name'] ?? '').toString().toLowerCase();
+      final name = (member['name'] ?? '').toString().normalizeSearch();
       final cellId = (member['cellId'] ?? member['primaryCellId']) as String?;
       final cellName = (cellId != null && _cellNamesMap.containsKey(cellId))
-          ? _cellNamesMap[cellId]!.toLowerCase()
+          ? _cellNamesMap[cellId]!.normalizeSearch()
           : '';
-      return name.contains(_searchQuery) || cellName.contains(_searchQuery);
+      return name.contains(normalizedQuery) || cellName.contains(normalizedQuery);
     }).toList();
   }
 

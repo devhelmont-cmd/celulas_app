@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/core/utils/gender_helper.dart';
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
+import 'package:celulas_app/src/core/utils/string_utils.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cell_reports/presentation/pages/fill_report_page.dart';
@@ -207,7 +208,7 @@ class _ReportsPageState extends State<ReportsPage>
 
       if (user.isPastorOrCoordinator) {
         allCells.sort(
-              (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+              (a, b) => a.name.compareToNormalized(b.name),
         );
 
         cells = allCells;

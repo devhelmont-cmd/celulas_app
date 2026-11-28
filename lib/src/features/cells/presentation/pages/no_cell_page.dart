@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/injections/injection_container.dart';
+import '../../../../core/utils/string_utils.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../auth/presentation/pages/login_page.dart';
 import '../../data/datasources/cell_remote_datasource.dart';
@@ -255,9 +256,7 @@ class _NoCellPageState extends State<NoCellPage> {
                       ).then(
                             (list) => list.whereType<CellEntity>().toList()
                           ..sort(
-                                (a, b) => (a.name ?? '').toLowerCase().compareTo(
-                              (b.name ?? '').toLowerCase(),
-                            ),
+                                (a, b) => compareNullableStrings(a.name, b.name),
                           ),
                       ),
                       builder: (context, asyncSnapshot) {

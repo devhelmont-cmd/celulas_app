@@ -1,6 +1,7 @@
 // lib/src/features/cell_reports/presentation/widgets/leader_analytics_widget.dart
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
+import 'package:celulas_app/src/core/utils/string_utils.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
@@ -501,7 +502,7 @@ class _LeaderDashboardWithMembersViewState extends State<LeaderDashboardWithMemb
 
       if (foundCell != null) {
         final members = await dataSource.getCellMembers(foundCell.id);
-        members.sort((a, b) => a.name.compareTo(b.name));
+        members.sort((a, b) => a.name.compareToNormalized(b.name));
 
         if (mounted) {
           setState(() {

@@ -656,6 +656,7 @@ class _CellAttendanceChartWidgetState
                     LineChartBarData(
                       spots: memberSpots,
                       isCurved: true,
+                      curveSmoothness: 0.1,
                       color: Colors.purple,
                       barWidth: 3,
                       isStrokeCapRound: true,
@@ -669,6 +670,7 @@ class _CellAttendanceChartWidgetState
                     LineChartBarData(
                       spots: visitorSpots,
                       isCurved: true,
+                      curveSmoothness: 0.1,
                       color: Colors.orange,
                       barWidth: 2,
                       isStrokeCapRound: true,
@@ -678,6 +680,7 @@ class _CellAttendanceChartWidgetState
                     LineChartBarData(
                       spots: conversionSpots,
                       isCurved: true,
+                      curveSmoothness: 0.1,
                       color: Colors.green,
                       barWidth: 2,
                       isStrokeCapRound: true,
@@ -688,6 +691,7 @@ class _CellAttendanceChartWidgetState
                       LineChartBarData(
                         spots: unexcusedSpots,
                         isCurved: true,
+                        curveSmoothness: 0.1,
                         color: Colors.red,
                         barWidth: 2,
                         isStrokeCapRound: true,

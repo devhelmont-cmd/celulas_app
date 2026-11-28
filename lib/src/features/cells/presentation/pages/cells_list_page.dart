@@ -6,6 +6,7 @@ import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_data
 import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/core/injections/injection_container.dart';
+import 'package:celulas_app/src/core/utils/string_utils.dart';
 
 import '../../../members/presentation/pages/members_management_page.dart';
 
@@ -156,7 +157,7 @@ class _CellsListPageState extends State<CellsListPage>
 
       final nameA = a.name ?? '';
       final nameB = b.name ?? '';
-      return nameA.toLowerCase().compareTo(nameB.toLowerCase());
+      return nameA.compareToNormalized(nameB);
     });
 
     if (sortedCells.isEmpty) {

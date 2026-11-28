@@ -18,6 +18,7 @@ import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell
 import 'package:celulas_app/src/features/cell_reports/presentation/pages/reports_page.dart';
 
 import '../../../../core/utils/gender_helper.dart';
+import '../../../../core/utils/string_utils.dart';
 import '../../../members/presentation/pages/member_analysis_page.dart';
 import '../../data/models/cell_join_request_model.dart';
 
@@ -570,7 +571,7 @@ class _CellDetailPageState extends State<CellDetailPage>
     try {
       candidates = await dataSource.getUsersAndMembersWithoutCell();
       candidates.sort(
-        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        (a, b) => a.name.compareToNormalized(b.name),
       );
     } catch (e) {
       debugPrint('Erro ao buscar pessoas sem célula: $e');
@@ -1060,10 +1061,10 @@ class _CellDetailPageState extends State<CellDetailPage>
         if (matchA && !matchB) return -1;
         if (!matchA && matchB) return 1;
         if (matchA && matchB) {
-          return nameA.compareTo(nameB);
+          return nameA.compareToNormalized(nameB);
         }
       }
-      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      return a.name.compareToNormalized(b.name);
     });
 
     return showDialog<CellMemberModel>(
@@ -2789,8 +2790,8 @@ class _CellDetailPageState extends State<CellDetailPage>
                                 return weightA.compareTo(weightB);
                               }
 
-                              return a.name.toLowerCase().compareTo(
-                                b.name.toLowerCase(),
+                              return a.name.compareToNormalized(
+                                b.name,
                               );
                             });
 

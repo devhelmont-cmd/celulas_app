@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'package:celulas_app/src/core/injections/injection_container.dart';
 import 'package:celulas_app/src/core/utils/gender_helper.dart';
+import 'package:celulas_app/src/core/utils/string_utils.dart';
 import 'package:celulas_app/src/features/auth/data/models/user_model.dart';
 import 'package:celulas_app/src/features/auth/domain/entities/user_entity.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
@@ -112,7 +113,7 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
 
       // Carrega todas as células e ordena alfabeticamente pelo nome
       _allCells = await _cellDataSource.getCells(currentUser: widget.currentUser);
-      _allCells.sort((a, b) => (a.name ?? '').compareTo(b.name ?? ''));
+      _allCells.sort((a, b) => compareNullableStrings(a.name, b.name));
 
       if (mounted) setState(() => _isLoading = false);
     } catch (e) {

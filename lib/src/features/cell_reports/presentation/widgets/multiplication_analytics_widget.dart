@@ -1,6 +1,7 @@
 // lib/src/features/cell_reports/presentation/widgets/multiplication_analytics_widget.dart
 
 import 'package:celulas_app/src/core/injections/injection_container.dart';
+import 'package:celulas_app/src/core/utils/string_utils.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/repositories/i_cell_reports_repository.dart';
 import 'package:celulas_app/src/features/cells/data/datasources/cell_remote_datasource.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_meeting_model.dart';
@@ -39,7 +40,7 @@ class _MultiplicationAnalyticsWidgetState
 
       final settings = await dataSource.getMultiplicationSettings();
       final cells = await dataSource.getCells();
-      cells.sort((a, b) => a.name.compareTo(b.name));
+      cells.sort((a, b) => a.name.compareToNormalized(b.name));
 
       List<CellMultiplicationProgressModel> progressList = [];
 

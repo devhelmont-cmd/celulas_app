@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:celulas_app/src/core/utils/pastoral_cycle_helper.dart';
+import 'package:celulas_app/src/core/utils/string_utils.dart';
 import 'package:celulas_app/src/features/cell_reports/domain/entities/cell_report_entity.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_member_model.dart';
 import 'package:celulas_app/src/features/cells/data/models/cell_model.dart';
@@ -300,16 +301,16 @@ class _ActiveMembersAttendanceChartWidgetState
     memberStatsList.sort((a, b) {
       final rateComp = b.attendanceRate.compareTo(a.attendanceRate);
       if (rateComp != 0) return rateComp;
-      return a.member.name.compareTo(b.member.name);
+      return a.member.name.compareToNormalized(b.member.name);
     });
 
     // Filtro de busca simples
     List<_MemberPeriodStats> displayedStats = memberStatsList;
     if (_searchQuery.trim().isNotEmpty) {
-      final query = _searchQuery.trim().toLowerCase();
+      final query = _searchQuery.normalizeSearch();
       displayedStats = memberStatsList.where((s) {
-        return s.member.name.toLowerCase().contains(query) ||
-            s.cellName.toLowerCase().contains(query);
+        return s.member.name.normalizeSearch().contains(query) ||
+            s.cellName.normalizeSearch().contains(query);
       }).toList();
     }
 
