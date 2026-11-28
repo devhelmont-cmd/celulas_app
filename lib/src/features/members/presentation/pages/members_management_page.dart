@@ -27,6 +27,7 @@ class MembersManagementPage extends StatefulWidget {
 class _MembersManagementPageState extends State<MembersManagementPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
   final _dataSource = getIt<ICellRemoteDataSource>();
   final _firestore = FirebaseFirestore.instance;
 
@@ -36,6 +37,7 @@ class _MembersManagementPageState extends State<MembersManagementPage>
   Map<String, Map<String, dynamic>> _usersMap = {};
   Set<String> _pendingMemberIds = {};
   bool _isLoading = true;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -45,7 +47,19 @@ class _MembersManagementPageState extends State<MembersManagementPage>
       vsync: this,
       initialIndex: widget.initialFilterWithoutCell ? 1 : 0,
     );
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim().toLowerCase();
+      });
+    });
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -150,6 +164,18 @@ class _MembersManagementPageState extends State<MembersManagementPage>
     );
   }
 
+  List<Map<String, dynamic>> _filterMembers(List<Map<String, dynamic>> members) {
+    if (_searchQuery.isEmpty) return members;
+    return members.where((member) {
+      final name = (member['name'] ?? '').toString().toLowerCase();
+      final cellId = (member['cellId'] ?? member['primaryCellId']) as String?;
+      final cellName = (cellId != null && _cellNamesMap.containsKey(cellId))
+          ? _cellNamesMap[cellId]!.toLowerCase()
+          : '';
+      return name.contains(_searchQuery) || cellName.contains(_searchQuery);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -166,13 +192,48 @@ class _MembersManagementPageState extends State<MembersManagementPage>
       body:
           _isLoading
               ? const Center(child: CircularProgressIndicator())
-              : TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildMemberList(_membersWithCell, isLinked: true),
-                  _buildMemberList(_membersWithoutCell, isLinked: false),
-                ],
-              ),
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Buscar membros por nome...',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () => _searchController.clear(),
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10,
+                            horizontal: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: [
+                          _buildMemberList(
+                            _filterMembers(_membersWithCell),
+                            isLinked: true,
+                          ),
+                          _buildMemberList(
+                            _filterMembers(_membersWithoutCell),
+                            isLinked: false,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
     );
   }
 
@@ -182,10 +243,16 @@ class _MembersManagementPageState extends State<MembersManagementPage>
   }) {
     if (members.isEmpty) {
       return Center(
-        child: Text(
-          isLinked
-              ? 'Nenhum membro vinculado a célula.'
-              : 'Nenhuma pessoa sem célula cadastrada.',
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Text(
+            _searchQuery.isNotEmpty
+                ? 'Nenhum membro encontrado para "$_searchQuery".'
+                : (isLinked
+                    ? 'Nenhum membro vinculado a célula.'
+                    : 'Nenhuma pessoa sem célula cadastrada.'),
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
