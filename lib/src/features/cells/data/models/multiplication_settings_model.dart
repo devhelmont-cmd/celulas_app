@@ -11,6 +11,7 @@ class MultiplicationSettingsModel {
   final String requiredLeadershipRole; // 'lider_treinamento', 'colider', 'lider_treinamento_ou_colider'
   final bool requireHost;
   final DateTime? multiplicationStartDate;
+  final bool countExcusedAbsencesAsPresence;
 
   const MultiplicationSettingsModel({
     this.targetMonths = 6,
@@ -21,6 +22,7 @@ class MultiplicationSettingsModel {
     this.requiredLeadershipRole = 'lider_treinamento_ou_colider',
     this.requireHost = true,
     this.multiplicationStartDate,
+    this.countExcusedAbsencesAsPresence = true,
   });
 
   factory MultiplicationSettingsModel.fromMap(Map<String, dynamic>? map) {
@@ -48,6 +50,8 @@ class MultiplicationSettingsModel {
           (map['requiredLeadershipRole'] as String?) ?? 'lider_treinamento_ou_colider',
       requireHost: (map['requireHost'] as bool?) ?? true,
       multiplicationStartDate: parsedStartDate,
+      countExcusedAbsencesAsPresence:
+          (map['countExcusedAbsencesAsPresence'] as bool?) ?? true,
     );
   }
 
@@ -63,6 +67,7 @@ class MultiplicationSettingsModel {
       'multiplicationStartDate': multiplicationStartDate != null
           ? Timestamp.fromDate(multiplicationStartDate!)
           : null,
+      'countExcusedAbsencesAsPresence': countExcusedAbsencesAsPresence,
     };
   }
 
@@ -76,6 +81,7 @@ class MultiplicationSettingsModel {
     bool? requireHost,
     DateTime? multiplicationStartDate,
     bool clearMultiplicationStartDate = false,
+    bool? countExcusedAbsencesAsPresence,
   }) {
     return MultiplicationSettingsModel(
       targetMonths: targetMonths ?? this.targetMonths,
@@ -91,6 +97,8 @@ class MultiplicationSettingsModel {
       multiplicationStartDate: clearMultiplicationStartDate
           ? null
           : (multiplicationStartDate ?? this.multiplicationStartDate),
+      countExcusedAbsencesAsPresence:
+          countExcusedAbsencesAsPresence ?? this.countExcusedAbsencesAsPresence,
     );
   }
 }

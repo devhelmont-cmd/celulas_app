@@ -27,6 +27,7 @@ class CellModel extends CellEntity {
     super.customRequiredLeadershipRole,
     super.customRequireHost,
     super.customMultiplicationStartDate,
+    super.customCountExcusedAbsencesAsPresence,
   });
 
   factory CellModel.fromMap(Map<String, dynamic> map, String id) {
@@ -75,6 +76,8 @@ class CellModel extends CellEntity {
       customRequiredLeadershipRole: map['customRequiredLeadershipRole']?.toString(),
       customRequireHost: map['customRequireHost'] as bool?,
       customMultiplicationStartDate: parsedCustomStartDate,
+      customCountExcusedAbsencesAsPresence:
+          map['customCountExcusedAbsencesAsPresence'] as bool?,
     );
   }
 
@@ -103,6 +106,7 @@ class CellModel extends CellEntity {
       'customMultiplicationStartDate': customMultiplicationStartDate != null
           ? Timestamp.fromDate(customMultiplicationStartDate!)
           : null,
+      'customCountExcusedAbsencesAsPresence': customCountExcusedAbsencesAsPresence,
     };
   }
 
@@ -130,6 +134,8 @@ class CellModel extends CellEntity {
       customRequiredLeadershipRole: entity.customRequiredLeadershipRole,
       customRequireHost: entity.customRequireHost,
       customMultiplicationStartDate: entity.customMultiplicationStartDate,
+      customCountExcusedAbsencesAsPresence:
+          entity.customCountExcusedAbsencesAsPresence,
     );
   }
 
@@ -157,6 +163,7 @@ class CellModel extends CellEntity {
     bool? customRequireHost,
     DateTime? customMultiplicationStartDate,
     bool clearCustomMultiplicationStartDate = false,
+    bool? customCountExcusedAbsencesAsPresence,
   }) {
     return CellModel(
       id: id ?? this.id,
@@ -188,6 +195,9 @@ class CellModel extends CellEntity {
       customMultiplicationStartDate: clearCustomMultiplicationStartDate
           ? null
           : (customMultiplicationStartDate ?? this.customMultiplicationStartDate),
+      customCountExcusedAbsencesAsPresence:
+          customCountExcusedAbsencesAsPresence ??
+              this.customCountExcusedAbsencesAsPresence,
     );
   }
 }

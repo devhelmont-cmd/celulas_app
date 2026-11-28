@@ -26,6 +26,7 @@ class _MultiplicationSettingsDialogState
   late TextEditingController _reportsController;
   late String _requiredRole;
   late bool _requireHost;
+  late bool _countExcusedAbsencesAsPresence;
   DateTime? _multiplicationStartDate;
 
   @override
@@ -43,6 +44,8 @@ class _MultiplicationSettingsDialogState
         text: widget.initialSettings.minReportRegularityPercentage.toString());
     _requiredRole = widget.initialSettings.requiredLeadershipRole;
     _requireHost = widget.initialSettings.requireHost;
+    _countExcusedAbsencesAsPresence =
+        widget.initialSettings.countExcusedAbsencesAsPresence;
     _multiplicationStartDate = widget.initialSettings.multiplicationStartDate;
   }
 
@@ -86,6 +89,7 @@ class _MultiplicationSettingsDialogState
       requiredLeadershipRole: _requiredRole,
       requireHost: _requireHost,
       multiplicationStartDate: _multiplicationStartDate,
+      countExcusedAbsencesAsPresence: _countExcusedAbsencesAsPresence,
     );
 
     Navigator.of(context).pop(updated);
@@ -223,6 +227,20 @@ class _MultiplicationSettingsDialogState
               title: const Text('Exigir Anfitrião / Local Definido'),
               value: _requireHost,
               onChanged: (val) => setState(() => _requireHost = val),
+              contentPadding: EdgeInsets.zero,
+            ),
+            const SizedBox(height: 4),
+            SwitchListTile(
+              title: const Text(
+                'Faltas Justificadas contam como Presença',
+                style: TextStyle(fontSize: 14),
+              ),
+              subtitle: const Text(
+                'Aplicado exclusivamente no cálculo de assiduidade para o progresso de multiplicação da célula',
+                style: TextStyle(fontSize: 12),
+              ),
+              value: _countExcusedAbsencesAsPresence,
+              onChanged: (val) => setState(() => _countExcusedAbsencesAsPresence = val),
               contentPadding: EdgeInsets.zero,
             ),
           ],

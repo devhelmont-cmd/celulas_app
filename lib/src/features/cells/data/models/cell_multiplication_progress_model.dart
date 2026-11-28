@@ -19,6 +19,7 @@ class CellMultiplicationProgressModel {
   final double effectiveMinReportRegularity;
   final String effectiveRequiredRole;
   final bool effectiveRequireHost;
+  final bool effectiveCountExcusedAbsencesAsPresence;
 
   // Datas e prazos de multiplicação
   final DateTime effectiveStartDate;
@@ -62,6 +63,7 @@ class CellMultiplicationProgressModel {
     required this.effectiveMinReportRegularity,
     required this.effectiveRequiredRole,
     required this.effectiveRequireHost,
+    required this.effectiveCountExcusedAbsencesAsPresence,
     required this.effectiveStartDate,
     required this.targetEndDate,
     required this.isStartDateInFuture,
@@ -108,6 +110,9 @@ class CellMultiplicationProgressModel {
     final effectiveMinReportRegularity = useGlobal ? settings.minReportRegularityPercentage : (cell.customMinReportRegularityPercentage ?? settings.minReportRegularityPercentage);
     final effectiveRequiredRole = useGlobal ? settings.requiredLeadershipRole : (cell.customRequiredLeadershipRole ?? settings.requiredLeadershipRole);
     final effectiveRequireHost = useGlobal ? settings.requireHost : (cell.customRequireHost ?? settings.requireHost);
+    final effectiveCountExcusedAbsencesAsPresence = useGlobal
+        ? settings.countExcusedAbsencesAsPresence
+        : (cell.customCountExcusedAbsencesAsPresence ?? settings.countExcusedAbsencesAsPresence);
 
     // Determinação da Data de Início Efetiva
     final isCustomStartDateActive = !useGlobal && cell.customMultiplicationStartDate != null;
@@ -190,8 +195,10 @@ class CellMultiplicationProgressModel {
         if (!att.isExcused) {
           totalAttendancesCount++;
           // Exclusivamente para o cálculo de assiduidade na multiplicação de célula:
-          // Faltas justificadas validadas contam como presença
-          if (att.isPresent || att.isJustificationApproved) presentCount++;
+          // Faltas justificadas validadas contam como presença apenas se ativado pelo pastor
+          final isPresentCounted = att.isPresent ||
+              (effectiveCountExcusedAbsencesAsPresence && att.isJustificationApproved);
+          if (isPresentCounted) presentCount++;
         }
       }
     }
@@ -275,6 +282,7 @@ class CellMultiplicationProgressModel {
       effectiveMinReportRegularity: effectiveMinReportRegularity,
       effectiveRequiredRole: effectiveRequiredRole,
       effectiveRequireHost: effectiveRequireHost,
+      effectiveCountExcusedAbsencesAsPresence: effectiveCountExcusedAbsencesAsPresence,
       effectiveStartDate: effectiveStartDate,
       targetEndDate: targetEndDate,
       isStartDateInFuture: isStartDateInFuture,

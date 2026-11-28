@@ -50,6 +50,7 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
     {'id': 'attendance', 'title': 'Evolução Temporal da Célula', 'visible': true},
     {'id': 'status', 'title': 'Status das Reuniões da Célula', 'visible': true},
     {'id': 'member_attendance', 'title': 'Assiduidade dos Membros da Célula', 'visible': true},
+    {'id': 'multiplication', 'title': 'Progresso de Multiplicação da Célula', 'visible': true},
   ];
 
   @override
@@ -76,6 +77,7 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
               {'id': 'attendance', 'title': 'Evolução Temporal da Célula', 'visible': true},
               {'id': 'status', 'title': 'Status das Reuniões da Célula', 'visible': true},
               {'id': 'member_attendance', 'title': 'Assiduidade dos Membros da Célula', 'visible': true},
+              {'id': 'multiplication', 'title': 'Progresso de Multiplicação da Célula', 'visible': true},
             ]) {
               if (!savedIds.contains(defaultConfig['id'])) {
                 savedList.add(defaultConfig);
@@ -419,6 +421,8 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
         selectedMonthKey: _selectedMonthKey,
         cellIdFilter: _leaderCell?.id,
       );
+    } else if (id == 'multiplication') {
+      return LeaderMultiplicationWidget(cell: _leaderCell!);
     }
     return const SizedBox.shrink();
   }
@@ -447,7 +451,7 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
   }
 }
 
-enum LeaderTab { performance, members, multiplication }
+enum LeaderTab { performance, members }
 
 class LeaderDashboardWithMembersView extends StatefulWidget {
   final UserEntity currentUser;
@@ -546,11 +550,6 @@ class _LeaderDashboardWithMembersViewState extends State<LeaderDashboardWithMemb
                   icon: Icon(Icons.people_outline, size: 16),
                   label: Text('Membros da Célula'),
                 ),
-                ButtonSegment<LeaderTab>(
-                  value: LeaderTab.multiplication,
-                  icon: Icon(Icons.diversity_3_outlined, size: 16),
-                  label: Text('Multiplicação'),
-                ),
               ],
               selected: {_currentTab},
               onSelectionChanged: (Set<LeaderTab> newSelection) {
@@ -565,10 +564,8 @@ class _LeaderDashboardWithMembersViewState extends State<LeaderDashboardWithMemb
 
         if (_currentTab == LeaderTab.performance)
           LeaderAnalyticsWidget(currentUser: widget.currentUser, isEmbedded: true)
-        else if (_currentTab == LeaderTab.members)
-          _buildCellMembersAnalyticsSection()
         else
-          LeaderMultiplicationWidget(cell: _leaderCell!),
+          _buildCellMembersAnalyticsSection(),
       ],
     );
   }
@@ -814,12 +811,12 @@ class _LeaderMultiplicationWidgetState extends State<LeaderMultiplicationWidget>
                 const SizedBox(height: 8),
                 _buildCriterionRow('Membros (${progress.currentMembersCount}/${progress.effectiveTargetMembers})', progress.isMembersTargetMet, Icons.group),
                 _buildCriterionRow('Liderança Preparada', progress.isLeadershipTargetMet, Icons.person_outline),
-                if (progress.settings.requireHost)
+                if (progress.effectiveRequireHost)
                   _buildCriterionRow('Futuro Anfitrião / Local Definido', progress.isHostTargetMet, Icons.home_outlined),
-                _buildCriterionRow('Média de Visitantes (${progress.visitorAverage.toStringAsFixed(1)} / ${progress.settings.minVisitorAverage})', progress.isVisitorTargetMet, Icons.person_add_outlined),
-                _buildCriterionRow('Assiduidade (${progress.attendancePercentage.toStringAsFixed(1)}% / ${progress.settings.minAttendancePercentage}%)', progress.isAttendanceTargetMet, Icons.trending_up),
+                _buildCriterionRow('Média de Visitantes (${progress.visitorAverage.toStringAsFixed(1)} / ${progress.effectiveMinVisitorAvg})', progress.isVisitorTargetMet, Icons.person_add_outlined),
+                _buildCriterionRow('Assiduidade (${progress.attendancePercentage.toStringAsFixed(1)}% / ${progress.effectiveMinAttendance}%)', progress.isAttendanceTargetMet, Icons.trending_up),
                 _buildCriterionRow('Relatórios Entregues (${progress.reportRegularityPercentage.toStringAsFixed(1)}%)', progress.isReportTargetMet, Icons.assignment_turned_in_outlined),
-                _buildCriterionRow('Tempo de Célula (${progress.elapsedMonths} / ${progress.settings.targetMonths} meses)', progress.isTimeTargetMet, Icons.timer_outlined),
+                _buildCriterionRow('Tempo de Célula (${progress.elapsedMonths} / ${progress.effectiveTargetMonths} meses)', progress.isTimeTargetMet, Icons.timer_outlined),
               ],
             ),
           ),

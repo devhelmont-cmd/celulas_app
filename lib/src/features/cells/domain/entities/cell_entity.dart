@@ -23,6 +23,7 @@ class CellEntity {
   final String? customRequiredLeadershipRole;
   final bool? customRequireHost;
   final DateTime? customMultiplicationStartDate;
+  final bool? customCountExcusedAbsencesAsPresence;
 
   const CellEntity({
     required this.id,
@@ -47,6 +48,7 @@ class CellEntity {
     this.customRequiredLeadershipRole,
     this.customRequireHost,
     this.customMultiplicationStartDate,
+    this.customCountExcusedAbsencesAsPresence,
   });
 }
 

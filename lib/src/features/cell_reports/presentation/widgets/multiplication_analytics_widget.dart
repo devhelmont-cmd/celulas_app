@@ -124,6 +124,7 @@ class _MultiplicationAnalyticsWidgetState
     );
     bool futureHostDefined = progress.cell.futureHostDefined;
     DateTime? customStartDate = progress.cell.customMultiplicationStartDate;
+    bool customCountExcused = progress.cell.customCountExcusedAbsencesAsPresence ?? progress.settings.countExcusedAbsencesAsPresence;
 
     final result = await showDialog<bool>(
       context: context,
@@ -191,6 +192,7 @@ class _MultiplicationAnalyticsWidgetState
                                         setDialogState(() {
                                           useGlobalGoals = true;
                                           customStartDate = null;
+                                          customCountExcused = progress.settings.countExcusedAbsencesAsPresence;
                                           targetMembersController.text = progress.settings.targetMembers.toString();
                                           targetMonthsController.text = progress.settings.targetMonths.toString();
                                           minAttendanceController.text = progress.settings.minAttendancePercentage.toString();
@@ -279,6 +281,14 @@ class _MultiplicationAnalyticsWidgetState
                       onChanged: (val) => setDialogState(() => futureHostDefined = val),
                       contentPadding: EdgeInsets.zero,
                     ),
+                    const SizedBox(height: 4),
+                    SwitchListTile(
+                      title: const Text('Faltas Justificadas contam como Presença', style: TextStyle(fontSize: 14)),
+                      subtitle: const Text('No cálculo exclusivo de assiduidade de multiplicação', style: TextStyle(fontSize: 12)),
+                      value: customCountExcused,
+                      onChanged: (val) => setDialogState(() => customCountExcused = val),
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ],
                 ),
               ),
@@ -308,6 +318,7 @@ class _MultiplicationAnalyticsWidgetState
           customMinVisitorAverage: customVisitor,
           customMultiplicationStartDate: customStartDate,
           clearCustomMultiplicationStartDate: customStartDate == null,
+          customCountExcusedAbsencesAsPresence: useGlobalGoals ? null : customCountExcused,
         );
 
         final dataSource = getIt<ICellRemoteDataSource>();
