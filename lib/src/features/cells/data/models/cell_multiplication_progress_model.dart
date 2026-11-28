@@ -240,24 +240,28 @@ class CellMultiplicationProgressModel {
     }).toList();
 
     // Regularidade rigorosa de relatórios baseada estritamente nas reuniões agendadas e relatórios entregues no período da meta:
-    double reportRegularityPercentage = 100.0;
-    if (meetings.isNotEmpty) {
-      final today = DateTime(now.year, now.month, now.day);
-      final pastGoalMeetings = meetings.where((m) {
-        final meetingDay = DateTime(m.meetingDate.year, m.meetingDate.month, m.meetingDate.day);
-        return !meetingDay.isBefore(startDateOnly) &&
-            !meetingDay.isAfter(endDateOnly) &&
-            (meetingDay.isBefore(today) || meetingDay.isAtSameMomentAs(today));
-      }).toList();
+    double reportRegularityPercentage = 0.0;
+    if (allGoalPeriodReports.isNotEmpty) {
+      if (meetings.isNotEmpty) {
+        final today = DateTime(now.year, now.month, now.day);
+        final pastGoalMeetings = meetings.where((m) {
+          final meetingDay = DateTime(m.meetingDate.year, m.meetingDate.month, m.meetingDate.day);
+          return !meetingDay.isBefore(startDateOnly) &&
+              !meetingDay.isAfter(endDateOnly) &&
+              (meetingDay.isBefore(today) || meetingDay.isAtSameMomentAs(today));
+        }).toList();
 
-      final expectedReports = pastGoalMeetings.length;
-      if (expectedReports > 0) {
-        reportRegularityPercentage = ((allGoalPeriodReports.length / expectedReports) * 100.0).clamp(0.0, 100.0);
+        final expectedReports = pastGoalMeetings.length;
+        if (expectedReports > 0) {
+          reportRegularityPercentage = ((allGoalPeriodReports.length / expectedReports) * 100.0).clamp(0.0, 100.0);
+        } else {
+          reportRegularityPercentage = 100.0;
+        }
       } else {
         reportRegularityPercentage = 100.0;
       }
     } else {
-      reportRegularityPercentage = allGoalPeriodReports.isNotEmpty ? 100.0 : 0.0;
+      reportRegularityPercentage = 0.0;
     }
 
     // Verificação de Metas

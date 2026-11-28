@@ -76,22 +76,24 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Células App'),
-        actions: [
-          IconButton(
-            onPressed: () async {
-              await getIt<AuthController>().signOut();
-              if (context.mounted) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                );
-              }
-            },
-            icon: const Icon(Icons.logout),
-          ),
-        ],
-      ),
+      appBar: _currentIndex == 0
+          ? AppBar(
+              title: const Text('Células App'),
+              actions: [
+                IconButton(
+                  onPressed: () async {
+                    await getIt<AuthController>().signOut();
+                    if (context.mounted) {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.logout),
+                ),
+              ],
+            )
+          : null,
       body: IndexedStack(
         index: _currentIndex,
         children: [
