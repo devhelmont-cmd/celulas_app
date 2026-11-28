@@ -756,27 +756,37 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Selecionar Falta para Justificar'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: allPastAbsences.isEmpty
-              ? const Text('Nenhuma falta registrada para este membro.')
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: allPastAbsences.length,
-                  itemBuilder: (context, index) {
-                    final abs = allPastAbsences[index];
-                    final dateStr = DateFormat('dd/MM/yyyy').format(abs.scheduledDate);
-                    return ListTile(
-                      title: Text('Reunião em $dateStr'),
-                      subtitle: Text(abs.attendance.justificationReason ?? 'Sem justificativa prévia'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _showDirectJustifyDialog(context, abs);
-                      },
-                    );
-                  },
-                ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 400, maxWidth: double.maxFinite),
+          child: SizedBox(
+            width: double.maxFinite,
+            child: allPastAbsences.isEmpty
+                ? const Text('Nenhuma falta registrada para este membro.')
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: allPastAbsences.length,
+                    itemBuilder: (context, index) {
+                      final abs = allPastAbsences[index];
+                      final dateStr = DateFormat('dd/MM/yyyy').format(abs.scheduledDate);
+                      final isBridgeEvent = abs.eventType == 'bridge_event';
+                      final meetingTypeDesc = isBridgeEvent ? 'Evento Ponte' : 'Reunião Normal';
+                      return ListTile(
+                        title: Text('$dateStr • ${abs.cellName}'),
+                        subtitle: Text('$meetingTypeDesc\n${abs.attendance.justificationReason ?? 'Sem justificativa prévia'}'),
+                        isThreeLine: true,
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          Future.microtask(() {
+                            if (context.mounted) {
+                              _showDirectJustifyDialog(context, abs);
+                            }
+                          });
+                        },
+                      );
+                    },
+                  ),
+          ),
         ),
         actions: [
           TextButton(
@@ -885,6 +895,9 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
         }
 
         final reports = snapshot.data ?? [];
+        final Map<String, String> cellNamesMap = {
+          for (var c in _allCells) c.id: c.name ?? 'Célula'
+        };
         List<_AbsenceRecord> memberAbsences = [];
         List<_AbsenceRecord> allPastAbsences = [];
 
@@ -910,6 +923,9 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
                 cellMemberId: att.cellMemberId,
                 scheduledDate: report.scheduledDate,
                 attendance: att,
+                cellId: report.cellId,
+                eventType: report.eventType,
+                cellName: cellNamesMap[report.cellId] ?? _cellName,
               );
               if (!att.isPresent) {
                 allPastAbsences.add(record);
@@ -1021,20 +1037,31 @@ class _MemberAnalysisPageState extends State<MemberAnalysisPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade700),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'Reunião em $formattedDate',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade700),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Reunião em $formattedDate • ${item.cellName}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        item.eventType == 'bridge_event' ? 'Evento Ponte' : 'Reunião Normal',
+                                        style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontStyle: FontStyle.italic),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
@@ -1144,11 +1171,17 @@ class _AbsenceRecord {
   final String cellMemberId;
   final DateTime scheduledDate;
   final AttendanceEntity attendance;
+  final String cellId;
+  final String? eventType;
+  final String cellName;
 
   _AbsenceRecord({
     required this.reportId,
     required this.cellMemberId,
     required this.scheduledDate,
     required this.attendance,
+    required this.cellId,
+    this.eventType,
+    required this.cellName,
   });
 }

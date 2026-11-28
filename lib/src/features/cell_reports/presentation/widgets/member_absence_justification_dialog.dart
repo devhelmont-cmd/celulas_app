@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -123,6 +124,12 @@ class _MemberAbsenceJustificationDialogState
         if (cellMemberId != null) cellMemberId,
       };
 
+      final cellsSnapshot = await FirebaseFirestore.instance.collection('cells').get();
+      final Map<String, String> cellNamesMap = {
+        for (var doc in cellsSnapshot.docs)
+          doc.id: (doc.data()['name'] as String? ?? 'Célula')
+      };
+
       List<_AbsenceItem> unjustified = [];
       List<_AbsenceItem> processed = [];
 
@@ -167,11 +174,15 @@ class _MemberAbsenceJustificationDialogState
           continue;
         }
 
+        final cellName = cellNamesMap[report.cellId] ?? 'Célula';
         final item = _AbsenceItem(
           reportId: report.id,
           cellMemberId: att.cellMemberId,
           meetingDate: report.scheduledDate,
           attendance: att,
+          cellId: report.cellId,
+          eventType: report.eventType,
+          cellName: cellName,
         );
 
         if (att.justificationStatus == 'none' ||
@@ -473,12 +484,22 @@ class _MemberAbsenceJustificationDialogState
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        'Falta em: $formattedDate',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Falta em: $formattedDate • ${item.cellName}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item.eventType == 'bridge_event' ? 'Evento Ponte' : 'Reunião Normal',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontStyle: FontStyle.italic),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -609,9 +630,19 @@ class _MemberAbsenceJustificationDialogState
                     Icon(icon, color: badgeColor, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        'Reunião de $formattedDate',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Reunião de $formattedDate • ${item.cellName}',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item.eventType == 'bridge_event' ? 'Evento Ponte' : 'Reunião Normal',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontStyle: FontStyle.italic),
+                          ),
+                        ],
                       ),
                     ),
                     PopupMenuButton<String>(
@@ -686,11 +717,17 @@ class _AbsenceItem {
   final String cellMemberId;
   final DateTime meetingDate;
   final AttendanceEntity attendance;
+  final String cellId;
+  final String? eventType;
+  final String cellName;
 
   _AbsenceItem({
     required this.reportId,
     required this.cellMemberId,
     required this.meetingDate,
     required this.attendance,
+    required this.cellId,
+    this.eventType,
+    required this.cellName,
   });
 }

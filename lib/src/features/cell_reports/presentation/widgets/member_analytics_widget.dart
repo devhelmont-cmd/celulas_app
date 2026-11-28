@@ -502,7 +502,19 @@ class _MemberAnalyticsWidgetState extends State<MemberAnalyticsWidget> {
             ? _selectedMonthKey
             : 'all';
 
-    final filteredReports = _getReportsForSelectedCell();
+    List<CellReportEntity> filteredReports = cellScopedReports;
+    if (_selectedMonthKey != 'all') {
+      filteredReports = cellScopedReports.where((r) {
+        final cycleKey =
+            (r.cycleKey != null && r.cycleKey!.isNotEmpty)
+                ? r.cycleKey!
+                : PastoralCycleHelper.getCycleKeyString(r.scheduledDate);
+        if (cycleKey.length >= 7) {
+          return cycleKey.substring(0, 7) == _selectedMonthKey;
+        }
+        return false;
+      }).toList();
+    }
 
     int totalValidMeetingsHeld = 0;
     int presences = 0;
