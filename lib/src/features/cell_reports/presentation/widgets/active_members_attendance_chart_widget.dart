@@ -222,15 +222,30 @@ class _ActiveMembersAttendanceChartWidgetState
     int totalJustified = 0;
     int totalUnexcused = 0;
 
-    // Garante lista única de membros para iterar
-    final uniqueMembers = _allMembersMap.values.toSet().toList();
+    // Lista de membros únicos cadastrados
+    final uniqueMembersList = {
+      for (var m in _allMembersMap.values) m.id: m
+    }.values.toList();
+
+    // No período geral de uma célula específica, considera apenas os membros atualmente ativos nessa célula.
+    // Nos filtros por mês ou na visão geral (sem cellIdFilter), considera todos os membros.
+    final isGeneralPeriodForSingleCell = widget.cellIdFilter != null &&
+        widget.cellIdFilter!.isNotEmpty &&
+        widget.selectedMonthKey == 'all';
+
+    final List<CellMemberEntity> membersToProcess = isGeneralPeriodForSingleCell
+        ? uniqueMembersList
+            .where((m) => m.cellId == widget.cellIdFilter)
+            .toList()
+        : uniqueMembersList;
+
     final Map<String, _MemberPeriodStats> statsByMember = {};
 
     for (var report in activeReports) {
       final reportDate = report.scheduledDate;
       final reportCellId = report.cellId;
 
-      for (var member in uniqueMembers) {
+      for (var member in membersToProcess) {
         final isActiveInCell = _isMemberActiveInCellOnDate(
           member: member,
           cellId: reportCellId,

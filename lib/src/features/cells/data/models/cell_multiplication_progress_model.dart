@@ -174,9 +174,31 @@ class CellMultiplicationProgressModel {
       isLeadershipTargetMet = hasLeaderInTraining || hasCoLeader;
     }
 
-    // Processamento dos relatórios (Considera reuniões normais e eventos ponte, excluindo apenas reuniões canceladas)
-    final occurredReports = reports.where((r) => r.status != ReportStatus.cacelled).toList();
-    final totalMeetingsHeld = reports.length;
+    // Datas de início e fim da meta sem horário (apenas ano, mês e dia)
+    final startDateOnly = DateTime(
+      effectiveStartDate.year,
+      effectiveStartDate.month,
+      effectiveStartDate.day,
+    );
+    final endDateOnly = DateTime(
+      targetEndDate.year,
+      targetEndDate.month,
+      targetEndDate.day,
+    );
+
+    // Processamento dos relatórios exclusivamente no período da meta
+    // (Considera reuniões normais e eventos ponte realizados entre a data inicial e final da meta)
+    final occurredReports = reports.where((r) {
+      if (r.status == ReportStatus.cacelled) return false;
+      final rDate = DateTime(
+        r.scheduledDate.year,
+        r.scheduledDate.month,
+        r.scheduledDate.day,
+      );
+      return !rDate.isBefore(startDateOnly) && !rDate.isAfter(endDateOnly);
+    }).toList();
+
+    final totalMeetingsHeld = occurredReports.length;
 
     // Média de visitantes
     double visitorAverage = 0.0;
@@ -185,7 +207,7 @@ class CellMultiplicationProgressModel {
       visitorAverage = totalVisitors / occurredReports.length;
     }
 
-    // Assiduidade dos membros (% de chamadas com presença)
+    // Assiduidade dos membros (% de chamadas com presença no período da meta)
     double attendancePercentage = 0.0;
     int totalAttendancesCount = 0;
     int presentCount = 0;
@@ -207,23 +229,35 @@ class CellMultiplicationProgressModel {
       attendancePercentage = (presentCount / totalAttendancesCount) * 100.0;
     }
 
-    // Regularidade rigorosa de relatórios baseada apenas nas reuniões que já aconteceram (passadas ou hoje):
+    // Todos os relatórios entregues referentes a reuniões agendadas no período da meta
+    final allGoalPeriodReports = reports.where((r) {
+      final rDate = DateTime(
+        r.scheduledDate.year,
+        r.scheduledDate.month,
+        r.scheduledDate.day,
+      );
+      return !rDate.isBefore(startDateOnly) && !rDate.isAfter(endDateOnly);
+    }).toList();
+
+    // Regularidade rigorosa de relatórios baseada estritamente nas reuniões agendadas e relatórios entregues no período da meta:
     double reportRegularityPercentage = 100.0;
     if (meetings.isNotEmpty) {
       final today = DateTime(now.year, now.month, now.day);
-      final pastMeetings = meetings.where((m) {
+      final pastGoalMeetings = meetings.where((m) {
         final meetingDay = DateTime(m.meetingDate.year, m.meetingDate.month, m.meetingDate.day);
-        return meetingDay.isBefore(today) || meetingDay.isAtSameMomentAs(today);
+        return !meetingDay.isBefore(startDateOnly) &&
+            !meetingDay.isAfter(endDateOnly) &&
+            (meetingDay.isBefore(today) || meetingDay.isAtSameMomentAs(today));
       }).toList();
 
-      final expectedReports = pastMeetings.length;
+      final expectedReports = pastGoalMeetings.length;
       if (expectedReports > 0) {
-        reportRegularityPercentage = ((reports.length / expectedReports) * 100.0).clamp(0.0, 100.0);
+        reportRegularityPercentage = ((allGoalPeriodReports.length / expectedReports) * 100.0).clamp(0.0, 100.0);
       } else {
         reportRegularityPercentage = 100.0;
       }
     } else {
-      reportRegularityPercentage = reports.isNotEmpty ? 100.0 : 0.0;
+      reportRegularityPercentage = allGoalPeriodReports.isNotEmpty ? 100.0 : 0.0;
     }
 
     // Verificação de Metas

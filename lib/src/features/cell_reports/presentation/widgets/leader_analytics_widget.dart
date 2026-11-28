@@ -24,11 +24,13 @@ import 'member_analytics_widget.dart';
 class LeaderAnalyticsWidget extends StatefulWidget {
   final UserEntity currentUser;
   final bool isEmbedded;
+  final bool showFutureHostSwitch;
 
   const LeaderAnalyticsWidget({
     super.key,
     required this.currentUser,
     this.isEmbedded = false,
+    this.showFutureHostSwitch = true,
   });
 
   @override
@@ -423,7 +425,10 @@ class _LeaderAnalyticsWidgetState extends State<LeaderAnalyticsWidget> {
         cellIdFilter: _leaderCell?.id,
       );
     } else if (id == 'multiplication') {
-      return LeaderMultiplicationWidget(cell: _leaderCell!);
+      return LeaderMultiplicationWidget(
+        cell: _leaderCell!,
+        showFutureHostSwitch: widget.showFutureHostSwitch,
+      );
     }
     return const SizedBox.shrink();
   }
@@ -456,8 +461,13 @@ enum LeaderTab { performance, members }
 
 class LeaderDashboardWithMembersView extends StatefulWidget {
   final UserEntity currentUser;
+  final bool showFutureHostSwitch;
 
-  const LeaderDashboardWithMembersView({super.key, required this.currentUser});
+  const LeaderDashboardWithMembersView({
+    super.key,
+    required this.currentUser,
+    this.showFutureHostSwitch = true,
+  });
 
   @override
   State<LeaderDashboardWithMembersView> createState() => _LeaderDashboardWithMembersViewState();
@@ -564,7 +574,11 @@ class _LeaderDashboardWithMembersViewState extends State<LeaderDashboardWithMemb
         const SizedBox(height: 20),
 
         if (_currentTab == LeaderTab.performance)
-          LeaderAnalyticsWidget(currentUser: widget.currentUser, isEmbedded: true)
+          LeaderAnalyticsWidget(
+            currentUser: widget.currentUser,
+            isEmbedded: true,
+            showFutureHostSwitch: widget.showFutureHostSwitch,
+          )
         else
           _buildCellMembersAnalyticsSection(),
       ],
@@ -654,8 +668,13 @@ class _LeaderDashboardWithMembersViewState extends State<LeaderDashboardWithMemb
 
 class LeaderMultiplicationWidget extends StatefulWidget {
   final CellModel cell;
+  final bool showFutureHostSwitch;
 
-  const LeaderMultiplicationWidget({super.key, required this.cell});
+  const LeaderMultiplicationWidget({
+    super.key,
+    required this.cell,
+    this.showFutureHostSwitch = true,
+  });
 
   @override
   State<LeaderMultiplicationWidget> createState() => _LeaderMultiplicationWidgetState();
@@ -800,15 +819,18 @@ class _LeaderMultiplicationWidgetState extends State<LeaderMultiplicationWidget>
                   minHeight: 8,
                   borderRadius: BorderRadius.circular(4),
                 ),
-                const SizedBox(height: 16),
-                SwitchListTile(
-                  title: const Text('Futuro Anfitrião / Local Definido'),
-                  subtitle: const Text('Marque se já está definido onde ou com quem será a nova célula'),
-                  value: _currentCell.futureHostDefined,
-                  onChanged: _toggleFutureHost,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                const Divider(),
+                if (widget.showFutureHostSwitch) ...[
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    title: const Text('Futuro Anfitrião / Local Definido'),
+                    subtitle: const Text('Marque se já está definido onde ou com quem será a nova célula'),
+                    value: _currentCell.futureHostDefined,
+                    onChanged: _toggleFutureHost,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  const Divider(),
+                ] else
+                  const SizedBox(height: 16),
                 const SizedBox(height: 8),
                 _buildCriterionRow('Membros (${progress.currentMembersCount}/${progress.effectiveTargetMembers})', progress.isMembersTargetMet, Icons.group),
                 _buildCriterionRow('Liderança Preparada', progress.isLeadershipTargetMet, Icons.person_outline),
@@ -817,7 +839,12 @@ class _LeaderMultiplicationWidgetState extends State<LeaderMultiplicationWidget>
                 _buildCriterionRow('Média de Visitantes (${progress.visitorAverage.toStringAsFixed(1)} / ${progress.effectiveMinVisitorAvg})', progress.isVisitorTargetMet, Icons.person_add_outlined),
                 _buildCriterionRow('Assiduidade (${progress.attendancePercentage.toStringAsFixed(1)}% / ${progress.effectiveMinAttendance}%)', progress.isAttendanceTargetMet, Icons.trending_up),
                 _buildCriterionRow('Relatórios Entregues (${progress.reportRegularityPercentage.toStringAsFixed(1)}%)', progress.isReportTargetMet, Icons.assignment_turned_in_outlined),
-                _buildCriterionRow('Tempo de Célula (${progress.elapsedMonths} / ${progress.effectiveTargetMonths} meses)', progress.isTimeTargetMet, Icons.timer_outlined),
+                _buildCriterionRow(
+                  'Tempo de Célula (${progress.elapsedMonths} / ${progress.effectiveTargetMonths} meses)',
+                  progress.isTimeTargetMet,
+                  Icons.timer_outlined,
+                  subtitle: 'Início: ${DateFormat('dd/MM/yyyy').format(progress.effectiveStartDate)} • Meta: ${DateFormat('dd/MM/yyyy').format(progress.targetEndDate)}${progress.isCustomStartDateActive ? " (Individual)" : ""}',
+                ),
               ],
             ),
           ),
@@ -826,19 +853,34 @@ class _LeaderMultiplicationWidgetState extends State<LeaderMultiplicationWidget>
     );
   }
 
-  Widget _buildCriterionRow(String title, bool isMet, IconData icon) {
+  Widget _buildCriterionRow(String title, bool isMet, IconData icon, {String? subtitle}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: Colors.grey[700]),
-          const SizedBox(width: 8),
-          Expanded(child: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-          Icon(
-            isMet ? Icons.check_circle : Icons.cancel_outlined,
-            size: 18,
-            color: isMet ? Colors.green : Colors.grey[400],
+          Row(
+            children: [
+              Icon(icon, size: 18, color: Colors.grey[700]),
+              const SizedBox(width: 8),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+              Icon(
+                isMet ? Icons.check_circle : Icons.cancel_outlined,
+                size: 18,
+                color: isMet ? Colors.green : Colors.grey[400],
+              ),
+            ],
           ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 2),
+            Padding(
+              padding: const EdgeInsets.only(left: 26.0),
+              child: Text(
+                subtitle,
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+            ),
+          ],
         ],
       ),
     );

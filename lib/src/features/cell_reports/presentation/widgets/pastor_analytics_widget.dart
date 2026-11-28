@@ -476,6 +476,7 @@ class _PastorAnalyticsWidgetState extends State<PastorAnalyticsWidget> {
           key: ValueKey(_selectedCellId),
           currentUser: pseudoLeaderUser,
           isEmbedded: true,
+          showFutureHostSwitch: false,
         ),
       ],
     );
